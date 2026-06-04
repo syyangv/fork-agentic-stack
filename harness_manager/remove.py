@@ -153,7 +153,7 @@ def remove(
 
     # Remove skills_link (only the link/dir, not the target!) — but only
     # if the destination did NOT pre-exist install. If user had their own
-    # `.agents/skills/` or `.pi/skills/` before installing, we adopted it
+    # `.agent/skills/` or `.pi/skills/` before installing, we adopted it
     # via rsync sync, but it's still theirs to keep on remove.
     if skills_link and not skills_link_pre_existed:
         dst = target_root / skills_link["dst"]

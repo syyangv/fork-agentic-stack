@@ -1,14 +1,14 @@
 # Codex setup
 
 [Codex](https://developers.openai.com/codex/) reads `AGENTS.md` natively
-and scans `.agents/skills/` for repository-scoped skills. Our adapter
+and scans `.agent/skills/` for repository-scoped skills. Our adapter
 layers the portable `.agent/` brain on top so you keep one knowledge
 base even if you later swap harnesses.
 
 ## What the adapter installs
 - `AGENTS.md` at project root. Skipped if one already exists, since
   codex, pi, hermes, and opencode can all share the same file.
-- `.agents/skills/` symlinked to `.agent/skills/` when possible. Falls
+- `.agent/skills/` symlinked to `.agent/skills/` when possible. Falls
   back to copying / merging on platforms without symlink support.
 
 ## Install
@@ -29,7 +29,7 @@ codex
 - Codex loads `AGENTS.md` before starting work. The adapter file points
   it at `.agent/AGENTS.md`, `PREFERENCES.md`, `LESSONS.md`, and
   `permissions.md`.
-- Codex scans `.agents/skills/` from the current working directory up to
+- Codex scans `.agent/skills/` from the current working directory up to
   the repository root. The adapter mirrors `.agent/skills/` there so the
   portable skills are visible without duplication.
 - The adapter intentionally does **not** install Codex hooks. The docs
@@ -50,7 +50,7 @@ Expected:
 ## Troubleshooting
 - If Codex does not pick up `AGENTS.md`, restart it from the repository
   root and run the `Summarize the current instructions` check again.
-- If skills are missing, inspect `.agents/skills/`. On filesystems
+- If skills are missing, inspect `.agent/skills/`. On filesystems
   without symlink support, the installer copies / merges the directory
   instead; re-run the installer after updating `.agent/skills/`.
 - On Windows, the native sandbox is the default and works fine for this
