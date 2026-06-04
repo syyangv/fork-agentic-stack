@@ -13,12 +13,12 @@ the portable brain in `.agent/`.
 4. `.agent/protocols/permissions.md` — hard rules
 
 ## Skills
-Codex scans `.agents/skills/` for repository-scoped skills (per
+Codex scans `.agent/skills/` for repository-scoped skills (per
 [OpenAI Codex docs](https://developers.openai.com/codex/skills)). The
-install script symlinks or syncs `.agents/skills` from `.agent/skills`
+install script symlinks or syncs `.agent/skills` from `.agent/skills`
 so the portable brain remains the one source of truth. Load a full
 `SKILL.md` only when its triggers match the task (progressive
-disclosure). Edit skills in `.agent/skills/` — `.agents/skills/` is a
+disclosure). Edit skills in `.agent/skills/` — `.agent/skills/` is a
 mirror and re-running the installer will sync it back.
 
 ## Recall before non-trivial tasks

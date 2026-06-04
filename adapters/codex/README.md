@@ -14,7 +14,7 @@ Or on Windows PowerShell:
 - `AGENTS.md` — Codex reads this natively as project instructions. If
   `AGENTS.md` already exists (for example from the pi, hermes, or
   opencode adapters), the installer leaves it in place.
-- `.agents/skills/` → `.agent/skills/` — Codex scans `.agents/skills/`
+- `.agent/skills/` → `.agent/skills/` — Codex scans `.agent/skills/`
   for repository skills. The installer creates a symlink when possible
   and falls back to copying / merging when symlinks are unavailable.
 
@@ -40,5 +40,5 @@ It should read `.agent/memory/semantic/LESSONS.md`.
   experimental, and the official docs note they are currently disabled
   on Windows. The adapter therefore relies on manual `recall.py` and
   `memory_reflect.py` calls, like the Cursor and Windsurf paths.
-- If `.agents/skills/` is a copied directory rather than a symlink,
+- If `.agent/skills/` is a copied directory rather than a symlink,
   re-run the installer after editing `.agent/skills/` to sync updates.
