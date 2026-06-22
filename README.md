@@ -430,13 +430,13 @@ adapters/                       # one small shim per harness, each with adapter.
 ├── claude-code/   (CLAUDE.md + settings.json hooks — $CLAUDE_PROJECT_DIR wired, closes #18)
 ├── copilot-cli/   (AGENTS.md + .github/instructions/ + .github/hooks/ + .github/skills/ mirror)
 ├── cursor/        (.cursor/rules/*.mdc)
-├── gemini/        (gemini.md + .gemini/skills mirror)
+├── gemini/        (GEMINI.md + .gemini/settings.json hooks + .gemini/skills merge)
 ├── windsurf/      (.windsurf/rules/*.md + legacy .windsurfrules)
 ├── opencode/      (AGENTS.md + opencode.json)
 ├── openclaw/      (AGENTS.md + system-prompt include; auto-registers per-project agent)
 ├── hermes/        (AGENTS.md)
 ├── pi/            (AGENTS.md + .pi/skills symlink)
-├── codex/         (AGENTS.md + .agents/skills symlink)
+├── codex/         (AGENTS.md + .agent/skills symlink)
 ├── standalone-python/  (DIY conductor entrypoint)
 └── antigravity/   (ANTIGRAVITY.md)
 
@@ -488,13 +488,13 @@ verify_codex_fixes.py           # v0.8.0 regression checks (33 checks)
 | **Claude Code** | `CLAUDE.md` + `.claude/settings.json` | yes (PostToolUse, Stop) |
 | **GitHub Copilot CLI** | `AGENTS.md` + `.github/instructions/*.instructions.md` | yes (postToolUse, sessionEnd) |
 | **Cursor** | `.cursor/rules/*.mdc` | no (manual reflect calls) |
-| **Google Gemini CLI** | `gemini.md` + `.gemini/skills/` | no (manual reflect calls) |
+| **Google Gemini CLI** | `GEMINI.md` + `.gemini/settings.json` hooks | yes (AfterTool, SessionEnd) |
 | **Windsurf** | `.windsurfrules` | no (manual reflect calls) |
 | **OpenCode** | `AGENTS.md` + `opencode.json` | partial (permission rules) |
 | **OpenClaw** | `AGENTS.md` (auto-injected) + per-project `openclaw agents add --workspace` | varies by fork |
 | **Hermes Agent** | `AGENTS.md` (agentskills.io compatible) | partial (own memory) |
 | **Pi Coding Agent** | `AGENTS.md` + `.pi/skills/` + `.pi/extensions/` | yes (`tool_result` event) |
-| **Codex** | `AGENTS.md` + `.agents/skills/` | no (manual reflect calls) |
+| **Codex** | `AGENTS.md` + `.agent/skills/` | no (manual reflect calls) |
 | **Standalone Python** | `run.py` (any LLM) | yes (full control) |
 | **Antigravity** | `ANTIGRAVITY.md` | yes (system context) |
 
