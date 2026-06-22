@@ -124,8 +124,33 @@ class TransferCliTest(unittest.TestCase):
 
             self.assertEqual(result.returncode, 0, result.stderr)
             self.assertTrue((dst / ".agent" / "AGENTS.md").exists())
+            self.assertTrue((dst / ".agent" / "skills").exists())
             self.assertTrue((dst / "AGENTS.md").exists())
-            self.assertTrue((dst / ".agents" / "skills").exists())
+
+    def test_import_gemini_into_fresh_project_copies_full_brain(self):
+        with tempfile.TemporaryDirectory() as src_tmp, tempfile.TemporaryDirectory() as dst_tmp:
+            src = Path(src_tmp)
+            dst = Path(dst_tmp)
+            agent = self.make_agent(src)
+            payload, digest = encode_bundle(export_bundle(agent, targets=["gemini"], scopes=["preferences"]))
+
+            result = self.run_cli(
+                dst,
+                "transfer",
+                "import",
+                "--payload",
+                payload,
+                "--sha256",
+                digest,
+                "--target",
+                "gemini",
+            )
+
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertTrue((dst / ".agent" / "AGENTS.md").exists())
+            self.assertTrue((dst / "GEMINI.md").exists())
+            self.assertTrue((dst / ".gemini" / "settings.json").exists())
+            self.assertTrue((dst / ".gemini" / "skills").exists())
 
 
 if __name__ == "__main__":

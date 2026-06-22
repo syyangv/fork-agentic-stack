@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import Iterable
 
 
-VALID_TARGETS = ("codex", "autohand-code", "cursor", "windsurf", "terminal")
+VALID_TARGETS = ("codex", "autohand-code", "gemini", "cursor", "windsurf", "terminal")
 CORE_SCOPES = ("preferences", "accepted_lessons", "skills")
 DEFAULT_SCOPES = CORE_SCOPES + ("working", "episodic", "candidates")
 SENSITIVE_SCOPES = ("working", "episodic", "candidates", "data_layer", "flywheel")
@@ -19,6 +19,8 @@ TARGET_ALIASES = {
     "autohand": "autohand-code",
     "autohand-code": "autohand-code",
     "autohand-code-cli": "autohand-code",
+    "gemini": "gemini",
+    "google": "gemini",
     "cursor": "cursor",
     "windsurf": "windsurf",
     "cascade": "windsurf",
