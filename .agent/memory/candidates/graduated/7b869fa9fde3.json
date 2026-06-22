@@ -1,0 +1,44 @@
+{
+  "id": "7b869fa9fde3",
+  "key": "manual_7b869f",
+  "name": "manual_7b869f",
+  "claim": "For CLI smoke tests, verify structured evidence that the model actually ran, such as nonzero Claude num_turns and duration_api_ms, instead of trusting exit code zero.",
+  "conditions": [
+    "claude",
+    "cli",
+    "codex",
+    "duration_api_ms",
+    "num_turns",
+    "smoke-test",
+    "testing"
+  ],
+  "evidence_ids": [
+    "2026-05-17T19:21:23.123971+00:00"
+  ],
+  "cluster_size": 1,
+  "canonical_salience": 8.0,
+  "staged_at": "2026-05-17T19:21:23.123971+00:00",
+  "status": "accepted",
+  "decisions": [
+    {
+      "ts": "2026-05-17T19:21:23.123971+00:00",
+      "action": "staged",
+      "reviewer": "learn"
+    },
+    {
+      "ts": "2026-05-17T19:21:23.145962+00:00",
+      "action": "graduated",
+      "reviewer": "learn.py",
+      "notes": "Claude CLI previously returned a successful process with zero turns/usage, causing a false negative/false pass during registry visibility testing.",
+      "provisional": false,
+      "evidence_snapshot": [
+        "2026-05-17T19:21:23.123971+00:00"
+      ],
+      "lessons_sha": "6d86d5097100"
+    }
+  ],
+  "rejection_count": 0,
+  "accepted_at": "2026-05-17T19:21:23.145959+00:00",
+  "reviewer": "learn.py",
+  "rationale": "Claude CLI previously returned a successful process with zero turns/usage, causing a false negative/false pass during registry visibility testing."
+}

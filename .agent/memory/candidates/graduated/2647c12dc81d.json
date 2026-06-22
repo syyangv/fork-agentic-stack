@@ -1,0 +1,44 @@
+{
+  "id": "2647c12dc81d",
+  "key": "manual_2647c1",
+  "name": "manual_2647c1",
+  "claim": "When sharing skills between Claude, Codex, and agentic-stack, prefer secondary registry lookup at the original skill root over symlink or copy mirrors.",
+  "conditions": [
+    "agentic-stack",
+    "claude",
+    "codex",
+    "mirrors",
+    "registry",
+    "skills",
+    "symlinks"
+  ],
+  "evidence_ids": [
+    "2026-05-17T19:21:23.067260+00:00"
+  ],
+  "cluster_size": 1,
+  "canonical_salience": 8.0,
+  "staged_at": "2026-05-17T19:21:23.067260+00:00",
+  "status": "accepted",
+  "decisions": [
+    {
+      "ts": "2026-05-17T19:21:23.067260+00:00",
+      "action": "staged",
+      "reviewer": "learn"
+    },
+    {
+      "ts": "2026-05-17T19:21:23.092977+00:00",
+      "action": "graduated",
+      "reviewer": "learn.py",
+      "notes": "User explicitly rejected hosting .agents skills under .claude/.codex; mirrors caused stale ownership and invalid skill drift.",
+      "provisional": false,
+      "evidence_snapshot": [
+        "2026-05-17T19:21:23.067260+00:00"
+      ],
+      "lessons_sha": "3dde2afdd4e5"
+    }
+  ],
+  "rejection_count": 0,
+  "accepted_at": "2026-05-17T19:21:23.092973+00:00",
+  "reviewer": "learn.py",
+  "rationale": "User explicitly rejected hosting .agents skills under .claude/.codex; mirrors caused stale ownership and invalid skill drift."
+}
