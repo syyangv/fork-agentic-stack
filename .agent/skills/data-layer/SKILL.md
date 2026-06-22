@@ -1,6 +1,7 @@
 ---
 name: data-layer
 version: 2026-04-26
+description: Use when the user wants local dashboards, analytics, or usage reports for activity across the portable agent stack.
 triggers: ["data layer", "dashboard", "show me the dashboard", "what did my agents do", "agent analytics", "agent status", "resource usage", "usage report", "cron monitoring", "daily report", "tokens", "terminal dashboard", "TUI"]
 tools: [bash, git]
 preconditions: [".agent exists"]

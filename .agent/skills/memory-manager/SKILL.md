@@ -1,6 +1,7 @@
 ---
 name: memory-manager
 version: 2026-01-01
+description: Use when reflecting on completed work, consolidating memory, or promoting recurring lessons from episodic history.
 triggers: ["reflect", "remember", "distill", "what did I learn", "update memory", "compress memory"]
 tools: [memory_reflect, bash, git]
 preconditions: ["memory/episodic/AGENT_LEARNINGS.jsonl exists"]

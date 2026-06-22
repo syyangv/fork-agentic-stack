@@ -74,3 +74,11 @@ Triggers: "draw", "diagram", "sketch", "wireframe", "flowchart",
 Constraints: get_canvas before edits; max 200 shapes per create_shape call.
 Requires: tldraw MCP server wired in the harness's MCP config; user has
 http://localhost:3030 open. Opt-in via `.features.json` (`tldraw: true`).
+
+## skill-inventory
+Audits skill availability across Claude Code, Codex, and `.agents` roots;
+reports Claude-only, Codex-only, Agents-only, and symlink alias drift.
+Triggers: "skill inventory", "skill drift", "codex-only", "claude-only",
+"missing skills", "sync skills", "skill parity"
+Constraints: audit before deleting or moving skills; preserve Codex-only
+infrastructure unless explicitly requested.

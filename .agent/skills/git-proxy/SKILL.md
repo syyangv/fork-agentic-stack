@@ -1,6 +1,7 @@
 ---
 name: git-proxy
 version: 2026-01-01
+description: Use when performing git operations that need consistent safety checks for staging, commits, pushes, and branch hygiene.
 triggers: ["commit", "push", "branch", "merge", "rebase", "pull request", "PR"]
 tools: [bash]
 preconditions: [".git exists"]

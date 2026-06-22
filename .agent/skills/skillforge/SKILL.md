@@ -1,6 +1,7 @@
 ---
 name: skillforge
 version: 2026-01-01
+description: Use when creating a new reusable skill or extending an existing one without duplicating current capability.
 triggers: ["create skill", "new skill", "build skill", "new capability"]
 tools: [bash, memory_reflect, git]
 constraints: ["do not duplicate existing skills", "always include self-rewrite hook"]
