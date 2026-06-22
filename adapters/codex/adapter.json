@@ -1,6 +1,6 @@
 {
   "name": "codex",
-  "description": "OpenAI Codex CLI — AGENTS.md wiring only. Does not mirror or sync skills between .agent, .agents, .claude, or .codex registries.",
+  "description": "OpenAI Codex CLI \u2014 AGENTS.md wiring only. Does not mirror or sync skill registries.",
   "files": [
     {
       "src": "AGENTS.md",
