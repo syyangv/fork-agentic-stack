@@ -11,7 +11,7 @@ Users want to move their agentic-stack memory and setup instructions across Code
 ## Research Findings
 
 - Codex reads `AGENTS.md` guidance before work and supports layered global/project instruction discovery. Required team guidance should live in `AGENTS.md` or checked-in docs, not in generated Codex memory files.
-- Codex skills are discovered from `.agents/skills` along the current directory to repository root path, and symlinked skill folders are supported.
+- Codex skill discovery no longer uses the retired plural-agent skills directory on this machine; current lookup uses `~/.codex/skills`, `~/.agent/skills`, and `~/.claude/skills`.
 - Codex memories are generated local state under `~/.codex/memories/`; importing agentic-stack memory should not edit those files.
 - Cursor supports project rules in `.cursor/rules/*.mdc` with frontmatter, and root `AGENTS.md` is also supported for simple project instructions.
 - Windsurf supports root and nested `AGENTS.md` files, workspace rules in `.windsurf/rules/*.md`, and generated/local memories. Durable shareable guidance should be represented as rules or `AGENTS.md`, not auto-generated Windsurf memories.
@@ -130,7 +130,7 @@ The preview is the most important screen. It shows:
 - files to merge
 - files to leave alone
 - adapters to install
-- skills link strategy for Codex: `.agents/skills -> .agent/skills`
+- skills link strategy for Codex: retired; do not mirror skill registries
 - generated bundle digest
 - generated curl command
 - local apply command equivalent
@@ -294,7 +294,7 @@ Non-interactive commands are supporting surfaces, not the main UX.
 Install or merge:
 
 - `AGENTS.md`
-- `.agents/skills` symlink or sync from `.agent/skills`
+- no Codex skill symlink/sync from `.agent/skills`
 
 Do not edit `~/.codex/memories/`.
 
@@ -391,8 +391,12 @@ Packaging tests:
 - Running `agentic-stack transfer` opens an onboarding-style wizard in an interactive terminal.
 - A user can export preferences, accepted lessons, and skills to a generated curl command.
 - Pasting the curl command in a fresh project installs the selected adapter and imports memory into `.agent/`.
-- Codex sees root `AGENTS.md` and `.agents/skills`.
+- Codex sees root `AGENTS.md`; skills are loaded from the current user registries.
 - Cursor sees `.cursor/rules/agentic-stack.mdc`.
 - Windsurf sees either modern `.windsurf/rules/agentic-stack.md` or the existing legacy `.windsurfrules`, with the chosen behavior shown in preview.
 - No generated tool memory stores are edited directly.
 - Non-sensitive scopes are default; sensitive scopes require explicit opt-in.
+
+---
+
+> **Historical note (2026-06-03):** The plural `~/.agents/` registry was retired on this date. All references to `.agents` in this spec should be read as `.agent` (singular). The current skill lookup chain is `~/.claude/skills` → `~/.agent/skills` → `~/.codex/skills`. The Codex adapter no longer mirrors or syncs skill registries.

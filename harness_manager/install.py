@@ -101,6 +101,47 @@ def _resolve_skills_link(
 
     dst.parent.mkdir(parents=True, exist_ok=True)
 
+    if fallback in {"copy_with_delete", "copy_with_merge"}:
+        if dst.exists() and not dst.is_dir() and not dst.is_symlink():
+            raise FileExistsError(
+                f"skills_link destination {dst} exists as a regular file, "
+                f"not a directory or symlink. move or delete it first and "
+                f"re-run install."
+            )
+        if dst.is_symlink():
+            dst.unlink()
+        if dst.is_dir():
+            if fallback == "copy_with_delete" and shutil.which("rsync"):
+                import subprocess
+                subprocess.run(
+                    ["rsync", "-a", "--delete", str(target_abs) + "/", str(dst) + "/"],
+                    check=True,
+                )
+                log(f"  ~ synced {_short(dst)} (rsync --delete, copy-only)")
+                return "rsynced"
+            if fallback == "copy_with_delete":
+                shutil.rmtree(dst)
+                shutil.copytree(target_abs, dst)
+                log(f"  + {_short(dst)} (copy-only mirror)")
+                return "copied"
+            if shutil.which("rsync"):
+                import subprocess
+                subprocess.run(
+                    ["rsync", "-a", str(target_abs) + "/", str(dst) + "/"],
+                    check=True,
+                )
+                log(f"  ~ merged {_short(dst)} (rsync keep-existing)")
+                return "merged"
+            shutil.copytree(target_abs, dst, dirs_exist_ok=True)
+            log(f"  ~ merged {_short(dst)} (copy-only keep-existing)")
+            return "merged"
+        shutil.copytree(target_abs, dst)
+        if fallback == "copy_with_delete":
+            log(f"  + {_short(dst)} (copy-only mirror)")
+            return "copied"
+        log(f"  + {_short(dst)} (copy-only merged mirror)")
+        return "merged"
+
     # Case 1: dst is an existing symlink → repoint (cheap)
     if dst.is_symlink():
         dst.unlink()
@@ -271,7 +312,7 @@ def install(
     # 3. Skills link. Track whether the destination pre-existed before
     #    install touched it — if so, remove must NOT delete it (codex P1:
     #    `./install.sh remove codex` would otherwise wipe a user-owned
-    #    `.agents/skills/` that the installer adopted, not created).
+    #    `.agent/skills/` that the installer adopted, not created).
     skills_link_pre_existed = False
     if "skills_link" in manifest:
         skills_dst = target_root / manifest["skills_link"]["dst"]
@@ -284,7 +325,7 @@ def install(
         # files_written ownership preservation above.)
         prior_skills_pre_existed = (prior_entry.get("skills_link_pre_existed", False))
         # Intentionally NOT flipping pre_existed on synthesized entries.
-        # Doctor conservatively marks `.agents/skills` or `.pi/skills`
+        # Doctor conservatively marks `.agent/skills` or `.pi/skills`
         # as pre-existing because we can't know if the user's own
         # skills dir was there before the legacy install. Flipping on
         # reinstall would let remove delete a directory that predated

@@ -225,9 +225,73 @@ def openclaw_unregister_workspace(target_root: Path | str, **kwargs) -> dict:
     }
 
 
+def codex_sync_skills(target_root: Path | str, **_kwargs) -> dict:
+    """Run the configured Claude-to-Codex skill sync after Codex adapter installs.
+
+    This bridges agentic-stack's high-level `install.sh add codex` workflow to
+    the lower-level codex-hooks `codex-sync-skills` script that mirrors
+    `~/.claude/skills` into `~/.codex/skills`. The target_root is recorded for
+    install.json context, but the sync itself is intentionally global because
+    the script manages the user's global Codex skill registry.
+    """
+    candidates: list[Path] = []
+    env_script = os.environ.get("CODEX_SYNC_SKILLS_SCRIPT")
+    if env_script:
+        candidates.append(Path(env_script).expanduser())
+    which_script = shutil.which("codex-sync-skills")
+    if which_script:
+        candidates.append(Path(which_script))
+    candidates.append(Path.home() / "Documents/GitHub/codex-hooks/bin/codex-sync-skills")
+
+    script = next((path for path in candidates if path.is_file()), None)
+    if script is None:
+        return {
+            "action": "codex_sync_skills",
+            "status": "binary_missing",
+            "fallback_hint": (
+                "install codex-hooks or set CODEX_SYNC_SKILLS_SCRIPT to the "
+                "codex-sync-skills executable, then run it manually"
+            ),
+        }
+
+    try:
+        proc = subprocess.run(
+            ["zsh", str(script)],
+            capture_output=True,
+            text=True,
+            timeout=60,
+        )
+    except subprocess.TimeoutExpired:
+        return {
+            "action": "codex_sync_skills",
+            "status": "failed",
+            "script": str(script),
+            "stderr": "timed out after 60s",
+        }
+
+    if proc.returncode == 0:
+        return {
+            "action": "codex_sync_skills",
+            "status": "ok",
+            "script": str(script),
+            "target_root": str(Path(target_root)),
+            "stdout": (proc.stdout or "").strip()[:500],
+        }
+
+    return {
+        "action": "codex_sync_skills",
+        "status": "failed",
+        "script": str(script),
+        "exit_code": proc.returncode,
+        "stderr": ((proc.stderr or "") + (proc.stdout or "")).strip()[:500],
+        "fallback_hint": f"run manually: zsh {script}",
+    }
+
+
 # Registry: action name -> (run_fn, reverse_fn)
 ACTIONS: dict[str, tuple[Callable, Callable | None]] = {
     "openclaw_register_workspace": (openclaw_register_workspace, openclaw_unregister_workspace),
+    "codex_sync_skills": (codex_sync_skills, None),
 }
 
 

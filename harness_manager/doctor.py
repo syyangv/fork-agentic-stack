@@ -37,7 +37,12 @@ DETECT_SIGNALS = {
     ],
     "openclaw": [(".openclaw-system.md", "strong")],
     "pi": [(".pi/extensions/memory-hook.ts", "strong")],
-    "codex": [(".agents/skills", "strong")],
+    "codex": [(".agent/skills", "strong")],
+    "gemini": [
+        ("GEMINI.md", "weak"),
+        (".gemini/settings.json", "strong"),
+        (".gemini/skills", "strong"),
+    ],
     "antigravity": [("ANTIGRAVITY.md", "strong")],
     "opencode": [("opencode.json", "strong")],
     "hermes": [("AGENTS.md", "weak")],  # AGENTS.md alone is ambiguous
@@ -166,7 +171,7 @@ def _audit_adapter(
             lines.append(f"skills_link {sl['dst']} dangles")
             return RED, lines
         # Verify the link (or rsynced dir) still resolves to the manifest
-        # target. A user who repoints `.agents/skills` / `.pi/skills` to
+        # target. A user who repoints `.agent/skills` / `.pi/skills` to
         # a different directory would otherwise get a green doctor even
         # though the adapter is no longer reading the project's
         # .agent/skills tree.

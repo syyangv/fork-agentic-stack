@@ -25,7 +25,16 @@ class TransferPlanTest(unittest.TestCase):
         )
         self.assertEqual(plan.sensitive_scopes, ("working", "episodic", "candidates"))
         self.assertIn("AGENTS.md", [a.dst for a in plan.adapter_actions])
-        self.assertIn(".agents/skills", [a.dst for a in plan.adapter_actions])
+        self.assertIn(".agent/skills", [a.dst for a in plan.adapter_actions])
+
+    def test_detects_gemini_apply_here(self):
+        plan = build_plan("install this in Gemini here", ROOT)
+
+        self.assertEqual(plan.targets, ("gemini",))
+        self.assertEqual(plan.operation, "apply-here")
+        self.assertIn("GEMINI.md", [a.dst for a in plan.adapter_actions])
+        self.assertIn(".gemini/settings.json", [a.dst for a in plan.adapter_actions])
+        self.assertIn(".gemini/skills", [a.dst for a in plan.adapter_actions])
 
     def test_detects_multiple_targets_and_apply_here(self):
         plan = build_plan("install this in Cursor and Windsurf here", ROOT)

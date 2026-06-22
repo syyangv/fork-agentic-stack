@@ -16,8 +16,8 @@ from typing import Any
 SCHEMA_VERSION = 1
 
 VALID_MERGE_POLICIES = {"overwrite", "skip_if_exists", "merge_or_alert"}
-VALID_FALLBACKS = {"rsync_with_delete"}
-VALID_POST_INSTALL_ACTIONS = {"openclaw_register_workspace"}
+VALID_FALLBACKS = {"rsync_with_delete", "copy_with_delete", "copy_with_merge"}
+VALID_POST_INSTALL_ACTIONS = {"openclaw_register_workspace", "codex_sync_skills"}
 
 
 class ManifestError(ValueError):
