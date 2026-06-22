@@ -1,6 +1,7 @@
 ---
 name: deploy-checklist
 version: 2026-01-01
+description: Use before shipping or deploying to run pre-deploy, staging, production, and rollback-readiness checks.
 triggers: ["deploy", "ship", "release", "go live"]
 tools: [bash]
 constraints: ["all tests passing", "no unresolved TODOs in diff", "requires human approval for production"]

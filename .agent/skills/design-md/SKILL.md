@@ -1,6 +1,7 @@
 ---
 name: design-md
 version: 2026-04-26
+description: Use when a project has a root DESIGN.md and implementation should follow its design tokens and visual-system contract.
 triggers: ["DESIGN.md", "design.md", "Google Stitch", "Stitch", "design tokens", "design system", "visual design"]
 tools: [bash, memory_reflect]
 preconditions: ["DESIGN.md exists at project root"]

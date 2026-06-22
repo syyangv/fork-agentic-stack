@@ -81,3 +81,11 @@ The loop skills read `.agent/loops` contracts and `.agent/runtime` state before
 acting. `loop-triage` is read-only reporting; `loop-verifier` runs configured
 deterministic checks; `loop-constraints` enforces path and approval gates; and
 `loop-guard` enforces pause, budget, and stagnation decisions.
+
+## skill-inventory
+Audits skill availability across Claude Code, Codex, and `.agents` roots;
+reports Claude-only, Codex-only, Agents-only, and symlink alias drift.
+Triggers: "skill inventory", "skill drift", "codex-only", "claude-only",
+"missing skills", "sync skills", "skill parity"
+Constraints: audit before deleting or moving skills; preserve Codex-only
+infrastructure unless explicitly requested.

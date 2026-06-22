@@ -1,6 +1,7 @@
 ---
 name: tldraw
 version: 2026-04-21
+description: Use when the user wants a live diagram, sketch, wireframe, or architecture drawing on a connected tldraw canvas.
 triggers: ["draw", "diagram", "sketch", "wireframe", "flowchart", "mind-map", "mind map", "visualize", "lay out", "architecture diagram", "whiteboard"]
 tools: [mcp.tldraw.create_shape, mcp.tldraw.update_shape, mcp.tldraw.delete_shape, mcp.tldraw.get_canvas]
 preconditions: ["tldraw MCP server reachable via the harness's MCP config", "user has http://localhost:3030 open"]

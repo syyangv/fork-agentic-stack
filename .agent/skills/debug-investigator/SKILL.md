@@ -1,6 +1,7 @@
 ---
 name: debug-investigator
 version: 2026-01-01
+description: Use when debugging a failing system and you need a reproduce-isolate-hypothesize-verify workflow.
 triggers: ["debug", "why is this failing", "investigate", "stack trace", "bug"]
 tools: [bash, memory_reflect]
 constraints: ["reproduce before fixing", "fix root cause, not symptoms"]

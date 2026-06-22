@@ -1,6 +1,7 @@
 ---
 name: data-flywheel
 version: 2026-04-25
+description: Use when converting approved local agent runs into redacted traces, context cards, eval cases, and training-ready exports.
 triggers: ["data flywheel", "trace to train", "training traces", "context cards", "eval cases", "approved runs", "vertical intelligence"]
 tools: [bash, git]
 preconditions: [".agent exists"]
