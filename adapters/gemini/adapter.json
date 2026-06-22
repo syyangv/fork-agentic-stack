@@ -1,16 +1,21 @@
 {
   "name": "gemini",
-  "description": "Google Gemini CLI — gemini.md + .gemini/skills mirror",
+  "description": "Gemini CLI — GEMINI.md + .gemini/settings.json hooks + .gemini/skills mirror.",
   "files": [
     {
-      "src": "gemini.md",
-      "dst": "gemini.md",
-      "merge_policy": "overwrite"
+      "src": "GEMINI.md",
+      "dst": "GEMINI.md",
+      "merge_policy": "merge_or_alert"
+    },
+    {
+      "src": "settings.json",
+      "dst": ".gemini/settings.json",
+      "merge_policy": "merge_or_alert"
     }
   ],
   "skills_link": {
     "target": ".agent/skills",
     "dst": ".gemini/skills",
-    "fallback": "rsync_with_delete"
+    "fallback": "copy_with_merge"
   }
 }
