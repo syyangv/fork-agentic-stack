@@ -1,0 +1,45 @@
+{
+  "hooksConfig": {
+    "enabled": true,
+    "disabled": [],
+    "notifications": true
+  },
+  "skills": {
+    "enabled": true,
+    "disabled": []
+  },
+  "hooks": {
+    "AfterTool": [
+      {
+        "matcher": "run_shell_command|replace|write_file|write_todos",
+        "hooks": [
+          {
+            "name": "agentic-stack-post-tool",
+            "type": "command",
+            "command": "python3 \"$GEMINI_PROJECT_DIR/.agent/harness/hooks/gemini_post_tool.py\"",
+            "description": "Log significant Gemini tool results into .agent episodic memory",
+            "timeout": 60000
+          }
+        ]
+      }
+    ],
+    "SessionEnd": [
+      {
+        "hooks": [
+          {
+            "name": "agentic-stack-auto-dream",
+            "type": "command",
+            "command": "python3 \"$GEMINI_PROJECT_DIR/.agent/memory/auto_dream.py\"",
+            "description": "Stage recurring patterns into reviewable memory candidates",
+            "timeout": 60000
+          }
+        ]
+      }
+    ]
+  },
+  "security": {
+    "folderTrust": {
+      "enabled": true
+    }
+  }
+}
