@@ -155,6 +155,31 @@ category: visualization
             self.assertIn("brain", (agent / "skills" / "_index.md").read_text(encoding="utf-8"))
             self.assertIn("tldraw", (agent / "skills" / "_index.md").read_text(encoding="utf-8"))
 
+    def test_upgrade_merges_runtime_ignores_without_replacing_user_rules(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            project = Path(tmp)
+            agent = self.make_brain(project)
+            custom = "# private project rules\nmemory/private/**\n*.local-audit\n"
+            (agent / ".gitignore").write_text(custom, encoding="utf-8")
+            (agent / "skills" / "_manifest.jsonl").write_text("", encoding="utf-8")
+
+            result = self.run_cli(project, "upgrade", project, "--yes")
+
+            self.assertEqual(result.returncode, 0, result.stderr)
+            merged = (agent / ".gitignore").read_text(encoding="utf-8")
+            self.assertTrue(merged.startswith(custom))
+            self.assertIn("memory/private/**", merged)
+            self.assertIn("*.local-audit", merged)
+            self.assertIn("memory/dream-state.json", merged)
+            self.assertIn("memory/candidates/.lifecycle.lock", merged)
+
+            # A second upgrade is idempotent and does not duplicate patterns.
+            again = self.run_cli(project, "upgrade", project, "--yes")
+            self.assertEqual(again.returncode, 0, again.stderr)
+            repeated = (agent / ".gitignore").read_text(encoding="utf-8")
+            self.assertEqual(repeated.count("memory/dream-state.json"), 1)
+            self.assertEqual(repeated.count("memory/candidates/.lifecycle.lock"), 1)
+
     def test_doctor_warns_for_missing_and_unwired_claude_hook_files(self):
         from harness_manager import doctor
 
