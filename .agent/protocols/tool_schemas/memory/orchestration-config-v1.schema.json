@@ -3,8 +3,9 @@
   "$id": "agentic.memory.config.v1",
   "type": "object",
   "additionalProperties": false,
-  "required": ["mode", "total_token_budget", "lane_reserves", "project_aliases"],
+  "required": ["schema", "mode", "total_token_budget", "lane_reserves", "project_aliases"],
   "properties": {
+    "schema": {"const": "agentic.memory.config.v1"},
     "mode": {"type": "string", "enum": ["off", "shadow", "assist"]},
     "total_token_budget": {"type": "integer", "minimum": 1000, "maximum": 12000},
     "lane_reserves": {

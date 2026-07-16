@@ -16,6 +16,7 @@ class ConfigError(ValueError):
 
 @dataclass(frozen=True, slots=True)
 class MemoryOrchestrationConfig:
+    schema: str = "agentic.memory.config.v1"
     mode: str = "off"
     total_token_budget: int = 12_000
     lane_reserves: Mapping[str, int] = field(
@@ -28,6 +29,17 @@ class MemoryOrchestrationConfig:
     project_aliases: Mapping[str, str] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
+        data = {
+            "schema": self.schema,
+            "mode": self.mode,
+            "total_token_budget": self.total_token_budget,
+            "lane_reserves": thaw(self.lane_reserves),
+            "project_aliases": thaw(self.project_aliases),
+        }
+        try:
+            validate_schema(data, "orchestration-config-v1.schema.json")
+        except (SchemaValidationError, OSError, ValueError) as exc:
+            raise ConfigError(str(exc)) from exc
         object.__setattr__(self, "lane_reserves", deep_freeze(self.lane_reserves))
         object.__setattr__(self, "project_aliases", deep_freeze(self.project_aliases))
         if sum(self.lane_reserves.values()) != self.total_token_budget:
@@ -36,6 +48,7 @@ class MemoryOrchestrationConfig:
     @classmethod
     def from_external(cls, data: Mapping[str, Any]) -> "MemoryOrchestrationConfig":
         merged = {
+            "schema": "agentic.memory.config.v1",
             "mode": "off",
             "total_token_budget": 12_000,
             "lane_reserves": {

@@ -25,8 +25,8 @@ from harness_manager.upgrade import upgrade
 
 
 class EventEnvelopeTest(unittest.TestCase):
-    def base_event(self, payload):
-        return EventEnvelope.create(
+    def base_event(self, payload, **overrides):
+        values = dict(
             idempotency_key="codex:run-1:tool-2",
             timestamp="2026-07-16T20:00:00Z",
             event_type="tool.completed",
@@ -40,6 +40,8 @@ class EventEnvelopeTest(unittest.TestCase):
             intent="Inspect build output",
             payload=payload,
         )
+        values.update(overrides)
+        return EventEnvelope.create(**values)
 
     def test_stable_id_ignores_dictionary_key_order(self):
         first = self.base_event({"nested": {"b": 2, "a": 1}, "ok": True})
@@ -69,6 +71,34 @@ class EventEnvelopeTest(unittest.TestCase):
         self.assertIn("[REDACTED]", rendered)
         self.assertEqual(event.privacy, "sensitive-redacted")
 
+    def test_forbidden_prompt_environment_and_nested_credentials_are_redacted(self):
+        event = self.base_event(
+            {
+                "steps": [
+                    {"client_secret": "plain-client-secret"},
+                    {"refresh_token": "plain-refresh-token"},
+                    {"raw_environment": {"HOME": "/Users/a", "PATH": "/bin"}},
+                    {"full_prompt": "confidential user prompt"},
+                    {"path": "~/.ssh/id_rsa"},
+                ]
+            }
+        )
+        rendered = event.canonical_json()
+        for forbidden in (
+            "plain-client-secret",
+            "plain-refresh-token",
+            '"HOME"',
+            "confidential user prompt",
+            ".ssh/id_rsa",
+        ):
+            self.assertNotIn(forbidden, rendered)
+        self.assertEqual(event.privacy, "sensitive-redacted")
+
+        external = self.base_event({"ok": True}).to_dict()
+        external["payload"] = {"items": [{"raw_prompt": "do not persist"}]}
+        with self.assertRaises(ContractError):
+            EventEnvelope.from_external(external)
+
     def test_direct_plaintext_secret_is_rejected(self):
         data = self.base_event({"ok": True}).to_dict()
         data["payload"] = {"token": "ghp_abcdefghijklmnopqrstuvwxyz1234567890"}
@@ -86,11 +116,27 @@ class EventEnvelopeTest(unittest.TestCase):
         with self.assertRaises(ContractError):
             self.base_event({f"field-{i}": "x" * 1000 for i in range(20)})
 
+    def test_non_finite_and_non_json_payload_values_are_rejected(self):
+        for value in (float("nan"), float("inf"), float("-inf")):
+            with self.subTest(value=value), self.assertRaises(ContractError):
+                self.base_event({"metric": value})
+        with self.assertRaises(ContractError):
+            self.base_event({"binary": b"not-json"})
+
     def test_external_timestamp_must_be_utc(self):
         data = self.base_event({"ok": True}).to_dict()
         data["timestamp"] = "2026-07-16T16:00:00-04:00"
         with self.assertRaises(ContractError):
             EventEnvelope.from_external(data)
+        for invalid in (
+            "2026-99-99Tnot-a-timeZ",
+            "2025-02-29T12:00:00Z",
+            "2026-07-16T25:00:00Z",
+        ):
+            with self.subTest(timestamp=invalid), self.assertRaises(ContractError):
+                self.base_event({}, timestamp=invalid)
+        leap = self.base_event({}, timestamp="2024-02-29T12:00:00+00:00")
+        self.assertEqual(leap.timestamp, "2024-02-29T12:00:00Z")
 
     def test_contract_records_are_immutable(self):
         event = self.base_event({"nested": {"answer": 42}})
@@ -177,12 +223,16 @@ class ProjectIdentityTest(unittest.TestCase):
         ssh = derive_project_identity("/ignored", "git@github.com:MemTensor/MemOS.git")
         https = derive_project_identity("/other", "https://github.com/MemTensor/MemOS")
         self.assertEqual(ssh.project_id, https.project_id)
-        self.assertEqual(ssh.canonical_source, "github.com/MemTensor/MemOS")
+        self.assertEqual(ssh.canonical_source, "github.com/memtensor/memos")
+        lower = derive_project_identity("/third", "https://github.com/memtensor/memos.git")
+        self.assertEqual(ssh.project_id, lower.project_id)
 
     def test_windows_paths_are_canonicalized_without_host_resolution(self):
         identity = derive_project_identity(r"C:\Users\Alice\Repo")
-        self.assertEqual(identity.canonical_source, "c:/Users/Alice/Repo")
+        self.assertEqual(identity.canonical_source, "c:/users/alice/repo")
         self.assertEqual(len(identity.project_id), 16)
+        alternate = derive_project_identity(r"c:\users\alice\repo")
+        self.assertEqual(identity.project_id, alternate.project_id)
 
     def test_alias_resolution_is_explicit(self):
         identity = derive_project_identity("/repo", "https://example.com/acme/repo.git")
@@ -223,6 +273,8 @@ class RoutingAndBudgetTest(unittest.TestCase):
                 self.assertLessEqual(sum(budget.values()), 12_000)
                 if route.evidence is LaneRequirement.OFF:
                     self.assertEqual(budget["evidence"], 0)
+        with self.assertRaises(ValueError):
+            allocate_lane_budgets(route_intent("review code"), total=12_001)
 
 
 class ConfigurationTest(unittest.TestCase):
@@ -245,12 +297,15 @@ class ConfigurationTest(unittest.TestCase):
 
     def test_default_config_is_immutable_and_bounded(self):
         config = MemoryOrchestrationConfig()
+        self.assertEqual(config.schema, "agentic.memory.config.v1")
         self.assertEqual(config.mode, "off")
         self.assertEqual(sum(config.lane_reserves.values()), config.total_token_budget)
         with self.assertRaises(FrozenInstanceError):
             config.mode = "assist"
         with self.assertRaises(TypeError):
             config.lane_reserves["governance"] = 1
+        with self.assertRaises(ConfigError):
+            MemoryOrchestrationConfig(mode="enforce")
 
     def test_upgrade_installs_code_and_schemas_but_preserves_local_config(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -260,6 +315,7 @@ class ConfigurationTest(unittest.TestCase):
             local_config = agent / "memory" / "orchestration" / "config.json"
             local_config.parent.mkdir(parents=True)
             custom = {
+                "schema": "agentic.memory.config.v1",
                 "mode": "shadow",
                 "total_token_budget": 12000,
                 "lane_reserves": {

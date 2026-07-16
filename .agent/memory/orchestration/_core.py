@@ -4,6 +4,7 @@ from __future__ import annotations
 import json
 import re
 from collections.abc import Mapping
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from types import MappingProxyType
 from typing import Any
@@ -11,12 +12,18 @@ from typing import Any
 
 REDACTED = "[REDACTED]"
 _SENSITIVE_KEYS = re.compile(
-    r"^(api[_-]?key|access[_-]?token|auth(?:orization)?|bearer|password|passwd|secret|private[_-]?key)$",
+    r"^(api[_-]?key|access[_-]?token|refresh[_-]?token|session[_-]?token|client[_-]?secret|secret[_-]?access[_-]?key|auth(?:orization)?|bearer|password|passwd|secret|private[_-]?key)$",
+    re.IGNORECASE,
+)
+_FORBIDDEN_CONTENT_KEYS = re.compile(
+    r"^(full[_-]?prompt|raw[_-]?prompt|system[_-]?prompt|user[_-]?prompt|raw[_-]?(?:environment|env)|environment[_-]?variables|env[_-]?vars|process[_-]?env|os[_-]?environ)$",
     re.IGNORECASE,
 )
 _SECRET_VALUES = (
     re.compile(r"\bsk-(?:proj-)?[A-Za-z0-9_-]{16,}\b"),
     re.compile(r"\bgh[opusr]_[A-Za-z0-9]{20,}\b"),
+    re.compile(r"\bglpat-[A-Za-z0-9_-]{16,}\b"),
+    re.compile(r"\bAKIA[0-9A-Z]{16}\b"),
     re.compile(r"\bBearer\s+[A-Za-z0-9._~+/=-]{8,}\b", re.IGNORECASE),
     re.compile(r"-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----"),
 )
@@ -25,6 +32,9 @@ _CREDENTIAL_PATHS = (
     re.compile(r"(?:~|/[^\s]+)?/\.config/gcloud/application_default_credentials\.json\b", re.IGNORECASE),
     re.compile(r"(?:^|[\\/])\.env(?:\.[A-Za-z0-9_-]+)?\b", re.IGNORECASE),
     re.compile(r"(?:^|[\\/])(?:credentials|secrets|tokens?)(?:\.[A-Za-z0-9_-]+)?\b", re.IGNORECASE),
+    re.compile(r"(?:~|/[^\s]+)?/\.ssh/(?:id_[A-Za-z0-9_-]+|authorized_keys)\b", re.IGNORECASE),
+    re.compile(r"(?:~|/[^\s]+)?/\.(?:netrc|npmrc|pypirc)\b", re.IGNORECASE),
+    re.compile(r"(?:~|/[^\s]+)?/\.(?:docker|kube)/config(?:\.json)?\b", re.IGNORECASE),
 )
 
 
@@ -46,13 +56,17 @@ def thaw(value: Any) -> Any:
 
 def canonical_json(value: Any) -> str:
     return json.dumps(
-        thaw(value), sort_keys=True, separators=(",", ":"), ensure_ascii=False
+        thaw(value),
+        sort_keys=True,
+        separators=(",", ":"),
+        ensure_ascii=False,
+        allow_nan=False,
     )
 
 
 def redact(value: Any, key: str | None = None) -> Any:
     """Return a recursively redacted copy suitable for contract creation."""
-    if key and _SENSITIVE_KEYS.match(key):
+    if key and (_SENSITIVE_KEYS.match(key) or _FORBIDDEN_CONTENT_KEYS.match(key)):
         return REDACTED
     if isinstance(value, Mapping):
         return {str(k): redact(v, str(k)) for k, v in value.items()}
@@ -67,7 +81,7 @@ def redact(value: Any, key: str | None = None) -> Any:
 
 
 def contains_sensitive_plaintext(value: Any, key: str | None = None) -> bool:
-    if key and _SENSITIVE_KEYS.match(key) and value != REDACTED:
+    if key and (_SENSITIVE_KEYS.match(key) or _FORBIDDEN_CONTENT_KEYS.match(key)) and value != REDACTED:
         return True
     if isinstance(value, Mapping):
         return any(contains_sensitive_plaintext(v, str(k)) for k, v in value.items())
@@ -94,6 +108,22 @@ def validate_schema(instance: Any, schema_name: str) -> None:
     """
     schema = json.loads((_SCHEMA_DIR / schema_name).read_text(encoding="utf-8"))
     _validate(instance, schema, "$")
+
+
+def validate_utc_timestamp(value: str) -> None:
+    """Require a real ISO-8601 calendar timestamp whose offset is UTC."""
+    try:
+        parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except (TypeError, ValueError) as exc:
+        raise SchemaValidationError(f"invalid ISO-8601 timestamp: {value!r}") from exc
+    if parsed.tzinfo is None or parsed.utcoffset() != timedelta(0):
+        raise SchemaValidationError(f"timestamp must use UTC: {value!r}")
+
+
+def normalize_utc_timestamp(value: str) -> str:
+    validate_utc_timestamp(value)
+    parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+    return parsed.astimezone(timezone.utc).isoformat().replace("+00:00", "Z")
 
 
 def _validate(value: Any, schema: Mapping[str, Any], path: str) -> None:

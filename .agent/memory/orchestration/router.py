@@ -77,8 +77,8 @@ def allocate_lane_budgets(
     total: int = 12_000,
     reserves: dict[str, int] | None = None,
 ) -> dict[str, int]:
-    if total <= 0:
-        raise ValueError("total token budget must be positive")
+    if total <= 0 or total > 12_000:
+        raise ValueError("total token budget must be between 1 and 12,000")
     defaults = {"governance": 4_800, "behavioral": 4_200, "evidence": 3_000}
     requested = dict(reserves or defaults)
     if set(requested) != set(defaults) or any(value < 0 for value in requested.values()):

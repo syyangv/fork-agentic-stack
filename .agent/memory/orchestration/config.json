@@ -1,4 +1,5 @@
 {
+  "schema": "agentic.memory.config.v1",
   "mode": "off",
   "total_token_budget": 12000,
   "lane_reserves": {

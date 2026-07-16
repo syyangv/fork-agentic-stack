@@ -32,8 +32,7 @@ def derive_project_identity(repo_root: str | Path, remote: str | None = None) ->
 def canonicalize_repo_root(repo_root: str) -> str:
     expanded = str(Path(repo_root).expanduser())
     if _WINDOWS_ABSOLUTE.match(repo_root):
-        normalized = ntpath.normpath(repo_root).replace("\\", "/")
-        return normalized[0].lower() + normalized[1:]
+        return ntpath.normcase(ntpath.normpath(repo_root)).replace("\\", "/")
     return str(Path(expanded).resolve(strict=False))
 
 
@@ -52,7 +51,11 @@ def canonicalize_remote(remote: str) -> str:
         path = path[:-4]
     if not path:
         raise ValueError(f"git remote has no repository path: {remote!r}")
-    return f"{host.lower()}/{path}"
+    normalized_host = host.lower()
+    if normalized_host in {"github.com", "www.github.com"}:
+        normalized_host = "github.com"
+        path = path.lower()
+    return f"{normalized_host}/{path}"
 
 
 class ProjectIdentityResolver:

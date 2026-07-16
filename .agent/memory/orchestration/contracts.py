@@ -11,9 +11,11 @@ from ._core import (
     canonical_json,
     contains_sensitive_plaintext,
     deep_freeze,
+    normalize_utc_timestamp,
     redact,
     thaw,
     validate_schema,
+    validate_utc_timestamp,
 )
 
 
@@ -56,13 +58,20 @@ class EventEnvelope:
         object.__setattr__(self, "payload", deep_freeze(self.payload))
         object.__setattr__(self, "code_refs", deep_freeze(self.code_refs))
         object.__setattr__(self, "parent_event_ids", tuple(self.parent_event_ids))
-        if contains_sensitive_plaintext(self.to_dict()):
+        data = self.to_dict()
+        if contains_sensitive_plaintext(data):
             raise ContractError("event contains plaintext secret or credential path")
         for path, value in _walk_strings(self.payload):
             if len(value) > 2_000:
                 raise ContractError(f"payload string at {path} exceeds 2,000 characters")
-        if len(canonical_json(self.payload).encode("utf-8")) > 16 * 1024:
-            raise ContractError("payload exceeds 16 KiB")
+        try:
+            if len(canonical_json(self.payload).encode("utf-8")) > 16 * 1024:
+                raise ContractError("payload exceeds 16 KiB")
+            validate_schema(data, "event-envelope-v1.schema.json")
+            validate_utc_timestamp(self.timestamp)
+        except (SchemaValidationError, TypeError, ValueError) as exc:
+            raise ContractError(str(exc)) from exc
+        self._validate_id()
 
     @classmethod
     def create(cls, **values: Any) -> "EventEnvelope":
@@ -71,6 +80,10 @@ class EventEnvelope:
         values.setdefault("privacy", "internal")
         values.setdefault("code_refs", ())
         values.setdefault("parent_event_ids", ())
+        try:
+            values["timestamp"] = normalize_utc_timestamp(values["timestamp"])
+        except (KeyError, SchemaValidationError) as exc:
+            raise ContractError(str(exc)) from exc
         original = {
             "intent": values.get("intent", ""),
             "payload": values.get("payload", {}),
@@ -78,23 +91,22 @@ class EventEnvelope:
         }
         for name, raw in original.items():
             values[name] = redact(raw)
-        if canonical_json(original) != canonical_json(
-            {name: values[name] for name in original}
-        ):
-            values["privacy"] = "sensitive-redacted"
-        content = {name: values[name] for name in _EVENT_FIELDS if name != "event_id"}
-        values["event_id"] = "evt_" + hashlib.sha256(
-            canonical_json(content).encode("utf-8")
-        ).hexdigest()
-        event = cls(**values)
-        event._validate_id()
-        validate_schema(event.to_dict(), "event-envelope-v1.schema.json")
-        return event
+        try:
+            if canonical_json(original) != canonical_json(
+                {name: values[name] for name in original}
+            ):
+                values["privacy"] = "sensitive-redacted"
+            content = {name: values[name] for name in _EVENT_FIELDS if name != "event_id"}
+            values["event_id"] = "evt_" + hashlib.sha256(
+                canonical_json(content).encode("utf-8")
+            ).hexdigest()
+            return cls(**values)
+        except (SchemaValidationError, TypeError, ValueError) as exc:
+            raise ContractError(str(exc)) from exc
 
     @classmethod
     def from_external(cls, data: Mapping[str, Any]) -> "EventEnvelope":
         event = cls(**_external(data, "event-envelope-v1.schema.json"))
-        event._validate_id()
         return event
 
     def _validate_id(self) -> None:
@@ -128,6 +140,11 @@ class ProvenanceRef:
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "locator", deep_freeze(self.locator))
+        _validate_contract(self.to_dict(), "provenance-ref-v1.schema.json")
+        try:
+            validate_utc_timestamp(self.observed_at)
+        except SchemaValidationError as exc:
+            raise ContractError(str(exc)) from exc
 
     @classmethod
     def from_external(cls, data: Mapping[str, Any]) -> "ProvenanceRef":
@@ -154,6 +171,9 @@ class RetrievalItem:
     def __post_init__(self) -> None:
         object.__setattr__(self, "scope", deep_freeze(self.scope))
         object.__setattr__(self, "provenance", deep_freeze(self.provenance))
+        _validate_contract(self.to_dict(), "retrieval-item-v1.schema.json")
+        for item in self.provenance:
+            ProvenanceRef.from_external(item)
 
     @classmethod
     def from_external(cls, data: Mapping[str, Any]) -> "RetrievalItem":
@@ -183,6 +203,10 @@ class ContextPacket:
         object.__setattr__(self, "sections", deep_freeze(self.sections))
         object.__setattr__(self, "warnings", tuple(self.warnings))
         object.__setattr__(self, "health", deep_freeze(self.health))
+        _validate_contract(self.to_dict(), "context-packet-v1.schema.json")
+        for section in self.sections:
+            for item in section["items"]:
+                RetrievalItem.from_external(item)
 
     @classmethod
     def from_external(cls, data: Mapping[str, Any]) -> "ContextPacket":
@@ -230,3 +254,13 @@ def _walk_strings(value: Any, path: str = "payload"):
     elif isinstance(value, tuple):
         for index, child in enumerate(value):
             yield from _walk_strings(child, f"{path}[{index}]")
+
+
+def _validate_contract(data: Mapping[str, Any], schema: str) -> None:
+    try:
+        validate_schema(data, schema)
+        canonical_json(data)
+    except (SchemaValidationError, TypeError, ValueError) as exc:
+        raise ContractError(str(exc)) from exc
+    if contains_sensitive_plaintext(data):
+        raise ContractError("contract contains plaintext secret or credential path")
