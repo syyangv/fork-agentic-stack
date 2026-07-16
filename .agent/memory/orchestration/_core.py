@@ -70,9 +70,9 @@ _CREDENTIAL_PATHS = (
 )
 _TEXT_ASSIGNMENT = re.compile(
     r"(?<![A-Za-z0-9_.-])"
-    r"(?P<key>[A-Za-z][A-Za-z0-9_.-]*)"
+    r"(?P<key_quote>[\"']?)(?P<key>[A-Za-z][A-Za-z0-9_.-]*)(?P=key_quote)"
     r"(?P<spacing>\s*[:=]\s*)"
-    r"(?P<value>\"[^\"\n]*\"|'[^'\n]*'|`[^`\n]*`|[^\s,;]+)"
+    r"(?P<value>\[REDACTED\]|\"(?:\\.|[^\"\\\n])*\"|'(?:\\.|[^'\\\n])*'|`[^`\n]*`|[^\n,;}\]]+)"
 )
 
 
@@ -129,7 +129,7 @@ def contains_sensitive_plaintext(value: Any, key: str | None = None) -> bool:
         if any(pattern.search(value) for pattern in _SECRET_VALUES + _CREDENTIAL_PATHS):
             return True
         return any(
-            _is_sensitive_key(match.group("key")) and match.group("value") != REDACTED
+            _is_sensitive_key(match.group("key")) and not _is_redacted_scalar(match.group("value"))
             for match in _TEXT_ASSIGNMENT.finditer(value)
         )
     return False
@@ -138,7 +138,19 @@ def contains_sensitive_plaintext(value: Any, key: str | None = None) -> bool:
 def _redact_text_assignment(match: re.Match[str]) -> str:
     if not _is_sensitive_key(match.group("key")):
         return match.group(0)
-    return f"{match.group('key')}{match.group('spacing')}{REDACTED}"
+    value = match.group("value").strip()
+    redacted = REDACTED
+    if len(value) >= 2 and value[0] == value[-1] and value[0] in "\"'`":
+        redacted = f"{value[0]}{REDACTED}{value[-1]}"
+    quote = match.group("key_quote")
+    return f"{quote}{match.group('key')}{quote}{match.group('spacing')}{redacted}"
+
+
+def _is_redacted_scalar(value: str) -> bool:
+    scalar = value.strip()
+    if len(scalar) >= 2 and scalar[0] == scalar[-1] and scalar[0] in "\"'`":
+        scalar = scalar[1:-1]
+    return scalar == REDACTED
 
 
 def _normalized_key(key: str) -> str:

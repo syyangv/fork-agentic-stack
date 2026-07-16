@@ -155,12 +155,17 @@ class GovernanceOrchestratorTest(unittest.TestCase):
                 "- OPENAI_API_KEY=plain-secret-value\n"
                 "- githubToken: plain-github-token\n"
                 "- DatabasePassword='plain database password'\n"
+                '- {"apiKey": "plain-json-secret"}\n'
+                "- dbPassword: correct horse battery staple\n"
             )
             packet = build_governance_packet(self.provider(agent), "credentials")
             for rendered in (json.dumps(packet.to_dict()), format_packet_text(packet)):
                 self.assertNotIn("plain-secret-value", rendered)
                 self.assertNotIn("plain-github-token", rendered)
                 self.assertNotIn("plain database password", rendered)
+                self.assertNotIn("plain-json-secret", rendered)
+                self.assertNotIn("correct horse battery staple", rendered)
+                self.assertNotIn("horse battery staple", rendered)
                 self.assertIn("[REDACTED]", rendered)
             self.assertIn("governance_redacted:preference", packet.warnings)
             self.assertEqual(packet.health["governance"]["status"], "degraded")
