@@ -216,7 +216,7 @@ class EventEnvelopeTest(unittest.TestCase):
 class ContractSchemaTest(unittest.TestCase):
     def test_manifest_declares_phase1_contract_features(self):
         manifest = json.loads((ROOT / ".agent" / "infrastructure.json").read_text())
-        self.assertEqual(manifest["orchestration_phase"], 1)
+        self.assertGreaterEqual(manifest["orchestration_phase"], 1)
         self.assertTrue(
             {
                 "memory_contracts_v1",

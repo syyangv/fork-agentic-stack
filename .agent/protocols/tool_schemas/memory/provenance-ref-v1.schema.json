@@ -5,7 +5,7 @@
   "additionalProperties": false,
   "required": ["kind", "provider", "source_id", "project_id", "repository_revision", "source_hash", "observed_at", "confidence", "freshness", "locator"],
   "properties": {
-    "kind": {"type": "string", "enum": ["lesson", "decision", "episode", "trace", "policy", "world_model", "skill", "crg_node", "crg_flow", "test_run"]},
+    "kind": {"type": "string", "enum": ["lesson", "preference", "permission", "decision", "review_queue", "episode", "trace", "policy", "world_model", "skill", "crg_node", "crg_flow", "test_run"]},
     "provider": {"type": "string", "enum": ["agentic-stack", "memos-local", "crg", "test-runner"]},
     "source_id": {"type": "string", "minLength": 1, "maxLength": 512},
     "project_id": {"type": "string", "pattern": "[0-9a-f]{16}"},
