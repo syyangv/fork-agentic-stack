@@ -14,6 +14,7 @@ sys.path.insert(0, os.path.join(BASE, "memory"))
 from review_state import mark_graduated
 from validate import heuristic_check
 from render_lessons import append_lesson, render_lessons, load_lessons
+from candidate_lock import candidate_lifecycle_lock
 
 CANDIDATES = os.path.join(BASE, "memory/candidates")
 SEMANTIC = os.path.join(BASE, "memory/semantic")
@@ -36,7 +37,7 @@ def _lesson_id(candidate):
     return "lesson_" + hashlib.md5(claim.encode()).hexdigest()[:12]
 
 
-def main():
+def _main_unlocked():
     p = argparse.ArgumentParser(description="Graduate a staged candidate.")
     p.add_argument("candidate_id")
     p.add_argument("--rationale", required=True,
@@ -183,6 +184,13 @@ def main():
 
     print(f"graduated {args.candidate_id} → lesson {lesson['id']}")
     print(f"re-rendered: {md_path}")
+
+
+def main():
+    # Serialize the candidate read, semantic append, render, and terminal move
+    # as one lifecycle transaction. Nested review_state calls are reentrant.
+    with candidate_lifecycle_lock(CANDIDATES):
+        return _main_unlocked()
 
 
 if __name__ == "__main__":

@@ -10,6 +10,7 @@ history so a candidate that keeps reappearing is visibly churning rather
 than looking novel each time.
 """
 import os, json, datetime, hashlib
+from candidate_lock import atomic_write_json, candidate_lifecycle_lock
 
 
 def _now():
@@ -64,16 +65,22 @@ def load_candidate(path):
 
 
 def save_candidate(candidate, path):
-    with open(path, "w") as f:
-        json.dump(candidate, f, indent=2)
+    atomic_write_json(path, candidate)
+
+
+def _move_candidate(src, dst):
+    """Atomically move a lifecycle record within the candidates filesystem."""
+    os.replace(src, dst)
 
 
 def stage_candidate(candidate_path, reviewer="auto_dream"):
     """Mark a freshly-written candidate as staged with an initial decision entry."""
-    cand = load_candidate(candidate_path)
-    cand.setdefault("status", "staged")
-    _touch(cand, "staged", reviewer)
-    save_candidate(cand, candidate_path)
+    candidates_dir = os.path.dirname(candidate_path)
+    with candidate_lifecycle_lock(candidates_dir):
+        cand = load_candidate(candidate_path)
+        cand.setdefault("status", "staged")
+        _touch(cand, "staged", reviewer)
+        save_candidate(cand, candidate_path)
 
 
 def _default_queue_path(candidates_dir):
@@ -104,25 +111,28 @@ def mark_graduated(candidate_id, reviewer, rationale, candidates_dir,
     the structured lesson entry to semantic/lessons.jsonl and re-rendering
     LESSONS.md — this function only handles the candidate side.
     """
-    src = os.path.join(candidates_dir, f"{candidate_id}.json")
-    if not os.path.exists(src):
-        raise FileNotFoundError(f"candidate not found: {candidate_id}")
-    cand = load_candidate(src)
-    cand["status"] = "provisional" if provisional else "accepted"
-    cand["accepted_at"] = _now()
-    cand["reviewer"] = reviewer
-    cand["rationale"] = rationale
-    _touch(cand, "graduated", reviewer, notes=rationale,
-           provisional=provisional)
-    _stamp_evidence_and_lessons(cand, candidates_dir)
+    with candidate_lifecycle_lock(candidates_dir):
+        src = os.path.join(candidates_dir, f"{candidate_id}.json")
+        if not os.path.exists(src):
+            raise FileNotFoundError(f"candidate not found: {candidate_id}")
+        cand = load_candidate(src)
+        target_status = "provisional" if provisional else "accepted"
+        if cand.get("status") != target_status:
+            cand["status"] = target_status
+            cand["accepted_at"] = _now()
+            cand["reviewer"] = reviewer
+            cand["rationale"] = rationale
+            _touch(cand, "graduated", reviewer, notes=rationale,
+                   provisional=provisional)
+            _stamp_evidence_and_lessons(cand, candidates_dir)
+            save_candidate(cand, src)
 
-    graduated_dir = os.path.join(candidates_dir, "graduated")
-    os.makedirs(graduated_dir, exist_ok=True)
-    dst = os.path.join(graduated_dir, f"{candidate_id}.json")
-    save_candidate(cand, dst)
-    os.remove(src)
-    _refresh_queue(candidates_dir)
-    return cand
+        graduated_dir = os.path.join(candidates_dir, "graduated")
+        os.makedirs(graduated_dir, exist_ok=True)
+        dst = os.path.join(graduated_dir, f"{candidate_id}.json")
+        _move_candidate(src, dst)
+        _refresh_queue(candidates_dir)
+        return cand
 
 
 def mark_rejected(candidate_id, reviewer, reason, candidates_dir, **extra_stamp):
@@ -137,38 +147,42 @@ def mark_rejected(candidate_id, reviewer, reason, candidates_dir, **extra_stamp)
     specific lessons are still present before re-staging, so unrelated LESSONS
     edits don't cause the candidate to churn.
     """
-    src = os.path.join(candidates_dir, f"{candidate_id}.json")
-    if not os.path.exists(src):
-        raise FileNotFoundError(f"candidate not found: {candidate_id}")
-    cand = load_candidate(src)
-    cand["status"] = "rejected"
-    cand["rejection_count"] = cand.get("rejection_count", 0) + 1
-    _touch(cand, "rejected", reviewer, notes=reason, **extra_stamp)
-    _stamp_evidence_and_lessons(cand, candidates_dir)
+    with candidate_lifecycle_lock(candidates_dir):
+        src = os.path.join(candidates_dir, f"{candidate_id}.json")
+        if not os.path.exists(src):
+            raise FileNotFoundError(f"candidate not found: {candidate_id}")
+        cand = load_candidate(src)
+        if cand.get("status") != "rejected":
+            cand["status"] = "rejected"
+            cand["rejection_count"] = cand.get("rejection_count", 0) + 1
+            _touch(cand, "rejected", reviewer, notes=reason, **extra_stamp)
+            _stamp_evidence_and_lessons(cand, candidates_dir)
+            save_candidate(cand, src)
 
-    rejected_dir = os.path.join(candidates_dir, "rejected")
-    os.makedirs(rejected_dir, exist_ok=True)
-    dst = os.path.join(rejected_dir, f"{candidate_id}.json")
-    save_candidate(cand, dst)
-    os.remove(src)
-    _refresh_queue(candidates_dir)
-    return cand
+        rejected_dir = os.path.join(candidates_dir, "rejected")
+        os.makedirs(rejected_dir, exist_ok=True)
+        dst = os.path.join(rejected_dir, f"{candidate_id}.json")
+        _move_candidate(src, dst)
+        _refresh_queue(candidates_dir)
+        return cand
 
 
 def mark_reopened(candidate_id, reviewer, candidates_dir):
     """Move a rejected candidate back to the staged pool with history intact."""
-    src = os.path.join(candidates_dir, "rejected", f"{candidate_id}.json")
-    if not os.path.exists(src):
-        raise FileNotFoundError(f"rejected candidate not found: {candidate_id}")
-    cand = load_candidate(src)
-    cand["status"] = "staged"
-    _touch(cand, "reopened", reviewer)
+    with candidate_lifecycle_lock(candidates_dir):
+        src = os.path.join(candidates_dir, "rejected", f"{candidate_id}.json")
+        if not os.path.exists(src):
+            raise FileNotFoundError(f"rejected candidate not found: {candidate_id}")
+        cand = load_candidate(src)
+        if cand.get("status") != "staged":
+            cand["status"] = "staged"
+            _touch(cand, "reopened", reviewer)
+            save_candidate(cand, src)
 
-    dst = os.path.join(candidates_dir, f"{candidate_id}.json")
-    save_candidate(cand, dst)
-    os.remove(src)
-    _refresh_queue(candidates_dir)
-    return cand
+        dst = os.path.join(candidates_dir, f"{candidate_id}.json")
+        _move_candidate(src, dst)
+        _refresh_queue(candidates_dir)
+        return cand
 
 
 def _age_factor(staged_at):
@@ -232,11 +246,15 @@ def write_review_queue_summary(candidates_dir, summary_path):
     This file sits in memory/working/ and gets loaded by context_budget into
     every host session — impossible to miss.
     """
+    with candidate_lifecycle_lock(candidates_dir):
+        return _write_review_queue_summary_locked(candidates_dir, summary_path)
+
+
+def _write_review_queue_summary_locked(candidates_dir, summary_path):
     pending = list_candidates(candidates_dir, status="staged")
     os.makedirs(os.path.dirname(summary_path), exist_ok=True)
     if not pending:
-        with open(summary_path, "w") as f:
-            f.write("# Review Queue\n\n_No pending candidates._\n")
+        _atomic_write_text(summary_path, "# Review Queue\n\n_No pending candidates._\n")
         return 0
 
     staged_ats = [c.get("staged_at", "") for c in pending if c.get("staged_at")]
@@ -262,6 +280,21 @@ def write_review_queue_summary(candidates_dir, summary_path):
             f"rejections={cand.get('rejection_count', 0)}) "
             f"— {claim_preview}"
         )
-    with open(summary_path, "w") as f:
-        f.write("\n".join(lines) + "\n")
+    _atomic_write_text(summary_path, "\n".join(lines) + "\n")
     return len(pending)
+
+
+def _atomic_write_text(path, text):
+    import tempfile
+
+    directory = os.path.dirname(path) or "."
+    fd, tmp = tempfile.mkstemp(prefix=".review-queue-", suffix=".tmp", dir=directory)
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as stream:
+            stream.write(text)
+            stream.flush()
+            os.fsync(stream.fileno())
+        os.replace(tmp, path)
+    finally:
+        if os.path.exists(tmp):
+            os.unlink(tmp)

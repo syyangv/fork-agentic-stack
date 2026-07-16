@@ -12,6 +12,7 @@ import os, json, datetime, hashlib
 from cluster import content_cluster, extract_pattern
 from review_state import _lessons_sha
 from validate import extract_lesson_lines, check_exact_duplicate
+from candidate_lock import atomic_write_json, candidate_lifecycle_lock
 
 
 def cluster_and_extract(entries, threshold=0.3):
@@ -54,6 +55,22 @@ def _find_prior(slug, candidates_dir):
     return {}, None
 
 
+def _human_rejection_is_terminal(candidate):
+    """Only deterministic machine rejections may be reconsidered automatically."""
+    automated_reviewers = {"heuristic_prefilter", "scheduled-deterministic-triage"}
+    rejected = [
+        decision for decision in candidate.get("decisions", [])
+        if decision.get("action") == "rejected"
+    ]
+    if not rejected:
+        return False
+    return rejected[-1].get("reviewer") not in automated_reviewers
+
+
+def _move_candidate(src, dst):
+    os.replace(src, dst)
+
+
 def write_candidates(patterns, candidates_dir):
     """Stage each pattern as a candidate JSON with lifecycle metadata.
 
@@ -69,6 +86,11 @@ def write_candidates(patterns, candidates_dir):
     """
     if not patterns:
         return 0
+    with candidate_lifecycle_lock(candidates_dir):
+        return _write_candidates_locked(patterns, candidates_dir)
+
+
+def _write_candidates_locked(patterns, candidates_dir):
     os.makedirs(candidates_dir, exist_ok=True)
     written = 0
     # Read LESSONS.md once — used to check whether specific duplicates that
@@ -78,7 +100,8 @@ def write_candidates(patterns, candidates_dir):
     lessons_text = ""
     if os.path.exists(lessons_path):
         try:
-            lessons_text = open(lessons_path).read()
+            with open(lessons_path, encoding="utf-8") as stream:
+                lessons_text = stream.read()
         except OSError:
             pass
     current_terminal_lessons = set(extract_lesson_lines(lessons_text))
@@ -104,8 +127,22 @@ def write_candidates(patterns, candidates_dir):
         slug = _slug(p)
         prev, prev_loc = _find_prior(slug, candidates_dir)
 
+        # Recover a prior interrupted restage/reopen. The source record was
+        # already atomically updated before its same-filesystem move failed.
+        if prev_loc in ("rejected", "graduated") and prev.get("status") == "staged":
+            src = os.path.join(candidates_dir, prev_loc, f"{slug}.json")
+            dst = os.path.join(candidates_dir, f"{slug}.json")
+            _move_candidate(src, dst)
+            written += 1
+            continue
+
         # Fully-accepted lesson — terminal, never resurrect.
         if prev_loc == "graduated" and prev.get("status") != "provisional":
+            continue
+
+        # A human rejection is terminal. New evidence may be inspected only
+        # after an explicit reopen transition moves the record back to staged.
+        if prev_loc == "rejected" and _human_rejection_is_terminal(prev):
             continue
 
         # For rejected + provisional-graduated, re-stage ONLY when something
@@ -162,17 +199,11 @@ def write_candidates(patterns, candidates_dir):
         }
 
         staged_path = os.path.join(candidates_dir, f"{slug}.json")
-        with open(staged_path, "w") as f:
-            json.dump(candidate, f, indent=2)
-
-        # The slug must live in exactly one lifecycle location. Remove any
-        # prior copy in rejected/ or graduated/ (the latter only for
-        # provisional re-review — accepted never gets here because it's
-        # skipped above).
         if prev_loc in ("rejected", "graduated"):
-            try:
-                os.remove(os.path.join(candidates_dir, prev_loc, f"{slug}.json"))
-            except OSError:
-                pass
+            prior_path = os.path.join(candidates_dir, prev_loc, f"{slug}.json")
+            atomic_write_json(prior_path, candidate)
+            _move_candidate(prior_path, staged_path)
+        else:
+            atomic_write_json(staged_path, candidate)
         written += 1
     return written

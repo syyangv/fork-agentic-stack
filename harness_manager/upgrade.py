@@ -2,8 +2,10 @@
 from __future__ import annotations
 
 import fnmatch
+import os
 import shutil
 import sys
+import tempfile
 from pathlib import Path
 from typing import Callable
 
@@ -54,8 +56,54 @@ def upgrade(
         dst.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(src, dst)
 
+    _merge_agent_gitignore(src_agent, dst_agent, log=log)
     skill_manifest.sync_manifest(target_root, log=log)
     return 0
+
+
+def _merge_agent_gitignore(
+    src_agent: Path, dst_agent: Path, *, log: Callable[[str], None]
+) -> bool:
+    """Upsert stack runtime ignores without replacing user-owned rules."""
+    src = src_agent / ".gitignore"
+    if not src.is_file():
+        return False
+    source_text = src.read_text(encoding="utf-8")
+    required = [
+        line.strip()
+        for line in source_text.splitlines()
+        if line.strip() and not line.lstrip().startswith("#")
+    ]
+    dst = dst_agent / ".gitignore"
+    existing = dst.read_text(encoding="utf-8") if dst.is_file() else ""
+    existing_lines = set(existing.splitlines())
+    missing = [line for line in required if line not in existing_lines]
+    if not missing:
+        return False
+    if existing:
+        separator = "" if existing.endswith("\n") else "\n"
+        addition = (
+            separator
+            + "\n# agentic-stack runtime coordination and health state\n"
+            + "\n".join(missing)
+            + "\n"
+        )
+        merged = existing + addition
+    else:
+        merged = source_text
+    dst.parent.mkdir(parents=True, exist_ok=True)
+    fd, tmp = tempfile.mkstemp(prefix=".gitignore-", suffix=".tmp", dir=dst.parent)
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as stream:
+            stream.write(merged)
+            stream.flush()
+            os.fsync(stream.fileno())
+        os.replace(tmp, dst)
+    finally:
+        if os.path.exists(tmp):
+            os.unlink(tmp)
+    log(f"  ~ {dst.relative_to(dst_agent.parent)} (merged runtime ignores)")
+    return True
 
 
 def _plan(src_agent: Path, dst_agent: Path) -> list[tuple[Path, Path]]:
@@ -85,6 +133,9 @@ def _plan(src_agent: Path, dst_agent: Path) -> list[tuple[Path, Path]]:
 
 def _infrastructure_files(src_agent: Path) -> list[Path]:
     rels: list[Path] = []
+    manifest = src_agent / "infrastructure.json"
+    if manifest.is_file():
+        rels.append(manifest.relative_to(src_agent))
     for base in ("harness",):
         root = src_agent / base
         if root.is_dir():

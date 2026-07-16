@@ -93,6 +93,7 @@ category: visualization
             (agent / "harness" / "hooks" / "claude_code_post_tool.py").write_text("old hook\n", encoding="utf-8")
             (agent / "memory" / "auto_dream.py").write_text("old dream\n", encoding="utf-8")
             (agent / "tools" / "skill_loader.py").write_text("old loader\n", encoding="utf-8")
+            (agent / "infrastructure.json").write_text('{"schema_version": 0}\n', encoding="utf-8")
             (agent / "memory" / "personal" / "PREFERENCES.md").write_text("user prefs\n", encoding="utf-8")
             (agent / "memory" / "candidates" / "candidate.json").write_text("user candidate\n", encoding="utf-8")
             custom_skill = agent / "skills" / "debug-investigator"
@@ -125,6 +126,25 @@ category: visualization
                 (agent / "tools" / "brain_bridge.py").read_text(encoding="utf-8"),
                 (ROOT / ".agent" / "tools" / "brain_bridge.py").read_text(encoding="utf-8"),
             )
+            self.assertEqual(
+                (agent / "infrastructure.json").read_text(encoding="utf-8"),
+                (ROOT / ".agent" / "infrastructure.json").read_text(encoding="utf-8"),
+            )
+            self.assertEqual(
+                (agent / ".gitignore").read_text(encoding="utf-8"),
+                (ROOT / ".agent" / ".gitignore").read_text(encoding="utf-8"),
+            )
+            (agent / "memory" / "dream-state.json").write_text("{}\n")
+            (agent / "memory" / "candidates" / ".lifecycle.lock").write_text("")
+            subprocess.run(["git", "init", "-q"], cwd=project, check=True)
+            for runtime_path in (
+                ".agent/memory/dream-state.json",
+                ".agent/memory/candidates/.lifecycle.lock",
+            ):
+                ignored = subprocess.run(
+                    ["git", "check-ignore", "-q", runtime_path], cwd=project
+                )
+                self.assertEqual(ignored.returncode, 0, runtime_path)
             self.assertTrue((agent / "skills" / "tldraw" / "SKILL.md").is_file())
             self.assertTrue((agent / "skills" / "brain" / "SKILL.md").is_file())
             rows = {row["name"]: row for row in self.manifest_rows(project)}
@@ -134,6 +154,31 @@ category: visualization
             self.assertIn("draw", rows["tldraw"]["triggers"])
             self.assertIn("brain", (agent / "skills" / "_index.md").read_text(encoding="utf-8"))
             self.assertIn("tldraw", (agent / "skills" / "_index.md").read_text(encoding="utf-8"))
+
+    def test_upgrade_merges_runtime_ignores_without_replacing_user_rules(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            project = Path(tmp)
+            agent = self.make_brain(project)
+            custom = "# private project rules\nmemory/private/**\n*.local-audit\n"
+            (agent / ".gitignore").write_text(custom, encoding="utf-8")
+            (agent / "skills" / "_manifest.jsonl").write_text("", encoding="utf-8")
+
+            result = self.run_cli(project, "upgrade", project, "--yes")
+
+            self.assertEqual(result.returncode, 0, result.stderr)
+            merged = (agent / ".gitignore").read_text(encoding="utf-8")
+            self.assertTrue(merged.startswith(custom))
+            self.assertIn("memory/private/**", merged)
+            self.assertIn("*.local-audit", merged)
+            self.assertIn("memory/dream-state.json", merged)
+            self.assertIn("memory/candidates/.lifecycle.lock", merged)
+
+            # A second upgrade is idempotent and does not duplicate patterns.
+            again = self.run_cli(project, "upgrade", project, "--yes")
+            self.assertEqual(again.returncode, 0, again.stderr)
+            repeated = (agent / ".gitignore").read_text(encoding="utf-8")
+            self.assertEqual(repeated.count("memory/dream-state.json"), 1)
+            self.assertEqual(repeated.count("memory/candidates/.lifecycle.lock"), 1)
 
     def test_doctor_warns_for_missing_and_unwired_claude_hook_files(self):
         from harness_manager import doctor
