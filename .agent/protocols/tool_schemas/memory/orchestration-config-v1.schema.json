@@ -1,0 +1,25 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "agentic.memory.config.v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["mode", "total_token_budget", "lane_reserves", "project_aliases"],
+  "properties": {
+    "mode": {"type": "string", "enum": ["off", "shadow", "assist"]},
+    "total_token_budget": {"type": "integer", "minimum": 1000, "maximum": 12000},
+    "lane_reserves": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["governance", "behavioral", "evidence"],
+      "properties": {
+        "governance": {"type": "integer", "minimum": 0, "maximum": 12000},
+        "behavioral": {"type": "integer", "minimum": 0, "maximum": 12000},
+        "evidence": {"type": "integer", "minimum": 0, "maximum": 12000}
+      }
+    },
+    "project_aliases": {
+      "type": "object",
+      "additionalProperties": {"type": "string", "pattern": "[0-9a-f]{16}"}
+    }
+  }
+}

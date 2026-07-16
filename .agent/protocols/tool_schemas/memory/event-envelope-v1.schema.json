@@ -1,0 +1,26 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "agentic.memory.event.v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema", "event_id", "idempotency_key", "timestamp", "event_type", "project_id", "repo_root", "revision", "harness", "run_id", "session_id", "actor", "intent", "payload", "privacy", "code_refs", "parent_event_ids"],
+  "properties": {
+    "schema": {"const": "agentic.memory.event.v1"},
+    "event_id": {"type": "string", "pattern": "evt_[0-9a-f]{64}"},
+    "idempotency_key": {"type": "string", "minLength": 1, "maxLength": 512},
+    "timestamp": {"type": "string", "pattern": "[0-9]{4}-[0-9]{2}-[0-9]{2}T[^ ]+(Z|\\+00:00)", "maxLength": 64},
+    "event_type": {"type": "string", "enum": ["task.started", "tool.completed", "feedback.recorded", "task.completed", "retrieval.used"]},
+    "project_id": {"type": "string", "pattern": "[0-9a-f]{16}"},
+    "repo_root": {"type": "string", "minLength": 1, "maxLength": 2000},
+    "revision": {"type": ["string", "null"], "pattern": "[0-9a-f]{7,64}", "maxLength": 128},
+    "harness": {"type": "string", "minLength": 1, "maxLength": 100},
+    "run_id": {"type": "string", "minLength": 1, "maxLength": 512},
+    "session_id": {"type": "string", "minLength": 1, "maxLength": 512},
+    "actor": {"type": "string", "enum": ["user", "agent", "tool", "system"]},
+    "intent": {"type": "string", "minLength": 1, "maxLength": 2000},
+    "payload": {"type": "object"},
+    "privacy": {"type": "string", "enum": ["public", "internal", "sensitive-redacted"]},
+    "code_refs": {"type": "array", "items": {"type": "object"}},
+    "parent_event_ids": {"type": "array", "items": {"type": "string", "pattern": "evt_[0-9a-f]{64}"}}
+  }
+}
