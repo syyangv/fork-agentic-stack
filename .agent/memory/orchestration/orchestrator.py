@@ -12,7 +12,7 @@ def build_governance_packet(provider, intent: str, top_k: int = 3) -> ContextPac
         warnings.append("governance_budget_exceeded")
         selected = []
         used = 0
-        priority = {"permission": 0, "preference": 1, "decision": 2, "review_queue": 3, "lesson": 4}
+        priority = {"permission": 0, "preference": 1, "decision": 2, "lesson": 3, "review_queue": 4}
         for item in sorted(items, key=lambda value: priority.get(value.type, 99)):
             if used + item.token_estimate <= 12_000:
                 selected.append(item)

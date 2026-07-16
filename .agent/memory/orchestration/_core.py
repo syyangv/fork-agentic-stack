@@ -68,6 +68,12 @@ _CREDENTIAL_PATHS = (
     re.compile(r"(?:^|[/\\])\.(?:netrc|npmrc|pypirc)\b", re.IGNORECASE),
     re.compile(r"(?:^|[/\\])\.(?:docker|kube)[/\\]config(?:\.json)?\b", re.IGNORECASE),
 )
+_TEXT_ASSIGNMENT = re.compile(
+    r"(?<![A-Za-z0-9_.-])"
+    r"(?P<key>[A-Za-z][A-Za-z0-9_.-]*)"
+    r"(?P<spacing>\s*[:=]\s*)"
+    r"(?P<value>\"[^\"\n]*\"|'[^'\n]*'|`[^`\n]*`|[^\s,;]+)"
+)
 
 
 def deep_freeze(value: Any) -> Any:
@@ -109,7 +115,7 @@ def redact(value: Any, key: str | None = None) -> Any:
     result = value
     for pattern in _SECRET_VALUES + _CREDENTIAL_PATHS:
         result = pattern.sub(REDACTED, result)
-    return result
+    return _TEXT_ASSIGNMENT.sub(_redact_text_assignment, result)
 
 
 def contains_sensitive_plaintext(value: Any, key: str | None = None) -> bool:
@@ -120,8 +126,19 @@ def contains_sensitive_plaintext(value: Any, key: str | None = None) -> bool:
     if isinstance(value, (list, tuple)):
         return any(contains_sensitive_plaintext(item) for item in value)
     if isinstance(value, str):
-        return any(pattern.search(value) for pattern in _SECRET_VALUES + _CREDENTIAL_PATHS)
+        if any(pattern.search(value) for pattern in _SECRET_VALUES + _CREDENTIAL_PATHS):
+            return True
+        return any(
+            _is_sensitive_key(match.group("key")) and match.group("value") != REDACTED
+            for match in _TEXT_ASSIGNMENT.finditer(value)
+        )
     return False
+
+
+def _redact_text_assignment(match: re.Match[str]) -> str:
+    if not _is_sensitive_key(match.group("key")):
+        return match.group(0)
+    return f"{match.group('key')}{match.group('spacing')}{REDACTED}"
 
 
 def _normalized_key(key: str) -> str:

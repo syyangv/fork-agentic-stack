@@ -13,7 +13,7 @@ ROOT = Path(__file__).resolve().parents[1]
 AGENT = ROOT / ".agent"
 sys.path.insert(0, str(AGENT / "memory"))
 sys.path.insert(0, str(AGENT / "harness"))
-from orchestration.orchestrator import build_governance_packet
+from orchestration.orchestrator import build_governance_packet, format_packet_text
 from orchestration.providers.governance import GovernanceProvider
 from text import word_set
 
@@ -148,9 +148,29 @@ class GovernanceOrchestratorTest(unittest.TestCase):
             self.assertNotIn(".aws/credentials", rendered)
             self.assertIn("governance_redacted:preference", packet.warnings)
 
-    def test_budget_priority_keeps_authority_records_before_lessons(self):
+    def test_governance_assignment_values_are_redacted_in_json_and_text(self):
         with tempfile.TemporaryDirectory() as tmp:
             agent = self.fixture(Path(tmp))
+            (agent / "memory/personal/PREFERENCES.md").write_text(
+                "- OPENAI_API_KEY=plain-secret-value\n"
+                "- githubToken: plain-github-token\n"
+                "- DatabasePassword='plain database password'\n"
+            )
+            packet = build_governance_packet(self.provider(agent), "credentials")
+            for rendered in (json.dumps(packet.to_dict()), format_packet_text(packet)):
+                self.assertNotIn("plain-secret-value", rendered)
+                self.assertNotIn("plain-github-token", rendered)
+                self.assertNotIn("plain database password", rendered)
+                self.assertIn("[REDACTED]", rendered)
+            self.assertIn("governance_redacted:preference", packet.warnings)
+            self.assertEqual(packet.health["governance"]["status"], "degraded")
+
+    def test_budget_priority_keeps_accepted_lessons_before_raw_review_queue(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            agent = self.fixture(Path(tmp))
+            (agent / "memory/working/REVIEW_QUEUE.md").write_text(
+                "raw candidate " + ("q" * 30_000)
+            )
             rows = [
                 {"id": f"large-{i}", "claim": "deploy " + ("x" * 1900),
                  "conditions": ["deploy"], "status": "accepted"}
@@ -161,7 +181,11 @@ class GovernanceOrchestratorTest(unittest.TestCase):
             )
             packet = build_governance_packet(self.provider(agent), "deploy", top_k=30)
             types = {item["type"] for item in packet.sections[0]["items"]}
-            self.assertTrue({"permission", "preference", "decision", "review_queue"}.issubset(types))
+            self.assertTrue({"permission", "preference", "decision", "lesson"}.issubset(types))
+            self.assertTrue(any(
+                warning.startswith("governance_budget_dropped:review_queue:")
+                for warning in packet.warnings
+            ))
             self.assertTrue(any(warning.startswith("governance_budget_dropped:") for warning in packet.warnings))
 
     def test_legacy_golden_output_and_eligible_state_agree(self):
