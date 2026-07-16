@@ -63,7 +63,7 @@ _CREDENTIAL_PATHS = (
     re.compile(r"(?:^|[/\\])\.aws[/\\]credentials\b", re.IGNORECASE),
     re.compile(r"(?:^|[/\\])\.config[/\\]gcloud[/\\]application_default_credentials\.json\b", re.IGNORECASE),
     re.compile(r"(?:^|[\\/])\.env(?:\.[A-Za-z0-9_-]+)?\b", re.IGNORECASE),
-    re.compile(r"(?:^|[\\/])(?:credentials|secrets|tokens?)(?:\.[A-Za-z0-9_-]+)?\b", re.IGNORECASE),
+    re.compile(r"[\\/](?:credentials|secrets|tokens?)(?:\.[A-Za-z0-9_-]+)?\b", re.IGNORECASE),
     re.compile(r"(?:^|[/\\])\.ssh[/\\](?:id_[A-Za-z0-9_-]+|authorized_keys)\b", re.IGNORECASE),
     re.compile(r"(?:^|[/\\])\.(?:netrc|npmrc|pypirc)\b", re.IGNORECASE),
     re.compile(r"(?:^|[/\\])\.(?:docker|kube)[/\\]config(?:\.json)?\b", re.IGNORECASE),

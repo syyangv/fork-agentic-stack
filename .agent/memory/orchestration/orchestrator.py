@@ -12,12 +12,16 @@ def build_governance_packet(provider, intent: str, top_k: int = 3) -> ContextPac
         warnings.append("governance_budget_exceeded")
         selected = []
         used = 0
-        # Permissions first, then other authority records and matched lessons.
-        for item in sorted(items, key=lambda value: value.type != "permission"):
+        priority = {"permission": 0, "preference": 1, "decision": 2, "review_queue": 3, "lesson": 4}
+        for item in sorted(items, key=lambda value: priority.get(value.type, 99)):
             if used + item.token_estimate <= 12_000:
                 selected.append(item)
                 used += item.token_estimate
+            else:
+                warnings.append(f"governance_budget_dropped:{item.type}:{item.item_id}")
         items, total = selected, used
+        health["status"] = "degraded"
+        health["warnings"] = list(warnings)
     return ContextPacket(
         schema="agentic.memory.context.v1", intent=intent,
         project_id=provider.project_id,

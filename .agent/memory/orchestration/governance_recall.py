@@ -10,7 +10,7 @@ from typing import Callable
 _STATUS_RE = re.compile(r"status=(\w+)")
 
 
-def load_structured(path: str | Path) -> list[dict]:
+def load_structured_state(path: str | Path) -> list[dict]:
     path = Path(path)
     if not path.exists():
         return []
@@ -34,10 +34,13 @@ def load_structured(path: str | Path) -> list[dict]:
         latest[lesson_id] = row
     active = [latest[lesson_id] for lesson_id in order]
     active.extend(no_id)
+    return [dict(lesson) for lesson in active]
+
+
+def load_structured(path: str | Path) -> list[dict]:
     out = []
-    for lesson in active:
+    for lesson in load_structured_state(path):
         if lesson.get("status") == "accepted":
-            lesson = dict(lesson)
             lesson.setdefault("_source", "lessons.jsonl")
             out.append(lesson)
     return out
@@ -74,9 +77,16 @@ def normalize_claim(value: str) -> str:
 
 
 def merge_sources(structured_path: str | Path, markdown_path: str | Path) -> tuple[list[dict], bool]:
-    structured = load_structured(structured_path)
+    latest = load_structured_state(structured_path)
+    structured = []
+    for item in latest:
+        if item.get("status") == "accepted":
+            item.setdefault("_source", "lessons.jsonl")
+            structured.append(item)
     markdown = load_markdown(markdown_path)
-    seen = {normalize_claim(item.get("claim", "")) for item in structured}
+    # Latest structured rows include tombstones. They must suppress matching
+    # rendered Markdown even though only accepted rows are retrievable.
+    seen = {normalize_claim(item.get("claim", "")) for item in latest}
     merged = list(structured)
     merged.extend(item for item in markdown if normalize_claim(item.get("claim", "")) not in seen)
     return merged, not structured
