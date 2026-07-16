@@ -19,6 +19,7 @@ _SENSITIVE_KEY_SUFFIXES = (
     "_api_key",
     "_private_key",
     "_access_key",
+    "_access_key_id",
     "_secret_access_key",
     "_authorization",
 )
@@ -30,6 +31,7 @@ _SENSITIVE_KEY_NAMES = {
     "api_key",
     "private_key",
     "access_key",
+    "access_key_id",
     "secret_access_key",
     "authorization",
     "auth",
@@ -53,7 +55,7 @@ _SECRET_VALUES = (
     re.compile(r"\bsk-(?:proj-)?[A-Za-z0-9_-]{16,}\b"),
     re.compile(r"\bgh[opusr]_[A-Za-z0-9]{20,}\b"),
     re.compile(r"\bglpat-[A-Za-z0-9_-]{16,}\b"),
-    re.compile(r"\bAKIA[0-9A-Z]{16}\b"),
+    re.compile(r"\b(?:AKIA|ASIA)[0-9A-Z]{16}\b"),
     re.compile(r"\bBearer\s+[A-Za-z0-9._~+/=-]{8,}\b", re.IGNORECASE),
     re.compile(r"-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----"),
 )
@@ -123,7 +125,11 @@ def contains_sensitive_plaintext(value: Any, key: str | None = None) -> bool:
 
 
 def _normalized_key(key: str) -> str:
-    return re.sub(r"[^a-z0-9]+", "_", key.lower()).strip("_")
+    # Preserve acronym groups while splitting the JSON/JS camelCase and
+    # PascalCase spellings commonly emitted by harness adapters.
+    split = re.sub(r"([A-Z]+)([A-Z][a-z])", r"\1_\2", key)
+    split = re.sub(r"(?<=[a-z0-9])(?=[A-Z])", "_", split)
+    return re.sub(r"[^a-z0-9]+", "_", split.lower()).strip("_")
 
 
 def _is_sensitive_key(key: str) -> bool:

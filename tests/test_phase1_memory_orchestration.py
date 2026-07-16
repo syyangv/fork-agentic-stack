@@ -1,4 +1,5 @@
 import json
+import hashlib
 import sys
 import tempfile
 import unittest
@@ -21,6 +22,7 @@ from orchestration.contracts import (
 )
 from orchestration.identity import ProjectIdentityResolver, derive_project_identity
 from orchestration.router import LaneRequirement, allocate_lane_budgets, route_intent
+from orchestration._core import canonical_json
 from harness_manager.upgrade import upgrade
 
 
@@ -122,6 +124,45 @@ class EventEnvelopeTest(unittest.TestCase):
                 external["payload"] = payload
                 with self.assertRaises(ContractError):
                     EventEnvelope.from_external(external)
+
+    def test_camel_case_secrets_and_temporary_aws_keys_are_redacted(self):
+        payloads = (
+            {"accessToken": "plain-access-token"},
+            {"githubToken": "plain-github-token"},
+            {"apiKey": "plain-api-key"},
+            {"clientSecret": "plain-client-secret"},
+            {"privateKey": "plain-private-key"},
+            {"fullPrompt": "confidential prompt"},
+            {"rawEnvironment": {"HOME": "/Users/a", "PATH": "/bin"}},
+            {"AWS_ACCESS_KEY_ID": "ASIAABCDEFGHIJKLMNOP"},
+        )
+        for payload in payloads:
+            with self.subTest(payload=payload):
+                event = self.base_event(payload)
+                self.assertEqual(event.privacy, "sensitive-redacted")
+                self.assertIn("[REDACTED]", event.canonical_json())
+
+                external = self.base_event({"ok": True}).to_dict()
+                external["payload"] = payload
+                content = {
+                    name: value for name, value in external.items() if name != "event_id"
+                }
+                external["event_id"] = "evt_" + hashlib.sha256(
+                    canonical_json(content).encode("utf-8")
+                ).hexdigest()
+                with self.assertRaises(ContractError):
+                    EventEnvelope.from_external(external)
+
+    def test_non_sensitive_metadata_keys_are_not_false_positives(self):
+        payload = {
+            "token_estimate": 42,
+            "max_tokens": 1200,
+            "public_key": "node-identifier",
+            "environment_name": "staging",
+        }
+        event = self.base_event(payload)
+        self.assertEqual(event.privacy, "internal")
+        self.assertEqual(dict(event.payload), payload)
 
     def test_direct_plaintext_secret_is_rejected(self):
         data = self.base_event({"ok": True}).to_dict()
