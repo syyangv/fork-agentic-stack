@@ -13,12 +13,13 @@ Never:
   - promotion to LESSONS.md (graduate.py does that)
   - git commit (unattended repo writes are dangerous on a host hook)
 """
-import contextlib, json, os
+import contextlib, datetime, json, os, sys, time
 from promote import cluster_and_extract, write_candidates
 from validate import heuristic_check
 from review_state import mark_rejected, write_review_queue_summary
 from decay import decay_old_entries
 from archive import archive_stale_workspace
+from dream_state import fail_cycle, finish_cycle, start_cycle
 
 # fcntl is POSIX-only. On Windows the dream cycle is best-effort: concurrent
 # writers there are rare (no shutdown hook = no parallel exits), and the lack
@@ -33,8 +34,37 @@ EPISODIC = os.path.join(ROOT, "episodic/AGENT_LEARNINGS.jsonl")
 CANDIDATES = os.path.join(ROOT, "candidates")
 SEMANTIC = os.path.join(ROOT, "semantic")
 REVIEW_QUEUE = os.path.join(ROOT, "working/REVIEW_QUEUE.md")
+DREAM_STATE = os.path.join(ROOT, "dream-state.json")
+STOP_ENTRY_MARKER = os.path.join(os.path.expanduser("~"), ".claude", "stop-hook-entry.jsonl")
+STOP_COMPLETION_MARKER = os.path.join(os.path.expanduser("~"), ".claude", "stop-hook-fired.jsonl")
 PROMOTION_THRESHOLD = 7.0
 CLUSTER_SIMILARITY = 0.3
+MAX_CLUSTER_ENTRIES = max(100, int(os.environ.get("AGENTIC_DREAM_MAX_CLUSTER_ENTRIES", "3000")))
+
+
+def _status(message):
+    """Keep Stop-hook stdout clean while preserving useful manual output."""
+    if sys.stdout.isatty():
+        print(message)
+
+
+def _append_marker(path, phase, run_id):
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    entry = {
+        "timestamp": datetime.datetime.now(datetime.timezone.utc).isoformat(),
+        "pid": os.getpid(),
+        "cwd": os.getcwd(),
+        "script": os.path.basename(__file__),
+        "phase": phase,
+        "run_id": run_id,
+    }
+    with open(path, "a", encoding="utf-8") as stream:
+        stream.write(json.dumps(entry, sort_keys=True) + "\n")
+
+
+def _entries_for_clustering(entries):
+    """Bound quadratic clustering without deleting or rewriting history."""
+    return entries[-MAX_CLUSTER_ENTRIES:]
 
 
 @contextlib.contextmanager
@@ -175,10 +205,11 @@ def run_dream_cycle():
             # into every session via build_context, so a stale/missing file
             # hides real work.
             pending = write_review_queue_summary(CANDIDATES, REVIEW_QUEUE)
-            print(f"dream cycle: no entries (queue has {pending} pending)")
+            _status(f"dream cycle: no entries (queue has {pending} pending)")
             return
 
-        patterns = cluster_and_extract(entries, threshold=CLUSTER_SIMILARITY)
+        cluster_entries = _entries_for_clustering(entries)
+        patterns = cluster_and_extract(cluster_entries, threshold=CLUSTER_SIMILARITY)
         promotable = {k: p for k, p in patterns.items()
                       if p.get("canonical_salience", 0) >= PROMOTION_THRESHOLD}
 
@@ -194,12 +225,29 @@ def run_dream_cycle():
 
         pending = write_review_queue_summary(CANDIDATES, REVIEW_QUEUE)
 
-    print(
+    _status(
         f"dream cycle: patterns={len(patterns)} staged={staged} "
         f"prefiltered_out={prefiltered} pending_review={pending} "
-        f"archived={len(archived)} kept={len(kept)}"
+        f"archived={len(archived)} kept={len(kept)} "
+        f"clustered={len(cluster_entries)}/{len(entries)}"
     )
 
 
+def main():
+    started = time.monotonic()
+    run_id = start_cycle(DREAM_STATE)
+    _append_marker(STOP_ENTRY_MARKER, "entry", run_id)
+    try:
+        run_dream_cycle()
+        _append_marker(STOP_COMPLETION_MARKER, "completed", run_id)
+    except BaseException as exc:
+        fail_cycle(DREAM_STATE, run_id, exc, started_monotonic=started)
+        raise
+    else:
+        # This is deliberately the last write: success means the entire cycle,
+        # including queue rendering and archival, completed without error.
+        finish_cycle(DREAM_STATE, run_id, started_monotonic=started)
+
+
 if __name__ == "__main__":
-    run_dream_cycle()
+    main()

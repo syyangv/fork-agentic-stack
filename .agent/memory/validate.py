@@ -22,6 +22,15 @@ CLUSTER_SATURATE = 5
 
 _STATUS_RE = re.compile(r"status=(\w+)")
 
+# Operational event logs are raw episode descriptions, not principles.
+_OPERATIONAL_LOG_RE = re.compile(
+    r"^(High-stakes op completed|Tool Agent completed successfully|Ran: )",
+    re.IGNORECASE,
+)
+
+# Identity edits: "replaced 'X' with 'X'" — same content both sides.
+_IDENTITY_EDIT_RE = re.compile(r"replaced '(.+?)' with '\1'", re.DOTALL)
+
 
 def _normalize(text):
     """Lowercase, strip punctuation, collapse whitespace. For exact-dup detection."""
@@ -94,6 +103,12 @@ def heuristic_check(candidate, existing_lessons_md=""):
     if len(content_words) < MIN_CONTENT_WORDS:
         reasons.append(
             f"insufficient_content_words_{len(content_words)}_of_{MIN_CONTENT_WORDS}")
+
+    if _OPERATIONAL_LOG_RE.match(claim):
+        reasons.append("operational_event_log_not_a_principle")
+
+    if _IDENTITY_EDIT_RE.search(claim):
+        reasons.append("identity_edit_same_content_both_sides")
 
     if claim:
         duplicates = check_exact_duplicate(claim, existing_lessons_md)

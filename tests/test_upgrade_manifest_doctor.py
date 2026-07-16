@@ -93,6 +93,7 @@ category: visualization
             (agent / "harness" / "hooks" / "claude_code_post_tool.py").write_text("old hook\n", encoding="utf-8")
             (agent / "memory" / "auto_dream.py").write_text("old dream\n", encoding="utf-8")
             (agent / "tools" / "skill_loader.py").write_text("old loader\n", encoding="utf-8")
+            (agent / "infrastructure.json").write_text('{"schema_version": 0}\n', encoding="utf-8")
             (agent / "memory" / "personal" / "PREFERENCES.md").write_text("user prefs\n", encoding="utf-8")
             (agent / "memory" / "candidates" / "candidate.json").write_text("user candidate\n", encoding="utf-8")
             custom_skill = agent / "skills" / "debug-investigator"
@@ -124,6 +125,10 @@ category: visualization
             self.assertEqual(
                 (agent / "tools" / "brain_bridge.py").read_text(encoding="utf-8"),
                 (ROOT / ".agent" / "tools" / "brain_bridge.py").read_text(encoding="utf-8"),
+            )
+            self.assertEqual(
+                (agent / "infrastructure.json").read_text(encoding="utf-8"),
+                (ROOT / ".agent" / "infrastructure.json").read_text(encoding="utf-8"),
             )
             self.assertTrue((agent / "skills" / "tldraw" / "SKILL.md").is_file())
             self.assertTrue((agent / "skills" / "brain" / "SKILL.md").is_file())
