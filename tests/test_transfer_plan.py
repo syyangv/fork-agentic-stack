@@ -14,7 +14,7 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 class TransferPlanTest(unittest.TestCase):
-    def test_detects_codex_curl_transfer_defaults(self):
+    def test_detects_codex_curl_transfer_defaults_without_skill_mirror(self):
         plan = build_plan("move my memory into Codex as a curl command", ROOT)
 
         self.assertEqual(plan.targets, ("codex",))
@@ -24,8 +24,11 @@ class TransferPlanTest(unittest.TestCase):
             ("preferences", "accepted_lessons", "skills", "working", "episodic", "candidates"),
         )
         self.assertEqual(plan.sensitive_scopes, ("working", "episodic", "candidates"))
-        self.assertIn("AGENTS.md", [a.dst for a in plan.adapter_actions])
-        self.assertIn(".agent/skills", [a.dst for a in plan.adapter_actions])
+        # Skills remain an exported data scope, but the Codex adapter itself
+        # wires only AGENTS.md. Codex loads skills from the original user
+        # registries; it must not recreate a copied/symlinked skill mirror.
+        self.assertEqual([a.dst for a in plan.adapter_actions], ["AGENTS.md"])
+        self.assertFalse(any(a.kind == "skills_link" for a in plan.adapter_actions))
 
     def test_detects_gemini_apply_here(self):
         plan = build_plan("install this in Gemini here", ROOT)

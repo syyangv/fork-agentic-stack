@@ -12,6 +12,7 @@ import os, json, datetime, hashlib
 from cluster import content_cluster, extract_pattern
 from review_state import _lessons_sha
 from validate import extract_lesson_lines, check_exact_duplicate
+from candidate_lock import atomic_write_json, candidate_lifecycle_lock
 
 
 def cluster_and_extract(entries, threshold=0.3):
@@ -54,6 +55,18 @@ def _find_prior(slug, candidates_dir):
     return {}, None
 
 
+def _human_rejection_is_terminal(candidate):
+    """Only deterministic machine rejections may be reconsidered automatically."""
+    automated_reviewers = {"heuristic_prefilter", "scheduled-deterministic-triage"}
+    rejected = [
+        decision for decision in candidate.get("decisions", [])
+        if decision.get("action") == "rejected"
+    ]
+    if not rejected:
+        return False
+    return rejected[-1].get("reviewer") not in automated_reviewers
+
+
 def write_candidates(patterns, candidates_dir):
     """Stage each pattern as a candidate JSON with lifecycle metadata.
 
@@ -69,6 +82,11 @@ def write_candidates(patterns, candidates_dir):
     """
     if not patterns:
         return 0
+    with candidate_lifecycle_lock(candidates_dir):
+        return _write_candidates_locked(patterns, candidates_dir)
+
+
+def _write_candidates_locked(patterns, candidates_dir):
     os.makedirs(candidates_dir, exist_ok=True)
     written = 0
     # Read LESSONS.md once — used to check whether specific duplicates that
@@ -106,6 +124,11 @@ def write_candidates(patterns, candidates_dir):
 
         # Fully-accepted lesson — terminal, never resurrect.
         if prev_loc == "graduated" and prev.get("status") != "provisional":
+            continue
+
+        # A human rejection is terminal. New evidence may be inspected only
+        # after an explicit reopen transition moves the record back to staged.
+        if prev_loc == "rejected" and _human_rejection_is_terminal(prev):
             continue
 
         # For rejected + provisional-graduated, re-stage ONLY when something
@@ -162,8 +185,7 @@ def write_candidates(patterns, candidates_dir):
         }
 
         staged_path = os.path.join(candidates_dir, f"{slug}.json")
-        with open(staged_path, "w") as f:
-            json.dump(candidate, f, indent=2)
+        atomic_write_json(staged_path, candidate)
 
         # The slug must live in exactly one lifecycle location. Remove any
         # prior copy in rejected/ or graduated/ (the latter only for

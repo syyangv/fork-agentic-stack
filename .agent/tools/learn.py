@@ -26,6 +26,7 @@ sys.path.insert(0, os.path.join(BASE, "harness"))
 sys.path.insert(0, os.path.join(BASE, "memory"))
 from text import word_set  # noqa: E402
 from cluster import pattern_id  # noqa: E402
+from candidate_lock import atomic_write_json, candidate_lifecycle_lock  # noqa: E402
 
 
 def _lesson_already_appended(cid):
@@ -77,8 +78,8 @@ def stage(claim, conditions, source="learn", importance=7):
         "rejection_count": 0,
     }
     path = os.path.join(CANDIDATES, f"{cid}.json")
-    with open(path, "w") as f:
-        json.dump(candidate, f, indent=2)
+    with candidate_lifecycle_lock(CANDIDATES):
+        atomic_write_json(path, candidate)
     return cid, path
 
 
@@ -154,7 +155,9 @@ def main():
         is_heuristic_reject = (result.returncode == 2 and not lesson_written)
         if os.path.isfile(path) and is_heuristic_reject:
             try:
-                os.remove(path)
+                with candidate_lifecycle_lock(CANDIDATES):
+                    if os.path.isfile(path):
+                        os.remove(path)
                 print(f"(cleaned up orphaned candidate at {path})",
                       file=sys.stderr)
             except OSError:

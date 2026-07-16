@@ -85,6 +85,9 @@ def _plan(src_agent: Path, dst_agent: Path) -> list[tuple[Path, Path]]:
 
 def _infrastructure_files(src_agent: Path) -> list[Path]:
     rels: list[Path] = []
+    manifest = src_agent / "infrastructure.json"
+    if manifest.is_file():
+        rels.append(manifest.relative_to(src_agent))
     for base in ("harness",):
         root = src_agent / base
         if root.is_dir():

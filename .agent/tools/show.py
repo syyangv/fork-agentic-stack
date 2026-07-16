@@ -24,8 +24,9 @@ CANDIDATES = os.path.join(BASE, "memory/candidates")
 LESSONS_JSONL = os.path.join(BASE, "memory/semantic/lessons.jsonl")
 LESSONS_MD = os.path.join(BASE, "memory/semantic/LESSONS.md")
 DREAM_LOG = os.path.join(BASE, "memory/dream.log")
+DREAM_STATE = os.path.join(BASE, "memory/dream-state.json")
 MANIFEST = os.path.join(BASE, "skills/_manifest.jsonl")
-VERSION_FILE = os.path.join(BASE, "..", "VERSION")
+INFRASTRUCTURE_MANIFEST = os.path.join(BASE, "infrastructure.json")
 
 
 # ── ANSI color primitives ──────────────────────────────────────────────────
@@ -251,12 +252,19 @@ def skill_stats():
     return {"count": len(names), "names": names}
 
 
-def last_dream_cycle():
-    if not os.path.exists(DREAM_LOG):
-        return None
-    # UTC so _human_age (which now compares against UTC) reads it correctly.
-    return datetime.datetime.fromtimestamp(
-        os.path.getmtime(DREAM_LOG), tz=datetime.timezone.utc).isoformat()
+def dream_health():
+    if not os.path.exists(DREAM_STATE):
+        return {"last_status": "never", "last_success_at": None}
+    try:
+        with open(DREAM_STATE, encoding="utf-8") as stream:
+            state = json.load(stream)
+    except (OSError, json.JSONDecodeError):
+        return {
+            "last_status": "invalid",
+            "last_success_at": None,
+            "last_error": "dream-state.json is unreadable",
+        }
+    return state
 
 
 def failing_skills(threshold=3, window_days=14):
@@ -281,13 +289,14 @@ def failing_skills(threshold=3, window_days=14):
                   key=lambda x: -x[1])
 
 
-def _version():
-    if not os.path.exists(VERSION_FILE):
-        return ""
+def infrastructure_manifest():
+    if not os.path.exists(INFRASTRUCTURE_MANIFEST):
+        return {}
     try:
-        return open(VERSION_FILE).read().strip()
-    except OSError:
-        return ""
+        with open(INFRASTRUCTURE_MANIFEST, encoding="utf-8") as stream:
+            return json.load(stream)
+    except (OSError, json.JSONDecodeError):
+        return {"error": "invalid infrastructure manifest"}
 
 
 # ── Rendering ──────────────────────────────────────────────────────────────
@@ -328,14 +337,18 @@ def _health_icon(value, *, zero_is_good=True, low_is_good=True):
 
 
 def render(width=None, json_out=False, plain=False):
+    dream = dream_health()
+    infrastructure = infrastructure_manifest()
     data = {
         "episodic": episodic_stats(),
         "candidates": candidate_stats(),
         "lessons": lesson_stats(),
         "skills": skill_stats(),
-        "last_dream_cycle": last_dream_cycle(),
+        "dream": dream,
+        "last_dream_cycle": dream.get("last_success_at"),
         "failing_skills": failing_skills(),
-        "version": _version(),
+        "infrastructure": infrastructure,
+        "version": infrastructure.get("stack_version", ""),
     }
     if json_out:
         serializable = json.loads(json.dumps(data, default=str))
@@ -375,10 +388,15 @@ def render(width=None, json_out=False, plain=False):
                                              else C.BRIGHT_GREEN))
     ldc = data["last_dream_cycle"]
     age = _human_age(ldc) if ldc else "never"
-    li = "✓" if ldc else "○"
-    lc = C.BRIGHT_GREEN if ldc else C.DIM
+    dream_status = data["dream"].get("last_status", "never")
+    li = "✓" if dream_status == "success" else ("⚠" if dream_status in ("failure", "invalid") else "○")
+    lc = C.BRIGHT_GREEN if dream_status == "success" else (C.BRIGHT_RED if dream_status in ("failure", "invalid") else C.DIM)
     mem_lines.append(_metric_row("last dream", age, width, icon=li, icon_color=lc,
                                  value_color=C.BOLD if ldc else C.DIM))
+    if dream_status not in ("success", "never"):
+        mem_lines.append(_metric_row("dream status", dream_status, width,
+                                     icon="⚠", icon_color=C.BRIGHT_RED,
+                                     value_color=C.BRIGHT_RED))
 
     # sparkline — aligned with _metric_row's 2-space lead + 2-space icon slot
     counts = [c for _, c in ep["daily"]]
