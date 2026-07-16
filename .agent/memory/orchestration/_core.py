@@ -11,14 +11,44 @@ from typing import Any
 
 
 REDACTED = "[REDACTED]"
-_SENSITIVE_KEYS = re.compile(
-    r"^(api[_-]?key|access[_-]?token|refresh[_-]?token|session[_-]?token|client[_-]?secret|secret[_-]?access[_-]?key|auth(?:orization)?|bearer|password|passwd|secret|private[_-]?key)$",
-    re.IGNORECASE,
+_SENSITIVE_KEY_SUFFIXES = (
+    "_token",
+    "_password",
+    "_passwd",
+    "_secret",
+    "_api_key",
+    "_private_key",
+    "_access_key",
+    "_secret_access_key",
+    "_authorization",
 )
-_FORBIDDEN_CONTENT_KEYS = re.compile(
-    r"^(full[_-]?prompt|raw[_-]?prompt|system[_-]?prompt|user[_-]?prompt|raw[_-]?(?:environment|env)|environment[_-]?variables|env[_-]?vars|process[_-]?env|os[_-]?environ)$",
-    re.IGNORECASE,
-)
+_SENSITIVE_KEY_NAMES = {
+    "token",
+    "password",
+    "passwd",
+    "secret",
+    "api_key",
+    "private_key",
+    "access_key",
+    "secret_access_key",
+    "authorization",
+    "auth",
+    "bearer",
+}
+_FORBIDDEN_CONTENT_KEY_NAMES = {
+    "env",
+    "environment",
+    "raw_env",
+    "raw_environment",
+    "environment_variables",
+    "env_vars",
+    "process_env",
+    "os_environ",
+    "full_prompt",
+    "raw_prompt",
+    "system_prompt",
+    "user_prompt",
+}
 _SECRET_VALUES = (
     re.compile(r"\bsk-(?:proj-)?[A-Za-z0-9_-]{16,}\b"),
     re.compile(r"\bgh[opusr]_[A-Za-z0-9]{20,}\b"),
@@ -28,13 +58,13 @@ _SECRET_VALUES = (
     re.compile(r"-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----"),
 )
 _CREDENTIAL_PATHS = (
-    re.compile(r"(?:~|/[^\s]+)?/\.aws/credentials\b", re.IGNORECASE),
-    re.compile(r"(?:~|/[^\s]+)?/\.config/gcloud/application_default_credentials\.json\b", re.IGNORECASE),
+    re.compile(r"(?:^|[/\\])\.aws[/\\]credentials\b", re.IGNORECASE),
+    re.compile(r"(?:^|[/\\])\.config[/\\]gcloud[/\\]application_default_credentials\.json\b", re.IGNORECASE),
     re.compile(r"(?:^|[\\/])\.env(?:\.[A-Za-z0-9_-]+)?\b", re.IGNORECASE),
     re.compile(r"(?:^|[\\/])(?:credentials|secrets|tokens?)(?:\.[A-Za-z0-9_-]+)?\b", re.IGNORECASE),
-    re.compile(r"(?:~|/[^\s]+)?/\.ssh/(?:id_[A-Za-z0-9_-]+|authorized_keys)\b", re.IGNORECASE),
-    re.compile(r"(?:~|/[^\s]+)?/\.(?:netrc|npmrc|pypirc)\b", re.IGNORECASE),
-    re.compile(r"(?:~|/[^\s]+)?/\.(?:docker|kube)/config(?:\.json)?\b", re.IGNORECASE),
+    re.compile(r"(?:^|[/\\])\.ssh[/\\](?:id_[A-Za-z0-9_-]+|authorized_keys)\b", re.IGNORECASE),
+    re.compile(r"(?:^|[/\\])\.(?:netrc|npmrc|pypirc)\b", re.IGNORECASE),
+    re.compile(r"(?:^|[/\\])\.(?:docker|kube)[/\\]config(?:\.json)?\b", re.IGNORECASE),
 )
 
 
@@ -66,7 +96,7 @@ def canonical_json(value: Any) -> str:
 
 def redact(value: Any, key: str | None = None) -> Any:
     """Return a recursively redacted copy suitable for contract creation."""
-    if key and (_SENSITIVE_KEYS.match(key) or _FORBIDDEN_CONTENT_KEYS.match(key)):
+    if key and (_is_sensitive_key(key) or _is_forbidden_content_key(key)):
         return REDACTED
     if isinstance(value, Mapping):
         return {str(k): redact(v, str(k)) for k, v in value.items()}
@@ -81,7 +111,7 @@ def redact(value: Any, key: str | None = None) -> Any:
 
 
 def contains_sensitive_plaintext(value: Any, key: str | None = None) -> bool:
-    if key and (_SENSITIVE_KEYS.match(key) or _FORBIDDEN_CONTENT_KEYS.match(key)) and value != REDACTED:
+    if key and (_is_sensitive_key(key) or _is_forbidden_content_key(key)) and value != REDACTED:
         return True
     if isinstance(value, Mapping):
         return any(contains_sensitive_plaintext(v, str(k)) for k, v in value.items())
@@ -90,6 +120,21 @@ def contains_sensitive_plaintext(value: Any, key: str | None = None) -> bool:
     if isinstance(value, str):
         return any(pattern.search(value) for pattern in _SECRET_VALUES + _CREDENTIAL_PATHS)
     return False
+
+
+def _normalized_key(key: str) -> str:
+    return re.sub(r"[^a-z0-9]+", "_", key.lower()).strip("_")
+
+
+def _is_sensitive_key(key: str) -> bool:
+    normalized = _normalized_key(key)
+    return normalized in _SENSITIVE_KEY_NAMES or normalized.endswith(
+        _SENSITIVE_KEY_SUFFIXES
+    )
+
+
+def _is_forbidden_content_key(key: str) -> bool:
+    return _normalized_key(key) in _FORBIDDEN_CONTENT_KEY_NAMES
 
 
 class SchemaValidationError(ValueError):

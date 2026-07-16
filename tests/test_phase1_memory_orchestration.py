@@ -99,6 +99,30 @@ class EventEnvelopeTest(unittest.TestCase):
         with self.assertRaises(ContractError):
             EventEnvelope.from_external(external)
 
+    def test_provider_prefixed_secrets_and_windows_credential_paths_are_redacted(self):
+        payloads = (
+            {"token": "plain-token-value"},
+            {"github_token": "plain-github-token"},
+            {"aws_session_token": "plain-session-token"},
+            {"AWS_SECRET_ACCESS_KEY": "plain-aws-secret"},
+            {"db_password": "plain-db-password"},
+            {"env": {"API_TOKEN": "plain-value", "HOME": "/Users/a"}},
+            {"path": r"C:\Users\Alice\.ssh\id_rsa"},
+        )
+        for payload in payloads:
+            with self.subTest(payload=payload):
+                event = self.base_event(payload)
+                rendered = event.canonical_json()
+                self.assertEqual(event.privacy, "sensitive-redacted")
+                self.assertIn("[REDACTED]", rendered)
+                self.assertNotIn("plain-", rendered)
+                self.assertNotIn(".ssh", rendered)
+
+                external = self.base_event({"ok": True}).to_dict()
+                external["payload"] = payload
+                with self.assertRaises(ContractError):
+                    EventEnvelope.from_external(external)
+
     def test_direct_plaintext_secret_is_rejected(self):
         data = self.base_event({"ok": True}).to_dict()
         data["payload"] = {"token": "ghp_abcdefghijklmnopqrstuvwxyz1234567890"}
