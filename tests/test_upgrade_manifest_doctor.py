@@ -130,6 +130,21 @@ category: visualization
                 (agent / "infrastructure.json").read_text(encoding="utf-8"),
                 (ROOT / ".agent" / "infrastructure.json").read_text(encoding="utf-8"),
             )
+            self.assertEqual(
+                (agent / ".gitignore").read_text(encoding="utf-8"),
+                (ROOT / ".agent" / ".gitignore").read_text(encoding="utf-8"),
+            )
+            (agent / "memory" / "dream-state.json").write_text("{}\n")
+            (agent / "memory" / "candidates" / ".lifecycle.lock").write_text("")
+            subprocess.run(["git", "init", "-q"], cwd=project, check=True)
+            for runtime_path in (
+                ".agent/memory/dream-state.json",
+                ".agent/memory/candidates/.lifecycle.lock",
+            ):
+                ignored = subprocess.run(
+                    ["git", "check-ignore", "-q", runtime_path], cwd=project
+                )
+                self.assertEqual(ignored.returncode, 0, runtime_path)
             self.assertTrue((agent / "skills" / "tldraw" / "SKILL.md").is_file())
             self.assertTrue((agent / "skills" / "brain" / "SKILL.md").is_file())
             rows = {row["name"]: row for row in self.manifest_rows(project)}

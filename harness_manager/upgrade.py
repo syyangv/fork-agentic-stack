@@ -88,6 +88,9 @@ def _infrastructure_files(src_agent: Path) -> list[Path]:
     manifest = src_agent / "infrastructure.json"
     if manifest.is_file():
         rels.append(manifest.relative_to(src_agent))
+    nested_ignore = src_agent / ".gitignore"
+    if nested_ignore.is_file():
+        rels.append(nested_ignore.relative_to(src_agent))
     for base in ("harness",):
         root = src_agent / base
         if root.is_dir():

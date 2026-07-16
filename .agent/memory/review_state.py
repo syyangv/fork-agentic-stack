@@ -68,6 +68,11 @@ def save_candidate(candidate, path):
     atomic_write_json(path, candidate)
 
 
+def _move_candidate(src, dst):
+    """Atomically move a lifecycle record within the candidates filesystem."""
+    os.replace(src, dst)
+
+
 def stage_candidate(candidate_path, reviewer="auto_dream"):
     """Mark a freshly-written candidate as staged with an initial decision entry."""
     candidates_dir = os.path.dirname(candidate_path)
@@ -111,19 +116,21 @@ def mark_graduated(candidate_id, reviewer, rationale, candidates_dir,
         if not os.path.exists(src):
             raise FileNotFoundError(f"candidate not found: {candidate_id}")
         cand = load_candidate(src)
-        cand["status"] = "provisional" if provisional else "accepted"
-        cand["accepted_at"] = _now()
-        cand["reviewer"] = reviewer
-        cand["rationale"] = rationale
-        _touch(cand, "graduated", reviewer, notes=rationale,
-               provisional=provisional)
-        _stamp_evidence_and_lessons(cand, candidates_dir)
+        target_status = "provisional" if provisional else "accepted"
+        if cand.get("status") != target_status:
+            cand["status"] = target_status
+            cand["accepted_at"] = _now()
+            cand["reviewer"] = reviewer
+            cand["rationale"] = rationale
+            _touch(cand, "graduated", reviewer, notes=rationale,
+                   provisional=provisional)
+            _stamp_evidence_and_lessons(cand, candidates_dir)
+            save_candidate(cand, src)
 
         graduated_dir = os.path.join(candidates_dir, "graduated")
         os.makedirs(graduated_dir, exist_ok=True)
         dst = os.path.join(graduated_dir, f"{candidate_id}.json")
-        save_candidate(cand, dst)
-        os.remove(src)
+        _move_candidate(src, dst)
         _refresh_queue(candidates_dir)
         return cand
 
@@ -145,16 +152,17 @@ def mark_rejected(candidate_id, reviewer, reason, candidates_dir, **extra_stamp)
         if not os.path.exists(src):
             raise FileNotFoundError(f"candidate not found: {candidate_id}")
         cand = load_candidate(src)
-        cand["status"] = "rejected"
-        cand["rejection_count"] = cand.get("rejection_count", 0) + 1
-        _touch(cand, "rejected", reviewer, notes=reason, **extra_stamp)
-        _stamp_evidence_and_lessons(cand, candidates_dir)
+        if cand.get("status") != "rejected":
+            cand["status"] = "rejected"
+            cand["rejection_count"] = cand.get("rejection_count", 0) + 1
+            _touch(cand, "rejected", reviewer, notes=reason, **extra_stamp)
+            _stamp_evidence_and_lessons(cand, candidates_dir)
+            save_candidate(cand, src)
 
         rejected_dir = os.path.join(candidates_dir, "rejected")
         os.makedirs(rejected_dir, exist_ok=True)
         dst = os.path.join(rejected_dir, f"{candidate_id}.json")
-        save_candidate(cand, dst)
-        os.remove(src)
+        _move_candidate(src, dst)
         _refresh_queue(candidates_dir)
         return cand
 
@@ -166,12 +174,13 @@ def mark_reopened(candidate_id, reviewer, candidates_dir):
         if not os.path.exists(src):
             raise FileNotFoundError(f"rejected candidate not found: {candidate_id}")
         cand = load_candidate(src)
-        cand["status"] = "staged"
-        _touch(cand, "reopened", reviewer)
+        if cand.get("status") != "staged":
+            cand["status"] = "staged"
+            _touch(cand, "reopened", reviewer)
+            save_candidate(cand, src)
 
         dst = os.path.join(candidates_dir, f"{candidate_id}.json")
-        save_candidate(cand, dst)
-        os.remove(src)
+        _move_candidate(src, dst)
         _refresh_queue(candidates_dir)
         return cand
 
