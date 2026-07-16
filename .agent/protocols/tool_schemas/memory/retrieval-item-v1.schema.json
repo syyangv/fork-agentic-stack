@@ -7,7 +7,7 @@
   "properties": {
     "item_id": {"type": "string", "minLength": 1, "maxLength": 512},
     "lane": {"type": "string", "enum": ["governance", "behavioral", "evidence"]},
-    "type": {"type": "string", "enum": ["lesson", "preference", "decision", "skill", "trace", "policy", "world_model", "crg_node", "crg_flow", "test_run"]},
+    "type": {"type": "string", "enum": ["lesson", "preference", "permission", "decision", "review_queue", "skill", "trace", "policy", "world_model", "crg_node", "crg_flow", "test_run"]},
     "summary": {"type": "string", "minLength": 1, "maxLength": 2000},
     "scope": {
       "type": "object",

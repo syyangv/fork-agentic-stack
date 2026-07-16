@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "stack_version": "0.18.0",
-  "orchestration_phase": 1,
+  "orchestration_phase": 2,
   "features": [
     "latest_state_recall",
     "serialized_candidate_lifecycle",
@@ -13,6 +13,9 @@
     "stable_project_identity",
     "deterministic_memory_routing",
     "bounded_lane_budgets",
-    "strict_orchestration_config"
+    "strict_orchestration_config",
+    "governance_provider",
+    "governance_orchestrator_cli",
+    "legacy_recall_comparison"
   ]
 }
