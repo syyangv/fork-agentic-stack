@@ -350,7 +350,7 @@ class InfrastructureManifestTest(unittest.TestCase):
     def test_manifest_declares_phase0_trust_features(self):
         manifest = json.loads((ROOT / ".agent" / "infrastructure.json").read_text())
         self.assertEqual(manifest["schema_version"], 1)
-        self.assertEqual(manifest["orchestration_phase"], 0)
+        self.assertGreaterEqual(manifest["orchestration_phase"], 0)
         self.assertIn("serialized_candidate_lifecycle", manifest["features"])
         self.assertIn("structured_dream_health", manifest["features"])
         self.assertIn("latest_state_recall", manifest["features"])

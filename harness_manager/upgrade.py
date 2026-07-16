@@ -114,6 +114,15 @@ def _plan(src_agent: Path, dst_agent: Path) -> list[tuple[Path, Path]]:
         if _needs_copy(src, dst):
             actions.append((src, dst))
 
+    # Orchestration config is user-owned after first creation. Install the
+    # safe `off` default for existing brains that do not have one, but never
+    # replace local mode, budget, or project-alias choices during upgrade.
+    orchestration_config = Path("memory/orchestration/config.json")
+    src_config = src_agent / orchestration_config
+    dst_config = dst_agent / orchestration_config
+    if src_config.is_file() and not dst_config.exists():
+        actions.append((src_config, dst_config))
+
     src_index = src_agent / "skills" / "_index.md"
     dst_index = dst_agent / "skills" / "_index.md"
     if src_index.is_file() and _needs_copy(src_index, dst_index):
@@ -144,6 +153,16 @@ def _infrastructure_files(src_agent: Path) -> list[Path]:
         root = src_agent / base
         if root.is_dir():
             rels.extend(p.relative_to(src_agent) for p in root.glob("*.py") if not _ignored(p))
+    orchestration = src_agent / "memory" / "orchestration"
+    if orchestration.is_dir():
+        rels.extend(
+            p.relative_to(src_agent)
+            for p in orchestration.rglob("*.py")
+            if not _ignored(p)
+        )
+    memory_schemas = src_agent / "protocols" / "tool_schemas" / "memory"
+    if memory_schemas.is_dir():
+        rels.extend(p.relative_to(src_agent) for p in memory_schemas.rglob("*.json"))
     return sorted(rels)
 
 

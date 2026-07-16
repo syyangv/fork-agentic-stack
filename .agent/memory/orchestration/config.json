@@ -1,0 +1,11 @@
+{
+  "schema": "agentic.memory.config.v1",
+  "mode": "off",
+  "total_token_budget": 12000,
+  "lane_reserves": {
+    "governance": 4800,
+    "behavioral": 4200,
+    "evidence": 3000
+  },
+  "project_aliases": {}
+}

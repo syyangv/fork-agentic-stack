@@ -1,0 +1,28 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "agentic.memory.retrieval-item.v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["item_id", "lane", "type", "summary", "scope", "status", "provider_score", "selection_reason", "provenance", "token_estimate", "expires_at"],
+  "properties": {
+    "item_id": {"type": "string", "minLength": 1, "maxLength": 512},
+    "lane": {"type": "string", "enum": ["governance", "behavioral", "evidence"]},
+    "type": {"type": "string", "enum": ["lesson", "preference", "decision", "skill", "trace", "policy", "world_model", "crg_node", "crg_flow", "test_run"]},
+    "summary": {"type": "string", "minLength": 1, "maxLength": 2000},
+    "scope": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["project_id", "harness"],
+      "properties": {
+        "project_id": {"type": "string", "pattern": "[0-9a-f]{16}"},
+        "harness": {"type": ["string", "null"], "maxLength": 100}
+      }
+    },
+    "status": {"type": "string", "enum": ["accepted", "probationary", "active", "raw", "fresh", "stale"]},
+    "provider_score": {"type": "number"},
+    "selection_reason": {"type": "string", "minLength": 1, "maxLength": 2000},
+    "provenance": {"type": "array", "items": {"type": "object"}},
+    "token_estimate": {"type": "integer", "minimum": 0, "maximum": 1200},
+    "expires_at": {"type": ["string", "null"], "maxLength": 64}
+  }
+}

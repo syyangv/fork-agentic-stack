@@ -1,12 +1,18 @@
 {
   "schema_version": 1,
   "stack_version": "0.18.0",
-  "orchestration_phase": 0,
+  "orchestration_phase": 1,
   "features": [
     "latest_state_recall",
     "serialized_candidate_lifecycle",
     "staging_only_scheduled_review",
     "structured_dream_health",
-    "crg_registration_health"
+    "crg_registration_health",
+    "memory_contracts_v1",
+    "memory_redaction",
+    "stable_project_identity",
+    "deterministic_memory_routing",
+    "bounded_lane_budgets",
+    "strict_orchestration_config"
   ]
 }
