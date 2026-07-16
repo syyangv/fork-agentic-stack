@@ -22,6 +22,7 @@ from . import schema as schema_mod
 from . import state as state_mod
 from . import __version__
 from .loops.storage import collect_summary
+from .scheduled_review_health import default_scheduler_path, inspect_scheduler
 
 
 # Detection signals: (filename, signal_strength) tuples per adapter.
@@ -89,7 +90,8 @@ def audit(target_root: Path | str, log: Callable[[str], None] | None = None) -> 
                 f"loops: {loop_summary['valid']}/{loop_summary['configured']} valid"
                 + (f"; invalid: {', '.join(loop_summary['invalid'])}" if loop_summary["invalid"] else "")
             )
-        return _audit_pre_v090(target_root, log)
+        base_result = _audit_pre_v090(target_root, log)
+        return max(base_result, _audit_scheduled_reviewer(log=log))
 
     # install.json present → strict read-only audit
     log(f"auditing {len(doc.get('adapters', {}))} installed adapter(s) in {target_root}")
@@ -105,6 +107,9 @@ def audit(target_root: Path | str, log: Callable[[str], None] | None = None) -> 
         if status == RED:
             any_red = True
 
+    if _audit_scheduled_reviewer(log=log):
+        any_red = True
+
     log("")
     log(f"summary: {_summary(doc, any_red)}")
     if loop_summary["configured"]:
@@ -113,6 +118,20 @@ def audit(target_root: Path | str, log: Callable[[str], None] | None = None) -> 
             + (f"; invalid: {', '.join(loop_summary['invalid'])}" if loop_summary["invalid"] else "")
         )
     return 1 if any_red else 0
+
+
+def _audit_scheduled_reviewer(
+    *, log: Callable[[str], None] = print, home: Path | None = None
+) -> int:
+    health = inspect_scheduler(default_scheduler_path(home))
+    if health.status != RED:
+        return 0
+    log(f"✗ scheduled-reviewer red")
+    log(f"    {health.path}")
+    for reason in health.reasons:
+        log(f"    {reason}")
+    log("    automatic acceptance is forbidden; update or disable this scheduler")
+    return 1
 
 
 def _audit_adapter(

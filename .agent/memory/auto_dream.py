@@ -49,17 +49,22 @@ def _status(message):
 
 
 def _append_marker(path, phase, run_id):
-    os.makedirs(os.path.dirname(path), exist_ok=True)
-    entry = {
-        "timestamp": datetime.datetime.now(datetime.timezone.utc).isoformat(),
-        "pid": os.getpid(),
-        "cwd": os.getcwd(),
-        "script": os.path.basename(__file__),
-        "phase": phase,
-        "run_id": run_id,
-    }
-    with open(path, "a", encoding="utf-8") as stream:
-        stream.write(json.dumps(entry, sort_keys=True) + "\n")
+    """Write legacy harness telemetry without affecting cycle correctness."""
+    try:
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        entry = {
+            "timestamp": datetime.datetime.now(datetime.timezone.utc).isoformat(),
+            "pid": os.getpid(),
+            "cwd": os.getcwd(),
+            "script": os.path.basename(__file__),
+            "phase": phase,
+            "run_id": run_id,
+        }
+        with open(path, "a", encoding="utf-8") as stream:
+            stream.write(json.dumps(entry, sort_keys=True) + "\n")
+        return True
+    except OSError:
+        return False
 
 
 def _entries_for_clustering(entries):
@@ -141,7 +146,14 @@ def _write_entries_locked(fd, entries):
         return
     os.ftruncate(fd, 0)
     os.lseek(fd, 0, os.SEEK_SET)
-    os.write(fd, payload)
+    view = memoryview(payload)
+    written = 0
+    while written < len(view):
+        count = os.write(fd, view[written:])
+        if count <= 0:
+            raise OSError("episodic rewrite made no progress")
+        written += count
+    os.fsync(fd)
 
 
 # Compatibility shims for any external caller that still imports the
@@ -236,8 +248,8 @@ def run_dream_cycle():
 def main():
     started = time.monotonic()
     run_id = start_cycle(DREAM_STATE)
-    _append_marker(STOP_ENTRY_MARKER, "entry", run_id)
     try:
+        _append_marker(STOP_ENTRY_MARKER, "entry", run_id)
         run_dream_cycle()
         _append_marker(STOP_COMPLETION_MARKER, "completed", run_id)
     except BaseException as exc:

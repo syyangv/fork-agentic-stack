@@ -6,6 +6,7 @@ import sqlite3
 import sys
 import tempfile
 import unittest
+from unittest import mock
 from pathlib import Path
 
 
@@ -61,6 +62,89 @@ class ScheduledReviewPolicyTest(unittest.TestCase):
 
 
 class CandidateSerializationTest(unittest.TestCase):
+    def test_rejection_move_failure_recovers_without_duplicate_lifecycle_files(self):
+        sys.path.insert(0, str(MEMORY))
+        import review_state
+
+        with tempfile.TemporaryDirectory() as tmp:
+            memory = Path(tmp) / "memory"
+            candidates = memory / "candidates"
+            (memory / "working").mkdir(parents=True)
+            candidates.mkdir()
+            candidate = {
+                "id": "recover",
+                "claim": "Recover interrupted lifecycle moves atomically.",
+                "status": "staged",
+                "staged_at": "2026-07-16T00:00:00+00:00",
+                "decisions": [],
+            }
+            (candidates / "recover.json").write_text(json.dumps(candidate))
+
+            with mock.patch.object(review_state, "_move_candidate", side_effect=OSError("injected")):
+                with self.assertRaises(OSError):
+                    review_state.mark_rejected(
+                        "recover", "host-agent", "not doctrine", str(candidates)
+                    )
+
+            self.assertTrue((candidates / "recover.json").exists())
+            self.assertFalse((candidates / "rejected" / "recover.json").exists())
+            interrupted = json.loads((candidates / "recover.json").read_text())
+            self.assertEqual(interrupted["status"], "rejected")
+
+            review_state.mark_rejected(
+                "recover", "host-agent", "not doctrine", str(candidates)
+            )
+            self.assertFalse((candidates / "recover.json").exists())
+            terminal_path = candidates / "rejected" / "recover.json"
+            self.assertTrue(terminal_path.exists())
+            terminal = json.loads(terminal_path.read_text())
+            rejected = [d for d in terminal["decisions"] if d.get("action") == "rejected"]
+            self.assertEqual(len(rejected), 1)
+
+    def test_automated_restage_move_failure_recovers_without_duplicate_files(self):
+        sys.path.insert(0, str(MEMORY))
+        import promote
+        from review_state import mark_rejected
+
+        with tempfile.TemporaryDirectory() as tmp:
+            memory = Path(tmp) / "memory"
+            candidates = memory / "candidates"
+            (memory / "working").mkdir(parents=True)
+            (memory / "semantic").mkdir()
+            (memory / "semantic" / "LESSONS.md").write_text("# Lessons\n")
+            candidates.mkdir()
+            candidate = {
+                "id": "restage",
+                "claim": "Retry deterministic rejection after new evidence.",
+                "status": "staged",
+                "staged_at": "2026-07-16T00:00:00+00:00",
+                "evidence_ids": ["old"],
+                "decisions": [],
+            }
+            (candidates / "restage.json").write_text(json.dumps(candidate))
+            mark_rejected(
+                "restage", "heuristic_prefilter", "deterministic", str(candidates)
+            )
+            pattern = {
+                "id": "restage",
+                "name": "restage",
+                "claim": candidate["claim"],
+                "conditions": ["review"],
+                "evidence_ids": ["old", "new"],
+                "canonical_salience": 9,
+                "cluster_size": 3,
+            }
+            with mock.patch.object(promote, "_move_candidate", side_effect=OSError("injected")):
+                with self.assertRaises(OSError):
+                    promote.write_candidates({"restage": pattern}, str(candidates))
+            self.assertFalse((candidates / "restage.json").exists())
+            interrupted = candidates / "rejected" / "restage.json"
+            self.assertEqual(json.loads(interrupted.read_text())["status"], "staged")
+
+            self.assertEqual(promote.write_candidates({"restage": pattern}, str(candidates)), 1)
+            self.assertTrue((candidates / "restage.json").exists())
+            self.assertFalse(interrupted.exists())
+
     def test_human_rejection_is_terminal_until_explicit_reopen(self):
         sys.path.insert(0, str(MEMORY))
         from promote import write_candidates
@@ -146,6 +230,52 @@ class CandidateSerializationTest(unittest.TestCase):
 
 
 class DreamStateTest(unittest.TestCase):
+    def test_locked_rewrite_retries_short_writes_and_fsyncs(self):
+        sys.path.insert(0, str(MEMORY))
+        module = load_module(MEMORY / "auto_dream.py", "auto_dream_short_write")
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "episodes.jsonl"
+            fd = os.open(path, os.O_RDWR | os.O_CREAT, 0o600)
+            self.addCleanup(os.close, fd)
+            original_write = os.write
+            calls = 0
+
+            def short_once(target_fd, data):
+                nonlocal calls
+                calls += 1
+                if calls == 1:
+                    return original_write(target_fd, bytes(data[:2]))
+                return original_write(target_fd, bytes(data))
+
+            with mock.patch.object(module.os, "write", side_effect=short_once), mock.patch.object(
+                module.os, "fsync", wraps=os.fsync
+            ) as fsync:
+                module._write_entries_locked(fd, [{"id": 1}, {"id": 2}])
+            self.assertGreaterEqual(calls, 2)
+            fsync.assert_called_once_with(fd)
+            self.assertEqual(
+                [json.loads(line) for line in path.read_text().splitlines()],
+                [{"id": 1}, {"id": 2}],
+            )
+
+    def test_unwritable_legacy_markers_do_not_block_or_leave_running_state(self):
+        sys.path.insert(0, str(MEMORY))
+        module = load_module(MEMORY / "auto_dream.py", "auto_dream_marker_failure")
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            state = root / "dream-state.json"
+            marker_dir = root / "marker-is-directory"
+            marker_dir.mkdir()
+            module.DREAM_STATE = str(state)
+            module.STOP_ENTRY_MARKER = str(marker_dir)
+            module.STOP_COMPLETION_MARKER = str(marker_dir)
+            ran = []
+            module.run_dream_cycle = lambda: ran.append(True)
+            module.main()
+            health = json.loads(state.read_text())
+            self.assertEqual(ran, [True])
+            self.assertEqual(health["last_status"], "success")
+
     def test_dream_clustering_window_is_bounded_without_mutating_history(self):
         sys.path.insert(0, str(MEMORY))
         module = load_module(MEMORY / "auto_dream.py", "auto_dream_window")
@@ -224,6 +354,29 @@ class InfrastructureManifestTest(unittest.TestCase):
         self.assertIn("serialized_candidate_lifecycle", manifest["features"])
         self.assertIn("structured_dream_health", manifest["features"])
         self.assertIn("latest_state_recall", manifest["features"])
+
+
+class ScheduledReviewHealthTest(unittest.TestCase):
+    def test_doctor_fails_unsafe_legacy_scheduler_under_arbitrary_home(self):
+        from harness_manager import doctor
+
+        with tempfile.TemporaryDirectory() as tmp:
+            home = Path(tmp)
+            scheduler = (
+                home / "Library" / "Scripts" / "agentic_stack_review_notify.py"
+            )
+            scheduler.parent.mkdir(parents=True)
+            scheduler.write_text('subprocess.run(["graduate.py", candidate])\n')
+            messages = []
+            self.assertEqual(
+                doctor._audit_scheduled_reviewer(log=messages.append, home=home), 1
+            )
+            self.assertIn("automatic acceptance is forbidden", "\n".join(messages))
+
+            scheduler.write_text("from scheduled_review_policy import triage_candidates\n")
+            self.assertEqual(
+                doctor._audit_scheduled_reviewer(log=messages.append, home=home), 0
+            )
 
 
 if __name__ == "__main__":

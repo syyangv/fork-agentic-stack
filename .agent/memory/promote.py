@@ -67,6 +67,10 @@ def _human_rejection_is_terminal(candidate):
     return rejected[-1].get("reviewer") not in automated_reviewers
 
 
+def _move_candidate(src, dst):
+    os.replace(src, dst)
+
+
 def write_candidates(patterns, candidates_dir):
     """Stage each pattern as a candidate JSON with lifecycle metadata.
 
@@ -96,7 +100,8 @@ def _write_candidates_locked(patterns, candidates_dir):
     lessons_text = ""
     if os.path.exists(lessons_path):
         try:
-            lessons_text = open(lessons_path).read()
+            with open(lessons_path, encoding="utf-8") as stream:
+                lessons_text = stream.read()
         except OSError:
             pass
     current_terminal_lessons = set(extract_lesson_lines(lessons_text))
@@ -121,6 +126,15 @@ def _write_candidates_locked(patterns, candidates_dir):
         # means lifecycle state carries across cluster membership changes.
         slug = _slug(p)
         prev, prev_loc = _find_prior(slug, candidates_dir)
+
+        # Recover a prior interrupted restage/reopen. The source record was
+        # already atomically updated before its same-filesystem move failed.
+        if prev_loc in ("rejected", "graduated") and prev.get("status") == "staged":
+            src = os.path.join(candidates_dir, prev_loc, f"{slug}.json")
+            dst = os.path.join(candidates_dir, f"{slug}.json")
+            _move_candidate(src, dst)
+            written += 1
+            continue
 
         # Fully-accepted lesson — terminal, never resurrect.
         if prev_loc == "graduated" and prev.get("status") != "provisional":
@@ -185,16 +199,11 @@ def _write_candidates_locked(patterns, candidates_dir):
         }
 
         staged_path = os.path.join(candidates_dir, f"{slug}.json")
-        atomic_write_json(staged_path, candidate)
-
-        # The slug must live in exactly one lifecycle location. Remove any
-        # prior copy in rejected/ or graduated/ (the latter only for
-        # provisional re-review — accepted never gets here because it's
-        # skipped above).
         if prev_loc in ("rejected", "graduated"):
-            try:
-                os.remove(os.path.join(candidates_dir, prev_loc, f"{slug}.json"))
-            except OSError:
-                pass
+            prior_path = os.path.join(candidates_dir, prev_loc, f"{slug}.json")
+            atomic_write_json(prior_path, candidate)
+            _move_candidate(prior_path, staged_path)
+        else:
+            atomic_write_json(staged_path, candidate)
         written += 1
     return written
