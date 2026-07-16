@@ -11,6 +11,45 @@ telemetry, and reusable artifacts are in local files.
 - **semantic/** — distilled patterns that outlive episodes.
 - **personal/** — user-specific preferences. Never merged into semantic.
 
+### Federated memory orchestration — three providers
+
+- **Governance (agentic-stack)** remains authoritative for permissions,
+  preferences, decisions, and human-approved lessons.
+- **Behavioral (MemOS local 2.0.10)** records project-isolated episodes and
+  traces through a digest-pinned artifact and committed npm dependency lock,
+  with telemetry disabled. Phase 3 is
+  shadow-only: its health is visible but its retrieval results are never
+  inserted into prompts.
+- **Evidence (CRG)** remains the structural code graph. Its lifecycle is
+  independent of governance maintenance and MemOS task capture.
+
+The MemOS code tree is immutable and separate from mutable per-project data.
+Each project gets a private `MEMOS_HOME`, synthetic `HOME`, SQLite delivery
+journal, and upstream episode-ID mapping. The bridge subprocess receives a
+sanitized environment, uses bounded JSON-RPC, and retries only calls known to
+be idempotent. Tool capture sends bounded summaries through `turn.end`; raw
+stdout, environment data, and model reasoning do not cross the provider
+boundary. External events can be submitted singly or as a bounded batch with
+`memory_orchestrate.py record`; batching preserves one bridge lifecycle for a
+complete task. Upstream-compatible `turn.start`, `turn.end`, `memory.search`,
+and `feedback.submit` calls receive a 75-second deadline; health, session, and
+other light calls retain the smaller bounded bridge default, while episode and
+session finalization receive 15 seconds to flush capture state. Initial bridge
+health receives a 75-second cold-start allowance. One total
+deadline is shared across retries, pipe writes, and response waits, so a
+backpressured child cannot hang the recorder. A project-scoped OS lock keeps
+one bridge lifecycle active per project, keeps claim-through-terminal delivery
+FIFO across concurrent recorders, and makes crash recovery unambiguous without
+reclaiming a live request. Phase 3 does not
+invoke this synchronous shadow recorder from task-facing hooks; later hook
+integration must dispatch it off the critical path. `export-shadow` is
+redacted and byte-bounded.
+
+The two daily governance LaunchAgents do not own MemOS or CRG lifecycle.
+Provider health/retry/retention jobs may be introduced only behind separate,
+tested provider-owned contracts. Phase 9 converts the governance jobs into
+installer-managed thin launchers without adding behavioral or graph work.
+
 ### Skills — progressive disclosure
 - `_index.md` and `_manifest.jsonl` always in context (tiny).
 - A full `SKILL.md` loads only when its triggers match the current task.

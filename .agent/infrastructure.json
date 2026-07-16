@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "stack_version": "0.18.0",
-  "orchestration_phase": 2,
+  "orchestration_phase": 3,
   "features": [
     "latest_state_recall",
     "serialized_candidate_lifecycle",
@@ -16,6 +16,15 @@
     "strict_orchestration_config",
     "governance_provider",
     "governance_orchestrator_cli",
-    "legacy_recall_comparison"
+    "legacy_recall_comparison",
+    "memos_local_artifact_pin",
+    "memos_shadow_provider",
+    "memos_delivery_journal",
+    "memos_bridge_supervision",
+    "memos_project_isolation",
+    "memos_privacy_config",
+    "memos_sanitized_environment",
+    "memos_upstream_episode_mapping",
+    "memos_shadow_cli"
   ]
 }
