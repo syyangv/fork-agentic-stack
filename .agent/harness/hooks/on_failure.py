@@ -36,7 +36,9 @@ def _count_recent_failures(skill_name):
 
 
 def on_failure(skill_name, action, error, context="", confidence=0.9,
-               evidence_ids=None, importance=None, pain_score=None):
+               evidence_ids=None, importance=None, pain_score=None,
+               orchestration_event_id=None, orchestration_run_id=None,
+               orchestration_capture_status=None):
     # Format reflection without the noisy `type(error).__name__:` prefix
     # when the caller passes a pre-formatted string (the common case for
     # hook callers). Only include the type name for actual Exception objects
@@ -64,6 +66,12 @@ def on_failure(skill_name, action, error, context="", confidence=0.9,
         "source": build_source(skill_name),
         "evidence_ids": list(evidence_ids) if evidence_ids else [],
     }
+    if orchestration_event_id:
+        entry["orchestration_event_id"] = orchestration_event_id
+    if orchestration_run_id:
+        entry["orchestration_run_id"] = orchestration_run_id
+    if orchestration_capture_status:
+        entry["orchestration_capture_status"] = orchestration_capture_status
     # _count_recent_failures returns PRIOR failures only; add 1 for this one
     # so the rewrite flag fires on the Nth failure, not the (N+1)th.
     recent = _count_recent_failures(skill_name) + 1

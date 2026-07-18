@@ -22,12 +22,15 @@ Or let the top-level install script do it:
   run `recall.py` before high-stakes operations, and call `memory_reflect.py`
   manually for significant events.
 
-- **`.claude/settings.json`** — two hooks + permission denies:
+- **`.claude/settings.json`** — lifecycle hooks + permission denies:
 
   | Hook | Trigger | Script |
   |---|---|---|
+  | `UserPromptSubmit` | `*` | `.agent/harness/hooks/orchestration_event.py` |
+  | `PreToolUse` | selected mutating/task tools | `.agent/harness/hooks/orchestration_event.py` |
   | `PostToolUse` | `Bash\|Edit\|MultiEdit\|Write\|Task\|TodoWrite` | `.agent/harness/hooks/claude_code_post_tool.py` |
-  | `Stop` | `*` (session end) | `.agent/memory/auto_dream.py` |
+  | `SubagentStart` | `*` | `.agent/harness/hooks/orchestration_event.py` |
+  | `Stop` | `*` (session end) | bounded behavioral finalization, then `.agent/memory/auto_dream.py` |
 
 ### Why `claude_code_post_tool.py` and not `memory_reflect.py`
 

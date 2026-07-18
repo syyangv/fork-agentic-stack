@@ -30,9 +30,11 @@ npm install -g @mariozechner/pi-coding-agent
   `/reload`.
 - **`.pi/extensions/memory-hook.ts`** — project-local TypeScript
   extension auto-discovered by pi at startup. It:
+  - Normalizes `before_agent_start`, selected `tool_result`, and
+    `session_shutdown` events through the shared redacting behavioral boundary.
   - Logs `bash`, `edit`, and `write` tool results directly to
-    `AGENT_LEARNINGS.jsonl` (no Python subprocess per call — all
-    scoring is inline TypeScript).
+    `AGENT_LEARNINGS.jsonl`; scoring stays inline TypeScript while the bounded
+    behavioral subprocess supplies shared event/run correlation IDs.
   - Skips `read`/`find`/`ls`/`grep` and noise-level bash calls to keep
     the episodic log signal-rich.
   - Runs `auto_dream.py` when the session ends (quit, new session, or

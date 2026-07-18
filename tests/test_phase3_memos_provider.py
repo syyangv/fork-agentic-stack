@@ -279,7 +279,7 @@ class JournalTest(unittest.TestCase):
 class ProviderTest(unittest.TestCase):
     def test_manifest_declares_phase3_shadow_features(self):
         manifest = json.loads((AGENT / "infrastructure.json").read_text())
-        self.assertEqual(manifest["orchestration_phase"], 3)
+        self.assertGreaterEqual(manifest["orchestration_phase"], 3)
         self.assertTrue({
             "memos_local_artifact_pin", "memos_shadow_provider",
             "memos_delivery_journal", "memos_bridge_supervision",

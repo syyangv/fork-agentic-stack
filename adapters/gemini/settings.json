@@ -9,6 +9,33 @@
     "disabled": []
   },
   "hooks": {
+    "BeforeAgent": [
+      {
+        "hooks": [
+          {
+            "name": "agentic-stack-task-start",
+            "type": "command",
+            "command": "python3 \"$GEMINI_PROJECT_DIR/.agent/harness/hooks/orchestration_event.py\" --harness gemini --signal user_prompt --timeout 3",
+            "description": "Start a correlated behavioral shadow run",
+            "timeout": 5000
+          }
+        ]
+      }
+    ],
+    "BeforeTool": [
+      {
+        "matcher": "run_shell_command|replace|write_file|write_todos",
+        "hooks": [
+          {
+            "name": "agentic-stack-pre-tool",
+            "type": "command",
+            "command": "python3 \"$GEMINI_PROJECT_DIR/.agent/harness/hooks/orchestration_event.py\" --harness gemini --signal pre_tool --timeout 2",
+            "description": "Capture a bounded pre-tool event",
+            "timeout": 4000
+          }
+        ]
+      }
+    ],
     "AfterTool": [
       {
         "matcher": "run_shell_command|replace|write_file|write_todos",
@@ -26,6 +53,13 @@
     "SessionEnd": [
       {
         "hooks": [
+          {
+            "name": "agentic-stack-task-finalize",
+            "type": "command",
+            "command": "python3 \"$GEMINI_PROJECT_DIR/.agent/harness/hooks/orchestration_event.py\" --harness gemini --signal finalize --timeout 1.5",
+            "description": "Finalize the correlated behavioral run without blocking shutdown",
+            "timeout": 3000
+          },
           {
             "name": "agentic-stack-auto-dream",
             "type": "command",

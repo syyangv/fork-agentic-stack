@@ -9,7 +9,8 @@ EPISODIC = os.path.join(ROOT, "memory/episodic/AGENT_LEARNINGS.jsonl")
 
 def log_execution(skill_name, action, result, success, reflection="",
                   importance=5, confidence=0.5, evidence_ids=None,
-                  pain_score=None):
+                  pain_score=None, orchestration_event_id=None,
+                  orchestration_run_id=None, orchestration_capture_status=None):
     """Log a structured episodic entry.
 
     pain_score: override the default (2 for success, 7 for failure). Pass
@@ -31,4 +32,10 @@ def log_execution(skill_name, action, result, success, reflection="",
         "source": build_source(skill_name),
         "evidence_ids": list(evidence_ids) if evidence_ids else [],
     }
+    if orchestration_event_id:
+        entry["orchestration_event_id"] = orchestration_event_id
+    if orchestration_run_id:
+        entry["orchestration_run_id"] = orchestration_run_id
+    if orchestration_capture_status:
+        entry["orchestration_capture_status"] = orchestration_capture_status
     return append_jsonl(EPISODIC, entry)

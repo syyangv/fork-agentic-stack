@@ -40,10 +40,17 @@ deadline is shared across retries, pipe writes, and response waits, so a
 backpressured child cannot hang the recorder. A project-scoped OS lock keeps
 one bridge lifecycle active per project, keeps claim-through-terminal delivery
 FIFO across concurrent recorders, and makes crash recovery unambiguous without
-reclaiming a live request. Phase 3 does not
-invoke this synchronous shadow recorder from task-facing hooks; later hook
-integration must dispatch it off the critical path. `export-shadow` is
-redacted and byte-bounded.
+reclaiming a live request. Phase 4 invokes the shadow recorder through a
+single redacting hook boundary. Each adapter sends only events exposed by its
+native hook API. Small private correlation records connect the behavioral
+event/run IDs to the existing episodic entry. Hooks atomically enqueue into a
+private spool; a detached, serialized worker delivers bounded batches and
+writes structured health. Provider startup and degradation therefore remain
+off the hook critical path and cannot block Stop/SessionEnd. `export-shadow`
+remains redacted and byte-bounded.
+
+The exact native capability matrix and explicit commands for hookless
+harnesses live in `docs/harness-event-capabilities.md`.
 
 The two daily governance LaunchAgents do not own MemOS or CRG lifecycle.
 Provider health/retry/retention jobs may be introduced only behind separate,
