@@ -24,6 +24,7 @@ from hooks.claude_code_post_tool import (  # noqa: E402
 )
 from hooks.on_failure import on_failure  # noqa: E402
 from hooks.post_execution import log_execution  # noqa: E402
+from hooks.orchestration_event import capture_hook_event  # noqa: E402
 
 
 TOOL_NAME_MAP = {
@@ -162,6 +163,14 @@ def main() -> None:
     action = _action_label(tool_name, tool_input)
     reflection = _reflection(tool_name, tool_input, tool_response, success)
     detail = _detail(tool_name, tool_input, tool_response, success)
+    behavioral_event, _capture_status = capture_hook_event(
+        "gemini", "post_tool", payload, timeout=3.0,
+    )
+    correlation = {
+        "orchestration_event_id": behavioral_event.event_id if behavioral_event else None,
+        "orchestration_run_id": behavioral_event.run_id if behavioral_event else None,
+        "orchestration_capture_status": f"{_capture_status.status}:{_capture_status.reason}",
+    }
 
     pain_score = _pain_score(importance, success)
     if success:
@@ -174,6 +183,7 @@ def main() -> None:
             importance=importance,
             confidence=0.7,
             pain_score=pain_score,
+            **correlation,
         )
         return
 
@@ -185,6 +195,7 @@ def main() -> None:
         confidence=0.7,
         importance=importance,
         pain_score=pain_score,
+        **correlation,
     )
 
 

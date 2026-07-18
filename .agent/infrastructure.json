@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "stack_version": "0.18.0",
-  "orchestration_phase": 3,
+  "orchestration_phase": 4,
   "features": [
     "latest_state_recall",
     "serialized_candidate_lifecycle",
@@ -25,6 +25,10 @@
     "memos_privacy_config",
     "memos_sanitized_environment",
     "memos_upstream_episode_mapping",
-    "memos_shadow_cli"
+    "memos_shadow_cli",
+    "harness_event_normalization",
+    "harness_event_correlation",
+    "bounded_hook_delivery",
+    "truthful_harness_capabilities"
   ]
 }

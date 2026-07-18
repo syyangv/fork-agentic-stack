@@ -39,7 +39,7 @@ import {
 } from "@mariozechner/pi-coding-agent";
 import * as fs from "node:fs";
 import * as path from "node:path";
-import { execSync } from "node:child_process";
+import { execSync, spawn } from "node:child_process";
 
 // ── Paths ────────────────────────────────────────────────────────────────────
 
@@ -47,7 +47,54 @@ const CWD        = process.cwd();
 const AGENT_ROOT = path.join(CWD, ".agent");
 const EPISODIC   = path.join(AGENT_ROOT, "memory", "episodic", "AGENT_LEARNINGS.jsonl");
 const DREAM_SCRIPT = path.join(AGENT_ROOT, "memory", "auto_dream.py");
+const ORCHESTRATION_SCRIPT = path.join(AGENT_ROOT, "harness", "hooks", "orchestration_event.py");
 const PATTERNS_CFG = path.join(AGENT_ROOT, "protocols", "hook_patterns.json");
+const SESSION_ID = `pi-${process.pid}`;
+
+type BehavioralCorrelation = { event_id: string; run_id: string; status: string; reason: string };
+
+async function _captureBehavioral(
+  signal: "user_prompt" | "post_tool" | "finalize",
+  payload: Record<string, unknown>,
+  timeoutMs: number,
+  emitMetadata = false,
+): Promise<BehavioralCorrelation | null> {
+  if (!fs.existsSync(ORCHESTRATION_SCRIPT)) return null;
+  for (const py of ["python3", "python"]) {
+    try {
+      const result = await new Promise<BehavioralCorrelation | null>((resolve, reject) => {
+        const args = [
+          ORCHESTRATION_SCRIPT, "--harness", "pi", "--signal", signal,
+          "--timeout", String(Math.max(0.1, timeoutMs / 1000 - 0.25)),
+        ];
+        if (emitMetadata) args.push("--emit-metadata");
+        const child = spawn(py, args, { cwd: CWD, stdio: ["pipe", "pipe", "ignore"] });
+        let stdout = "";
+        child.stdout.on("data", chunk => { stdout += chunk.toString(); });
+        const timer = setTimeout(() => {
+          child.kill("SIGKILL");
+          resolve(null);
+        }, timeoutMs);
+        child.once("error", error => { clearTimeout(timer); reject(error); });
+        child.once("close", () => {
+          clearTimeout(timer);
+          if (!emitMetadata || !stdout.trim()) return resolve(null);
+          try {
+            const value = JSON.parse(stdout) as BehavioralCorrelation;
+            resolve(value.event_id && value.run_id ? value : null);
+          } catch {
+            resolve(null);
+          }
+        });
+        child.stdin.end(JSON.stringify({ session_id: SESSION_ID, cwd: CWD, ...payload }));
+      });
+      return result;
+    } catch {
+      // Try the Windows/pyenv fallback.
+    }
+  }
+  return null;
+}
 
 // ── Importance patterns ───────────────────────────────────────────────────────
 // Mirrors claude_code_post_tool.py's _UNIVERSAL_HIGH / _UNIVERSAL_MEDIUM so
@@ -276,9 +323,15 @@ async function _runDream(pi: ExtensionAPI, hasUI: boolean): Promise<void> {
 
 export default function (pi: ExtensionAPI) {
 
+  pi.on("before_agent_start", async (event, _ctx) => {
+    const prompt = typeof event.prompt === "string" ? event.prompt : "";
+    if (!prompt) return;
+    await _captureBehavioral("user_prompt", { prompt }, 5_000);
+  });
+
   // ── tool_result: episodic logging ────────────────────────────────────────
 
-  pi.on("tool_result", (_event, _ctx) => {
+  pi.on("tool_result", async (_event, _ctx) => {
     const event = _event;
 
     // Only log the three tool types that carry meaningful signal.
@@ -308,6 +361,20 @@ export default function (pi: ExtensionAPI) {
     // the failure-threshold rewrite flag fires correctly.
     if (event.toolName === "bash" && imp <= 3 && success) return;
 
+    const correlation = await _captureBehavioral("post_tool", {
+      event_id: event.toolCallId,
+      tool_name: event.toolName,
+      tool_input: event.input,
+      tool_response: {
+        is_error: event.isError,
+        output: event.content
+          .filter(item => item.type === "text")
+          .map(item => item.text)
+          .join(" ")
+          .slice(0, 1_000),
+      },
+    }, 4_000, true);
+
     const entry: Record<string, unknown> = {
       timestamp:   new Date().toISOString(),
       skill:       "pi",
@@ -325,6 +392,11 @@ export default function (pi: ExtensionAPI) {
       },
       evidence_ids: [],
     };
+    if (correlation) {
+      entry.orchestration_event_id = correlation.event_id;
+      entry.orchestration_run_id = correlation.run_id;
+      entry.orchestration_capture_status = `${correlation.status}:${correlation.reason}`;
+    }
 
     try {
       _appendEntry(entry);
@@ -341,6 +413,7 @@ export default function (pi: ExtensionAPI) {
   // cycle never ran. Just always run.
 
   pi.on("session_shutdown", async (_event, ctx) => {
+    await _captureBehavioral("finalize", {}, 2_500);
     await _runDream(pi, ctx.hasUI);
   });
 }

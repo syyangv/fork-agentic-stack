@@ -9,7 +9,7 @@ via the `AGENTS.md`, `.github/instructions/`, hook, and skills paths.
 | File | Purpose |
 |---|---|
 | `.github/instructions/agentic-stack.instructions.md` | Instruction file loaded automatically by Copilot CLI on every session |
-| `.github/hooks/agentic-stack.json` | Hook config for tool-use logging and session-end dream cycles |
+| `.github/hooks/agentic-stack.json` | Native prompt/pre-tool/post-tool correlation plus bounded session finalization and dream cycles |
 | `AGENTS.md` | Primary project instructions that point Copilot CLI at the portable `.agent/` brain |
 | `.github/skills/` | Mirror of `.agent/skills/` for native skill discovery |
 

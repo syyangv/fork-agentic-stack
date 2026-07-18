@@ -1,6 +1,24 @@
 {
   "version": 1,
   "hooks": {
+    "userPromptSubmitted": [
+      {
+        "type": "command",
+        "bash": "python3 .agent/harness/hooks/orchestration_event.py --harness copilot-cli --signal user_prompt --timeout 3",
+        "powershell": "python .agent/harness/hooks/orchestration_event.py --harness copilot-cli --signal user_prompt --timeout 3",
+        "cwd": ".",
+        "timeoutSec": 5
+      }
+    ],
+    "preToolUse": [
+      {
+        "type": "command",
+        "bash": "python3 .agent/harness/hooks/orchestration_event.py --harness copilot-cli --signal pre_tool --timeout 2",
+        "powershell": "python .agent/harness/hooks/orchestration_event.py --harness copilot-cli --signal pre_tool --timeout 2",
+        "cwd": ".",
+        "timeoutSec": 4
+      }
+    ],
     "postToolUse": [
       {
         "type": "command",
@@ -11,6 +29,13 @@
       }
     ],
     "sessionEnd": [
+      {
+        "type": "command",
+        "bash": "python3 .agent/harness/hooks/orchestration_event.py --harness copilot-cli --signal finalize --timeout 1.5",
+        "powershell": "python .agent/harness/hooks/orchestration_event.py --harness copilot-cli --signal finalize --timeout 1.5",
+        "cwd": ".",
+        "timeoutSec": 3
+      },
       {
         "type": "command",
         "bash": "python3 .agent/memory/auto_dream.py",

@@ -15,8 +15,10 @@ Or on Windows PowerShell:
   Gemini at the shared `.agent/` brain and preserves the same recall /
   memory discipline as the other adapters.
 - `.gemini/settings.json` — project-level hooks for:
+  - `BeforeAgent` task-start correlation
+  - `BeforeTool` bounded pre-tool capture
   - `AfterTool` on `run_shell_command|replace|write_file|write_todos`
-  - `SessionEnd` to run `auto_dream.py`
+  - `SessionEnd` bounded behavioral finalization followed by `auto_dream.py`
 - `.gemini/skills/` — Gemini scans this path for project skills. The installer
   merges shared skills from `.agent/skills/` into a real directory instead of
   a symlink, because Gemini's skill discovery can miss symlinked directories.
