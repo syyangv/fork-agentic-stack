@@ -187,7 +187,7 @@ def validate_schema(instance: Any, schema_name: str) -> None:
     documents the executable external-boundary contract.
     """
     schema = json.loads((_SCHEMA_DIR / schema_name).read_text(encoding="utf-8"))
-    _validate(instance, schema, "$")
+    _validate(instance, schema, "$", root=schema)
 
 
 def validate_utc_timestamp(value: str) -> None:
@@ -206,7 +206,22 @@ def normalize_utc_timestamp(value: str) -> str:
     return parsed.astimezone(timezone.utc).isoformat().replace("+00:00", "Z")
 
 
-def _validate(value: Any, schema: Mapping[str, Any], path: str) -> None:
+def _validate(
+    value: Any, schema: Mapping[str, Any], path: str, *, root: Mapping[str, Any],
+) -> None:
+    reference = schema.get("$ref")
+    if reference is not None:
+        if not isinstance(reference, str) or not reference.startswith("#/"):
+            raise SchemaValidationError(f"{path}: unsupported schema reference")
+        target: Any = root
+        for component in reference[2:].split("/"):
+            if not isinstance(target, Mapping) or component not in target:
+                raise SchemaValidationError(f"{path}: unresolved schema reference")
+            target = target[component]
+        if not isinstance(target, Mapping):
+            raise SchemaValidationError(f"{path}: invalid schema reference")
+        _validate(value, target, path, root=root)
+        return
     expected = schema.get("type")
     if isinstance(expected, list):
         if value is None and "null" in expected:
@@ -246,12 +261,21 @@ def _validate(value: Any, schema: Mapping[str, Any], path: str) -> None:
                 raise SchemaValidationError(f"{path}: unknown fields {', '.join(unknown)}")
         for name, child in value.items():
             if name in properties:
-                _validate(child, properties[name], f"{path}.{name}")
+                _validate(child, properties[name], f"{path}.{name}", root=root)
             elif isinstance(additional, Mapping):
-                _validate(child, additional, f"{path}.{name}")
-    if isinstance(value, (list, tuple)) and "items" in schema:
-        for index, child in enumerate(value):
-            _validate(child, schema["items"], f"{path}[{index}]")
+                _validate(child, additional, f"{path}.{name}", root=root)
+    if isinstance(value, (list, tuple)):
+        if len(value) < schema.get("minItems", 0):
+            raise SchemaValidationError(f"{path}: array below minItems")
+        if len(value) > schema.get("maxItems", len(value)):
+            raise SchemaValidationError(f"{path}: array exceeds maxItems")
+        if schema.get("uniqueItems"):
+            encoded = [canonical_json(item) for item in value]
+            if len(encoded) != len(set(encoded)):
+                raise SchemaValidationError(f"{path}: array items must be unique")
+        if "items" in schema:
+            for index, child in enumerate(value):
+                _validate(child, schema["items"], f"{path}[{index}]", root=root)
 
 
 def _is_type(value: Any, kind: str) -> bool:

@@ -9,6 +9,7 @@ from pathlib import Path
 from .._core import REDACTED, redact
 from ..contracts import ContractError, ProvenanceRef, RetrievalItem
 from ..governance_recall import recall_lessons
+from ..governance_fts import rank_governance_records
 
 
 class GovernanceProvider:
@@ -30,7 +31,9 @@ class GovernanceProvider:
         for kind, relative, parser in documents:
             try:
                 records = parser(self.root / relative)
-                created, record_warnings = self._record_items(kind, relative, records)
+                created, record_warnings = self._record_items(
+                    kind, relative, records, intent,
+                )
                 items.extend(created)
                 warnings.extend(record_warnings)
                 if created:
@@ -91,7 +94,9 @@ class GovernanceProvider:
                 records.append(record)
         return records
 
-    def _record_items(self, kind: str, relative: str, records: list[str]):
+    def _record_items(
+        self, kind: str, relative: str, records: list[str], intent: str,
+    ):
         items, warnings = [], []
         reasons = {
             "permission": "authoritative permissions",
@@ -100,6 +105,9 @@ class GovernanceProvider:
             "review_queue": "pending review queue",
         }
         status = "raw" if kind == "review_queue" else "accepted"
+        record_scores = rank_governance_records(
+            intent, [(str(index), record) for index, record in enumerate(records)],
+        )
         for record_index, record in enumerate(records):
             cleaned = redact(record)
             if cleaned != record:
@@ -112,7 +120,14 @@ class GovernanceProvider:
                 items.append(RetrievalItem(
                     item_id=source_id, lane="governance", type=kind, summary=summary,
                     scope={"project_id": self.project_id, "harness": None}, status=status,
-                    provider_score=1.0, selection_reason=reasons[kind],
+                    provider_score=(
+                        1.0 if kind == "permission"
+                        else float(record_scores.get(str(record_index), 0.0))
+                    ),
+                    selection_reason=(
+                        reasons[kind] if kind == "permission"
+                        else reasons[kind] + "; ranked by local governance FTS"
+                    ),
                     provenance=(provenance.to_dict(),), token_estimate=_tokens(summary), expires_at=None,
                 ))
         return items, warnings

@@ -205,27 +205,62 @@ class MemOSBridgeClient:
         health["capabilities"] = PINNED_CAPABILITIES
         return health
 
-    def close(self) -> None:
+    def close(self, *, deadline: float | None = None) -> None:
         """Request cooperative shutdown, then terminate only if necessary."""
-        with self._operation_lock:
+        lock_timeout = None if deadline is None else max(0.0, deadline - time.monotonic())
+        acquired = (
+            self._operation_lock.acquire()
+            if lock_timeout is None else self._operation_lock.acquire(timeout=lock_timeout)
+        )
+        if not acquired:
+            process = self._process
+            if process is not None:
+                self._stop_process(process, timeout=0.0)
+            self._closed = True
+            self._process = None
+            self._fail_all(
+                MemOSUnavailableError("MemOS bridge client closed"), process,
+            )
+            return
+        try:
             if self._closed:
                 return
             process = self._process
             if process is not None and process.poll() is None:
-                if process.stdin is not None and not process.stdin.closed:
+                remaining = (
+                    self.config.shutdown_timeout if deadline is None
+                    else max(0.0, deadline - time.monotonic())
+                )
+                if remaining > 0 and process.stdin is not None and not process.stdin.closed:
                     try:
-                        self._call_once("core.shutdown", None, self.config.shutdown_timeout)
+                        self._call_once(
+                            "core.shutdown", None,
+                            min(self.config.shutdown_timeout, remaining),
+                        )
                     except MemOSBridgeError:
                         pass
                 self._close_stdin(process)
+                remaining = (
+                    self.config.shutdown_timeout if deadline is None
+                    else max(0.0, deadline - time.monotonic())
+                )
                 try:
-                    process.wait(timeout=self.config.shutdown_timeout)
+                    process.wait(timeout=min(self.config.shutdown_timeout, remaining))
                 except subprocess.TimeoutExpired:
-                    self._stop_process(process)
-            self._join_writers()
+                    self._stop_process(
+                        process, timeout=(
+                            None if deadline is None
+                            else max(0.0, deadline - time.monotonic())
+                        ),
+                    )
+            self._join_writers(timeout=(
+                None if deadline is None else max(0.0, deadline - time.monotonic())
+            ))
             self._closed = True
             self._process = None
             self._fail_all(MemOSUnavailableError("MemOS bridge client closed"), process)
+        finally:
+            self._operation_lock.release()
 
     def _call_once(self, method: str, params: Any, timeout: float) -> Any:
         # Preserve part of the externally visible budget for hard-stop cleanup.
@@ -499,9 +534,19 @@ class MemOSBridgeClient:
             if self._process is process:
                 self._process = None
 
-    def _stop_process(self, process: subprocess.Popen[bytes]) -> None:
-        with self._stop_lock:
+    def _stop_process(
+        self, process: subprocess.Popen[bytes], *, timeout: float | None = None,
+    ) -> None:
+        acquired = (
+            self._stop_lock.acquire() if timeout is None
+            else self._stop_lock.acquire(timeout=max(0.0, timeout))
+        )
+        if not acquired:
+            return
+        try:
             abort_timeout = min(self.config.shutdown_timeout, 0.05)
+            if timeout is not None:
+                abort_timeout = min(abort_timeout, max(0.0, timeout))
             if process.poll() is None:
                 try:
                     process.kill()
@@ -518,15 +563,18 @@ class MemOSBridgeClient:
             with self._state_lock:
                 if self._process is process:
                     self._process = None
+        finally:
+            self._stop_lock.release()
 
     def _join_writers(self, *, timeout: float | None = None) -> None:
         current = threading.current_thread()
         timeout = self.config.shutdown_timeout if timeout is None else timeout
+        deadline = time.monotonic() + timeout
         with self._state_lock:
             writers = tuple(self._writer_threads)
         for writer in writers:
             if writer is not current:
-                writer.join(timeout=timeout)
+                writer.join(timeout=max(0.0, deadline - time.monotonic()))
 
     @staticmethod
     def _close_stdin(process: subprocess.Popen[bytes]) -> None:

@@ -344,3 +344,24 @@ def test_close_requests_shutdown_and_reaps_process(tmp_path: Path) -> None:
     client.close()
     assert marker.read_text() == "yes"
     assert client.closed
+
+
+def test_close_honors_absolute_deadline_on_slow_shutdown(tmp_path: Path) -> None:
+    command = _script(
+        tmp_path,
+        """
+        import json, sys, time
+        for line in sys.stdin:
+            request = json.loads(line)
+            if request["method"] == "core.shutdown":
+                time.sleep(2)
+                continue
+            print(json.dumps({"jsonrpc":"2.0", "id":request["id"], "result":True}), flush=True)
+        """,
+    )
+    client = MemOSBridgeClient(BridgeConfig(command=command, shutdown_timeout=0.5))
+    assert client.call("x") is True
+    started = time.monotonic()
+    client.close(deadline=started + 0.1)
+    assert time.monotonic() - started < 0.2
+    assert client.closed

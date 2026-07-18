@@ -6,9 +6,11 @@ import hashlib
 import json
 import os
 import sqlite3
+import stat
 import subprocess
 import threading
 import time
+from collections import deque
 from collections.abc import Callable, Mapping
 from datetime import datetime, timezone
 from pathlib import Path
@@ -21,7 +23,7 @@ from .._core import (
     redact,
     validate_schema,
 )
-from ..contracts import ProvenanceRef
+from ..contracts import ContractError, ProvenanceRef, RetrievalItem
 
 
 SAFE_TOOLS = {
@@ -38,6 +40,7 @@ GRAPH_QUERY_PATTERNS = frozenset({
 })
 VOLATILE_ROOTS = (Path("/tmp"), Path("/private/tmp"), Path("/var/tmp"))
 MAX_RECORD_BYTES = 16 * 1024
+MAX_LEDGER_READ_BYTES = 16 * 1024 * 1024
 MAX_SUMMARY_CHARS = 2_000
 MAX_SYMBOLS = 50
 LOCK_TIMEOUT_SECONDS = 5.0
@@ -296,6 +299,87 @@ class CrgEvidenceProvider:
                     operation="graph_query", query=pattern, target=intent[:500],
                 )
         return self.request(operation="semantic_search", query=intent[:500])
+
+    def retrieve(
+        self, intent: str, top_k: int = 5,
+    ) -> tuple[list[RetrievalItem], dict[str, Any]]:
+        """Translate recent reconciled ledger rows into bounded evidence items."""
+        top_k = max(1, min(top_k, 20))
+        health = self.health()
+        warnings = list(health.get("warnings", []))
+        try:
+            _reject_symlink_components(self.ledger.path.parent)
+        except CrgEvidenceError:
+            warnings.append("evidence_ledger_symlink_parent")
+            return [], {**health, "status": "degraded", "warnings": warnings}
+        if self.ledger.path.is_symlink():
+            warnings.append("evidence_ledger_symlink")
+            return [], {**health, "status": "degraded", "warnings": warnings}
+        if not self.ledger.path.is_file():
+            warnings.append("evidence_ledger_missing")
+            return [], {**health, "status": "degraded", "warnings": warnings}
+        try:
+            entries = _recent_ledger_entries(self.ledger.path)
+        except CrgEvidenceError as exc:
+            warnings.append(f"evidence_ledger_error:{type(exc).__name__}")
+            return [], {**health, "status": "degraded", "warnings": warnings}
+        current_revision = self.revision_resolver(self.repo_root)
+        terms = {part.casefold() for part in intent.split() if len(part) > 2}
+        ranked: list[tuple[float, RetrievalItem]] = []
+        for entry in entries:
+            provenance = entry.get("provenance")
+            if not isinstance(provenance, Mapping):
+                continue
+            if provenance.get("project_id") != self.project_id:
+                warnings.append("evidence_cross_project_row")
+                continue
+            if provenance.get("repository_revision") != current_revision:
+                warnings.append("evidence_stale_revision")
+                continue
+            kind = provenance.get("kind")
+            if kind in {"crg_node", "crg_flow"}:
+                if health.get("status") != "healthy":
+                    warnings.append("evidence_stale_graph")
+                    continue
+                locator = provenance.get("locator", {})
+                if (
+                    not isinstance(locator, Mapping)
+                    or locator.get("graph_updated_at") != health.get("graph_updated_at")
+                ):
+                    warnings.append("evidence_stale_graph_timestamp")
+                    continue
+                try:
+                    symbols = locator.get("symbols", [])
+                    if not isinstance(symbols, list):
+                        raise CrgEvidenceError("invalid stored symbols")
+                    self._validate_symbols(symbols, Path(health["database"]))
+                except (CrgEvidenceError, OSError, sqlite3.Error):
+                    warnings.append("evidence_stale_symbols")
+                    continue
+            try:
+                reference = ProvenanceRef.from_external(provenance)
+                summary = str(entry.get("summary") or "")[:MAX_SUMMARY_CHARS]
+                overlap = len(terms & {part.casefold() for part in summary.split()})
+                score = min(1.0, 0.5 + overlap / max(1, len(terms)))
+                ranked.append((score, RetrievalItem(
+                    item_id=str(entry.get("evidence_id")), lane="evidence",
+                    type=str(kind), summary=summary,
+                    scope={"project_id": self.project_id, "harness": None},
+                    status="fresh", provider_score=score,
+                    selection_reason="current revision-bound evidence ledger record",
+                    provenance=(reference.to_dict(),),
+                    token_estimate=min(1200, (len(summary) + 3) // 4),
+                    expires_at=None,
+                )))
+            except (ContractError, TypeError, ValueError):
+                warnings.append("evidence_invalid_row")
+        ranked.sort(key=lambda value: (-value[0], value[1].item_id))
+        items = [value[1] for value in ranked[:top_k]]
+        return items, {
+            **health,
+            "status": "healthy" if not warnings else "degraded",
+            "warnings": list(dict.fromkeys(warnings)),
+        }
 
     def record(self, raw: Mapping[str, Any]) -> dict[str, Any]:
         allowed = {
@@ -615,6 +699,51 @@ def _write_all(descriptor: int, value: bytes) -> None:
         if written <= 0:
             raise OSError("short evidence ledger write")
         view = view[written:]
+
+
+def _recent_ledger_entries(path: Path, *, limit: int = 1000) -> list[dict[str, Any]]:
+    recent: deque[dict[str, Any]] = deque(maxlen=limit)
+    flags = os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0) | getattr(os, "O_NONBLOCK", 0)
+    try:
+        before = path.lstat()
+        descriptor = os.open(path, flags)
+        opened = os.fstat(descriptor)
+    except OSError as exc:
+        raise CrgEvidenceError("evidence ledger cannot be opened safely") from exc
+    if (
+        not stat.S_ISREG(opened.st_mode)
+        or (before.st_dev, before.st_ino) != (opened.st_dev, opened.st_ino)
+        or (hasattr(os, "getuid") and opened.st_uid != os.getuid())
+        or opened.st_mode & 0o022
+        or opened.st_size > MAX_LEDGER_READ_BYTES
+    ):
+        os.close(descriptor)
+        raise CrgEvidenceError("evidence ledger file is unsafe or too large")
+    total_bytes = 0
+    with os.fdopen(descriptor, "rb") as stream:
+        for line_number, line in enumerate(stream, start=1):
+            total_bytes += len(line)
+            if total_bytes > MAX_LEDGER_READ_BYTES:
+                raise CrgEvidenceError("evidence ledger exceeds read bound")
+            if not line.strip():
+                continue
+            if len(line) > MAX_RECORD_BYTES + 1:
+                raise CrgEvidenceError(
+                    f"evidence ledger record {line_number} exceeds 16 KiB"
+                )
+            try:
+                value = json.loads(line)
+                validate_schema(value, "evidence-ledger-v1.schema.json")
+            except (json.JSONDecodeError, UnicodeError, SchemaValidationError) as exc:
+                raise CrgEvidenceError(
+                    f"evidence ledger record {line_number} is invalid"
+                ) from exc
+            if not isinstance(value, dict):
+                raise CrgEvidenceError(
+                    f"evidence ledger record {line_number} is not an object"
+                )
+            recent.append(value)
+    return list(reversed(recent))
 
 
 @contextlib.contextmanager

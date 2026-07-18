@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "stack_version": "0.18.0",
-  "orchestration_phase": 5,
+  "orchestration_phase": 6,
   "features": [
     "latest_state_recall",
     "serialized_candidate_lifecycle",
@@ -33,6 +33,12 @@
     "crg_evidence_requests",
     "revision_bound_evidence",
     "bounded_evidence_ledger",
-    "explicit_test_run_evidence"
+    "explicit_test_run_evidence",
+    "assist_quality_gate",
+    "bounded_behavioral_retrieval",
+    "authority_ordered_fusion",
+    "retrieval_preview",
+    "lifecycle_retrieval_observations",
+    "local_governance_fts"
   ]
 }
