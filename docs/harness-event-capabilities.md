@@ -37,9 +37,13 @@ installed adapters exposes an unambiguous user-feedback hook.
 
 Native hooks validate that a prompt exists but persist only the fixed
 `user request received` intent marker; prompt text is never hashed, summarized
-heuristically, or retained. Raw prompts, environments, complete file bodies, complete tool payloads,
-model reasoning, and unbounded stdout are never forwarded. The shared
-contract redactor runs again when the immutable `EventEnvelope` is built.
+heuristically, or retained. Raw prompts, environments, complete file bodies,
+complete tool payloads, model reasoning, and unbounded stdout are never
+forwarded. The shared contract redactor runs again when the immutable
+`EventEnvelope` is built. On first worker access after upgrade, valid legacy
+hook events are rewritten with the content-free marker and a newly canonical
+event ID while retaining their idempotency key. Malformed legacy files are
+moved into an owner-only quarantine and are never delivered.
 
 ## Correlation and shutdown behavior
 
@@ -47,18 +51,27 @@ Task start creates a stable run ID and a task-start event ID. Later native
 events for that harness/session use both identifiers; existing episodic tool
 records receive `orchestration_event_id` and `orchestration_run_id`. The
 correlation file contains only these identifiers, a finalization marker, and
-the content-free intent marker. Locally accepted finalization clears it only
-when the stored run ID still matches;
-a timed-out finalization stays retryable but cannot block the next prompt.
+the content-free intent marker. Legacy correlation intents are rewritten
+before reuse. Locally accepted finalization clears correlation only when the
+stored run ID still matches; a timed-out finalization stays retryable but
+cannot block the next prompt.
 
 Hooks atomically enqueue an event under private runtime state and start a
 detached, serialized worker; they do not wait for MemOS startup or retrieval.
+Repository identity and revision Git probes share one 500 ms enrichment
+budget, and correlation locks have a 250 ms ceiling, keeping normal
+pre-enqueue work below the host's three-second deadline even when Git stalls.
 The worker submits bounded batches and moves only locally accepted events to
 the delivered spool. Its structured health file exposes provider failures and
 pending counts. Finalization retains a three-second host-hook budget, but its
 normal path is only a filesystem enqueue. Malformed input or a missing active
 run skips/degrades capture while exiting zero and emitting no Stop-hook stdout,
 so memory cannot block harness shutdown.
+
+Runtime migration repairs orchestration, pending, delivered, quarantine,
+correlation, health, and lock artifacts to owner-only POSIX modes (`0700` for
+directories and `0600` for files). Windows inherits repository ACLs;
+equivalent owner-only ACL enforcement remains platform-dependent.
 
 ## Explicit lifecycle commands
 

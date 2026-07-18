@@ -37,6 +37,8 @@ SIGNALS = (
     "user_prompt", "pre_tool", "post_tool", "feedback",
     "subagent_start", "finalize",
 )
+SAFE_INTENT = "user request received"
+GIT_ENRICHMENT_BUDGET_SECONDS = 0.5
 
 # A false value is intentional: instruction-only adapters must not imply that
 # they observed lifecycle events. Unsupported task start and feedback can be
@@ -209,7 +211,21 @@ class CorrelationStore:
         try:
             path.chmod(0o600)
             value = json.loads(path.read_text(encoding="utf-8"))
-            return Correlation(**value)
+            correlation = Correlation(**value)
+            if correlation.intent != SAFE_INTENT:
+                correlation = Correlation(
+                    correlation.run_id, correlation.session_id,
+                    correlation.start_event_id, SAFE_INTENT,
+                    finalizing=correlation.finalizing,
+                )
+                _atomic_private_write(path, json.dumps({
+                    "run_id": correlation.run_id,
+                    "session_id": correlation.session_id,
+                    "start_event_id": correlation.start_event_id,
+                    "intent": correlation.intent,
+                    "finalizing": correlation.finalizing,
+                }, sort_keys=True))
+            return correlation
         except (FileNotFoundError, json.JSONDecodeError, OSError, TypeError):
             return None
 
@@ -231,7 +247,10 @@ class CorrelationStore:
 
     def current(self, harness: str, session_id: str) -> Correlation | None:
         _ensure_private_tree(self.root)
-        return self._read(harness, session_id)
+        with _exclusive_file_lock(self._lock_path(harness, session_id), timeout=0.25) as acquired:
+            if not acquired:
+                raise OSError("unable to lock correlation state")
+            return self._read(harness, session_id)
 
     def clear(self, harness: str, session_id: str) -> None:
         _ensure_private_tree(self.root)
@@ -266,6 +285,8 @@ class HookEventSpool:
         self.root = Path(agent_root) / "runtime" / "orchestration" / "hook-events"
         self.pending_dir = self.root / "pending"
         self.delivered_dir = self.root / "delivered"
+        self.quarantine_dir = self.root / "quarantine"
+        self.migration_file = self.root / ".privacy-migration-v2"
         self.health_file = self.root / "health.json"
         self.lock_file = self.root / "worker.lock"
 
@@ -285,6 +306,7 @@ class HookEventSpool:
 
     def pending(self, limit: int = 100) -> list[Path]:
         _ensure_private_tree(self.root)
+        self._repair_legacy_artifacts()
         if not self.pending_dir.is_dir():
             return []
         _ensure_private_dir(self.pending_dir)
@@ -292,6 +314,39 @@ class HookEventSpool:
         for path in paths:
             path.chmod(0o600)
         return paths
+
+    def _repair_legacy_artifacts(self) -> None:
+        """Sanitize valid legacy events and privately isolate malformed ones."""
+        if self.migration_file.exists():
+            self.migration_file.chmod(0o600)
+            return
+        _ensure_private_dir(self.pending_dir)
+        _ensure_private_dir(self.delivered_dir)
+        _ensure_private_dir(self.quarantine_dir)
+        for directory in (self.pending_dir, self.delivered_dir):
+            for path in sorted(directory.glob("*.json")):
+                path.chmod(0o600)
+                try:
+                    event = EventEnvelope.from_external(
+                        json.loads(path.read_text(encoding="utf-8"))
+                    )
+                except Exception:
+                    destination = self.quarantine_dir / path.name
+                    os.replace(path, destination)
+                    destination.chmod(0o600)
+                    continue
+                if event.intent == SAFE_INTENT:
+                    continue
+                values = event.to_dict()
+                values.pop("event_id", None)
+                values["intent"] = SAFE_INTENT
+                sanitized = EventEnvelope.create(**values)
+                prefix = path.name.split("-evt_", 1)[0]
+                destination = directory / f"{prefix}-{sanitized.event_id}.json"
+                _atomic_private_write(destination, sanitized.canonical_json())
+                if destination != path:
+                    path.unlink()
+        _atomic_private_write(self.migration_file, "privacy-migration-v2\n")
 
     def mark_delivered(self, paths: list[Path]) -> None:
         _ensure_private_tree(self.root)
@@ -331,6 +386,7 @@ def normalize_event(
     timestamp: str | None = None,
     store: CorrelationStore | None = None,
     explicit: bool = False,
+    enrichment_timeout: float = GIT_ENRICHMENT_BUDGET_SECONDS,
 ) -> EventEnvelope:
     if harness not in CAPABILITIES:
         raise HookEventError(f"unknown harness: {harness}")
@@ -347,8 +403,10 @@ def normalize_event(
     session_id = _session_id(payload)
     store = store or CorrelationStore(agent_root)
     timestamp = timestamp or datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
-    identity = derive_project_identity(root, _git(root, "config", "--get", "remote.origin.url"))
-    revision = _git(root, "rev-parse", "HEAD") or None
+    enrichment_deadline = time.monotonic() + max(0.0, enrichment_timeout)
+    remote = _git_before(root, enrichment_deadline, "config", "--get", "remote.origin.url")
+    identity = derive_project_identity(root, remote)
+    revision = _git_before(root, enrichment_deadline, "rev-parse", "HEAD") or None
 
     correlation = store.current(harness, session_id)
     actor = "system"
@@ -600,7 +658,7 @@ def _prompt_intent(payload: Mapping[str, Any]) -> str:
     # the full prompt. Semantic intent can enter through an explicit policy in
     # a later contract version.
     value = _first(payload, "prompt", "user_prompt", "input")
-    return "user request received" if str(value or "").strip() else ""
+    return SAFE_INTENT if str(value or "").strip() else ""
 
 
 def _tool_payload(payload: Mapping[str, Any], *, include_output: bool) -> dict[str, Any]:
@@ -693,10 +751,17 @@ def _first_value(payload: Mapping[str, Any], *names: str) -> Any:
     return None
 
 
-def _git(root: Path, *args: str) -> str:
+def _git_before(root: Path, deadline: float, *args: str) -> str:
+    remaining = deadline - time.monotonic()
+    if remaining <= 0:
+        return ""
+    return _git(root, *args, timeout=remaining)
+
+
+def _git(root: Path, *args: str, timeout: float = 2.0) -> str:
     try:
         result = subprocess.run(
-            ["git", *args], cwd=root, text=True, capture_output=True, timeout=2,
+            ["git", *args], cwd=root, text=True, capture_output=True, timeout=timeout,
         )
         return result.stdout.strip() if result.returncode == 0 else ""
     except (OSError, subprocess.TimeoutExpired):
