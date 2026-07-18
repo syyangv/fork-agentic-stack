@@ -1,0 +1,50 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "agentic.memory.retrieval-preview.v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema", "selected", "rejected", "deduplicated", "stale", "over_budget", "category_counts", "truncated", "token_estimate", "lane_budgets"],
+  "properties": {
+    "schema": {"type": "string", "const": "agentic.memory.retrieval-preview.v1"},
+    "selected": {"$ref": "#/$defs/descriptors"},
+    "rejected": {"$ref": "#/$defs/descriptors"},
+    "deduplicated": {"$ref": "#/$defs/descriptors"},
+    "stale": {"$ref": "#/$defs/descriptors"},
+    "over_budget": {"$ref": "#/$defs/descriptors"},
+    "category_counts": {
+      "type": "object", "additionalProperties": false,
+      "required": ["selected", "rejected", "deduplicated", "stale", "over_budget"],
+      "properties": {
+        "selected": {"type": "integer", "minimum": 0}, "rejected": {"type": "integer", "minimum": 0},
+        "deduplicated": {"type": "integer", "minimum": 0}, "stale": {"type": "integer", "minimum": 0},
+        "over_budget": {"type": "integer", "minimum": 0}
+      }
+    },
+    "truncated": {"type": "array", "uniqueItems": true, "maxItems": 5, "items": {"enum": ["selected", "rejected", "deduplicated", "stale", "over_budget"]}},
+    "token_estimate": {"type": "integer", "minimum": 0, "maximum": 12000},
+    "lane_budgets": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["governance", "behavioral", "evidence"],
+      "properties": {
+        "governance": {"type": "integer", "minimum": 0, "maximum": 12000},
+        "behavioral": {"type": "integer", "minimum": 0, "maximum": 12000},
+        "evidence": {"type": "integer", "minimum": 0, "maximum": 12000}
+      }
+    }
+  },
+  "$defs": {
+    "descriptors": {
+      "type": "array", "maxItems": 100,
+      "items": {
+        "type": "object", "additionalProperties": false,
+        "required": ["lane", "item_id", "reason"],
+        "properties": {
+          "lane": {"enum": ["governance", "behavioral", "evidence"]},
+          "item_id": {"type": "string", "minLength": 1, "maxLength": 512},
+          "reason": {"type": "string", "minLength": 1, "maxLength": 500}
+        }
+      }
+    }
+  }
+}

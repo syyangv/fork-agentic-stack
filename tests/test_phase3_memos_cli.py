@@ -1,6 +1,7 @@
 import importlib.util
 import json
 import os
+import sqlite3
 import subprocess
 import sys
 import tempfile
@@ -129,12 +130,106 @@ class MemosCliTest(unittest.TestCase):
         self.assertLessEqual(len(result["traces"]), 100)
         self.assertLessEqual(len(json.dumps(result).encode()), 256)
 
-    def test_assist_mode_is_rejected_before_behavioral_injection_exists(self):
+    def test_recall_run_id_rejects_sensitive_paths_and_controls(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            _, environment = self._environment(Path(tmp), mode="off")
+            for run_id in ("sk-abcdefghijklmnopqrstuvwxyz", "/tmp/credentials",
+                           "line\nbreak", "../escape"):
+                with self.subTest(run_id=run_id):
+                    result = self._run(
+                        environment, "recall", "--intent", "permissions",
+                        "--run-id", run_id,
+                    )
+                    self.assertEqual(result.returncode, 2)
+            valid = self._run(
+                environment, "recall", "--intent", "permissions",
+                "--run-id", "run_2026-07-18:abc.1",
+            )
+            self.assertEqual(valid.returncode, 0, valid.stderr)
+
+    def test_assist_mode_fails_closed_to_governance_until_quality_gate_passes(self):
         with tempfile.TemporaryDirectory() as tmp:
             _, environment = self._environment(Path(tmp), mode="assist")
-            result = self._run(environment, "recall", "--intent", "permissions")
-            self.assertEqual(result.returncode, 2)
-            self.assertIn("not supported before Phase 6", result.stderr)
+            result = self._run(
+                environment, "recall", "--intent", "permissions", "--format", "json",
+            )
+            self.assertEqual(result.returncode, 0, result.stderr)
+            packet = json.loads(result.stdout)["context_packet"]
+            self.assertTrue(packet["sections"][0]["items"])
+            self.assertEqual(packet["sections"][1]["items"], [])
+            self.assertIn("assist_quality_gate_blocked", packet["warnings"])
+
+            health = json.loads(self._run(environment, "health").stdout)
+            self.assertEqual(health["behavioral"]["effective_mode"], "shadow")
+            self.assertFalse(health["behavioral"]["assist_gate"]["eligible"])
+
+    def test_eligible_assist_still_preserves_governance_when_plugins_are_down(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            project, environment = self._environment(root, mode="assist")
+            identity = derive_project_identity(project)
+            metrics = root / "assist-quality.json"
+            metrics.write_text(json.dumps({
+                "schema": "agentic.memory.assist-quality.v1",
+                "project_id": identity.project_id,
+                "measured_at": "2026-07-18T06:00:00Z",
+                "source": {"evaluation_set_sha256": "sha256:" + "c" * 64,
+                           "evaluator": "phase6-cli-test"},
+                "completed_episodes": 50, "task_categories": 5,
+                "duplicate_rate": 0.01, "evaluation_queries": 30,
+                "precision_at_5": 0.75, "cross_project_leaks": 0,
+                "p95_recall_ms": 500,
+            }))
+            environment["AGENTIC_ASSIST_METRICS"] = str(metrics)
+            result = self._run(
+                environment, "recall", "--intent", "debug repository failure",
+                "--format", "json",
+            )
+            self.assertEqual(result.returncode, 0, result.stderr)
+            payload = json.loads(result.stdout)
+            packet = payload["context_packet"]
+            self.assertTrue(packet["sections"][0]["items"])
+            self.assertEqual(packet["sections"][1]["items"], [])
+            self.assertIn("behavioral_unavailable", packet["warnings"])
+            self.assertEqual(
+                payload["retrieval_preview"]["schema"],
+                "agentic.memory.retrieval-preview.v1",
+            )
+
+    def test_assist_factory_and_entry_failures_preserve_governance(self):
+        module = _load_cli_module()
+        identity = derive_project_identity(ROOT)
+        config = type("Config", (), {
+            "mode": "assist", "total_token_budget": 12000,
+            "lane_reserves": {"governance": 4800, "behavioral": 4200,
+                              "evidence": 3000},
+        })()
+        gate = type("Gate", (), {"eligible": True})()
+
+        class BrokenEntry:
+            def __enter__(self):
+                raise sqlite3.DatabaseError("corrupt journal")
+
+            def __exit__(self, *_args):
+                return None
+
+        for failure in (
+            OSError("runtime unavailable"), BrokenEntry(),
+        ):
+            provider_result = (
+                mock.Mock(side_effect=failure)
+                if isinstance(failure, BaseException) else mock.Mock(return_value=failure)
+            )
+            with self.subTest(failure=type(failure).__name__), \
+                 mock.patch.object(module, "_runtime_context", return_value=(identity, config)), \
+                 mock.patch.object(module, "_assist_gate", return_value=gate), \
+                 mock.patch.object(module, "_provider_session", provider_result):
+                payload = json.loads(module.recall_command(
+                    "permissions", "json", False, 3,
+                ))
+            packet = payload["context_packet"]
+            self.assertTrue(packet["sections"][0]["items"])
+            self.assertIn("behavioral_unavailable", packet["warnings"])
 
 
 if __name__ == "__main__":

@@ -6,6 +6,7 @@ import json
 import os
 import sqlite3
 import threading
+import time
 from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import datetime, timezone
@@ -28,11 +29,15 @@ _WORKER_LOCAL = threading.local()
 
 
 @contextmanager
-def _project_lock(lock_path: str):
+def _project_lock(lock_path: str, *, timeout: float | None = None):
     """Acquire the reentrant per-project OS lock before touching runtime state."""
     with _LOCAL_WORKER_LOCKS_GUARD:
         local_lock = _LOCAL_WORKER_LOCKS.setdefault(lock_path, threading.RLock())
-    with local_lock:
+    deadline = time.monotonic() + timeout if timeout is not None else None
+    acquired = local_lock.acquire() if timeout is None else local_lock.acquire(timeout=timeout)
+    if not acquired:
+        raise TimeoutError("timed out acquiring MemOS project lock")
+    try:
         held = getattr(_WORKER_LOCAL, "held", None)
         if held is None:
             held = {}
@@ -49,14 +54,36 @@ def _project_lock(lock_path: str):
         handle = open(lock_path, "a+b")
         try:
             if fcntl is not None:
-                fcntl.flock(handle.fileno(), fcntl.LOCK_EX)
+                if timeout is None:
+                    fcntl.flock(handle.fileno(), fcntl.LOCK_EX)
+                else:
+                    assert deadline is not None
+                    while True:
+                        try:
+                            fcntl.flock(handle.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+                            break
+                        except BlockingIOError:
+                            if time.monotonic() >= deadline:
+                                raise TimeoutError("timed out acquiring MemOS project lock")
+                            time.sleep(min(0.01, max(0.0, deadline - time.monotonic())))
             elif msvcrt is not None:  # pragma: no cover - Windows
                 handle.seek(0)
                 if handle.read(1) == b"":
                     handle.write(b"0")
                     handle.flush()
                 handle.seek(0)
-                msvcrt.locking(handle.fileno(), msvcrt.LK_LOCK, 1)
+                if timeout is None:
+                    msvcrt.locking(handle.fileno(), msvcrt.LK_LOCK, 1)
+                else:
+                    assert deadline is not None
+                    while True:
+                        try:
+                            msvcrt.locking(handle.fileno(), msvcrt.LK_NBLCK, 1)
+                            break
+                        except OSError:
+                            if time.monotonic() >= deadline:
+                                raise TimeoutError("timed out acquiring MemOS project lock")
+                            time.sleep(min(0.01, max(0.0, deadline - time.monotonic())))
             held[lock_path] = (handle, 1)
             yield
         finally:
@@ -67,6 +94,8 @@ def _project_lock(lock_path: str):
                 handle.seek(0)
                 msvcrt.locking(handle.fileno(), msvcrt.LK_UNLCK, 1)
             handle.close()
+    finally:
+        local_lock.release()
 
 
 class JournalConflict(ValueError):
@@ -88,6 +117,7 @@ class Delivery:
 class MemosDeliveryJournal:
     def __init__(
         self, path: str | Path, *, max_attempts: int = 3,
+        initialize_timeout: float | None = None,
     ) -> None:
         self.path = Path(path)
         self.max_attempts = max_attempts
@@ -101,19 +131,33 @@ class MemosDeliveryJournal:
             os.chmod(self.path.parent, 0o700)
         except OSError:
             pass
-        with _project_lock(self._worker_lock_path):
-            self._initialize()
+        self.initialization_error: str | None = None
+        try:
+            deadline = (
+                time.monotonic() + initialize_timeout
+                if initialize_timeout is not None else None
+            )
+            with _project_lock(
+                self._worker_lock_path, timeout=initialize_timeout,
+            ):
+                self._initialize(timeout=(
+                    10 if deadline is None else max(0.0, deadline - time.monotonic())
+                ))
+        except TimeoutError:
+            if initialize_timeout is None:
+                raise
+            self.initialization_error = "memos_journal_initialization_timeout"
 
-    def _connect(self) -> sqlite3.Connection:
-        connection = sqlite3.connect(self.path, timeout=10)
+    def _connect(self, *, timeout: float = 10) -> sqlite3.Connection:
+        connection = sqlite3.connect(self.path, timeout=timeout)
         connection.row_factory = sqlite3.Row
-        connection.execute("pragma busy_timeout=10000")
+        connection.execute(f"pragma busy_timeout={max(0, int(timeout * 1000))}")
         connection.execute("pragma journal_mode=wal")
         return connection
 
     @contextmanager
-    def _connection(self):
-        connection = self._connect()
+    def _connection(self, *, timeout: float = 10):
+        connection = self._connect(timeout=timeout)
         try:
             with connection:
                 yield connection
@@ -121,8 +165,8 @@ class MemosDeliveryJournal:
             connection.close()
 
     @contextmanager
-    def _immediate_connection(self):
-        connection = self._connect()
+    def _immediate_connection(self, *, timeout: float = 10):
+        connection = self._connect(timeout=timeout)
         try:
             connection.execute("begin immediate")
             yield connection
@@ -133,8 +177,8 @@ class MemosDeliveryJournal:
         finally:
             connection.close()
 
-    def _initialize(self) -> None:
-        with self._connection() as connection:
+    def _initialize(self, *, timeout: float = 10) -> None:
+        with self._connection(timeout=timeout) as connection:
             connection.executescript(
                 """
                 create table if not exists deliveries (
@@ -183,6 +227,24 @@ class MemosDeliveryJournal:
                     created_at text not null,
                     updated_at text not null
                 );
+                create table if not exists retrieval_observations (
+                    run_id text not null,
+                    item_id text not null,
+                    reason text not null,
+                    outcome text not null check(outcome in
+                        ('selected','used','contradicted','ignored')),
+                    created_at text not null,
+                    updated_at text not null,
+                    primary key(run_id,item_id,reason)
+                );
+                create index if not exists retrieval_observations_run
+                    on retrieval_observations(run_id, created_at, item_id);
+                create table if not exists retrieval_invocations (
+                    run_id text not null,
+                    reason text not null,
+                    created_at text not null,
+                    primary key(run_id,reason)
+                );
                 """
             )
         try:
@@ -191,16 +253,24 @@ class MemosDeliveryJournal:
             pass
 
     @contextmanager
-    def delivery_worker(self):
+    def delivery_worker(self, *, timeout: float | None = None):
         """Serialize FIFO RPC delivery from claim through terminal transition."""
-        with _project_lock(self._worker_lock_path):
-            self._recover_orphaned_inflight()
+        deadline = time.monotonic() + timeout if timeout is not None else None
+        with _project_lock(self._worker_lock_path, timeout=timeout):
+            if self.initialization_error:
+                self._initialize(timeout=(
+                    10 if deadline is None else max(0.0, deadline - time.monotonic())
+                ))
+                self.initialization_error = None
+            self._recover_orphaned_inflight(timeout=(
+                10 if deadline is None else max(0.0, deadline - time.monotonic())
+            ))
             yield
 
-    def _recover_orphaned_inflight(self) -> None:
+    def _recover_orphaned_inflight(self, *, timeout: float = 10) -> None:
         # Holding the worker lock proves no live compliant worker owns these
         # rows; OS locks are released automatically when a process crashes.
-        with self._immediate_connection() as connection:
+        with self._immediate_connection(timeout=timeout) as connection:
             connection.execute(
                 "update deliveries set state=case "
                 "when retryable=0 then 'ambiguous' "
@@ -334,7 +404,84 @@ class MemosDeliveryJournal:
                 "insert into tool_events values (?,?,?,?,?,?)",
                 (event_id, idempotency_key, run_id, encoded, payload_hash, _now()),
             )
-        return True
+            return True
+
+    def record_retrievals(
+        self, run_id: str, item_ids: list[str], reason: str,
+    ) -> int:
+        now = _now()
+        inserted = 0
+        with self._immediate_connection() as connection:
+            for item_id in dict.fromkeys(item_ids[:100]):
+                cursor = connection.execute(
+                    "insert or ignore into retrieval_observations "
+                    "(run_id,item_id,reason,outcome,created_at,updated_at) "
+                    "values (?,?,?,'selected',?,?)",
+                    (run_id[:512], item_id[:512], reason[:100], now, now),
+                )
+                inserted += cursor.rowcount
+        return inserted
+
+    def record_retrieval_invocation(
+        self, run_id: str, reason: str, *, timeout: float = 10,
+    ) -> bool:
+        with self._immediate_connection(timeout=timeout) as connection:
+            cursor = connection.execute(
+                "insert or ignore into retrieval_invocations values (?,?,?)",
+                (run_id[:512], reason[:100], _now()),
+            )
+            return cursor.rowcount == 1
+
+    def mark_retrievals(
+        self, run_id: str, item_ids: list[str], outcome: str, *, reason: str,
+    ) -> int:
+        if outcome not in {"used", "contradicted", "ignored"}:
+            raise ValueError("retrieval outcome must be used, contradicted, or ignored")
+        updated = 0
+        with self._immediate_connection() as connection:
+            for item_id in dict.fromkeys(item_ids[:100]):
+                cursor = connection.execute(
+                    "update retrieval_observations set outcome=?,updated_at=? "
+                    "where run_id=? and item_id=? and reason=?",
+                    (outcome, _now(), run_id[:512], item_id[:512], reason[:100]),
+                )
+                updated += cursor.rowcount
+        return updated
+
+    def finalize_retrievals(self, run_id: str) -> int:
+        with self._immediate_connection() as connection:
+            cursor = connection.execute(
+                "update retrieval_observations set outcome='ignored',updated_at=? "
+                "where run_id=? and outcome='selected'",
+                (_now(), run_id[:512]),
+            )
+            return cursor.rowcount
+
+    def retrievals_for_run(self, run_id: str) -> list[dict]:
+        with self._connection() as connection:
+            rows = connection.execute(
+                "select item_id,reason,outcome from retrieval_observations "
+                "where run_id=? order by created_at,item_id",
+                (run_id[:512],),
+            ).fetchall()
+        return [dict(row) for row in rows]
+
+    def has_retrieval_reason(self, run_id: str, reason: str) -> bool:
+        with self._connection() as connection:
+            row = connection.execute(
+                "select 1 from retrieval_invocations where run_id=? and reason=? limit 1",
+                (run_id[:512], reason[:100]),
+            ).fetchone()
+        return row is not None
+
+    def retrieval_reasons_for_run(self, run_id: str) -> list[str]:
+        with self._connection() as connection:
+            rows = connection.execute(
+                "select reason from retrieval_invocations where run_id=? "
+                "order by created_at,reason",
+                (run_id[:512],),
+            ).fetchall()
+        return [str(row["reason"]) for row in rows]
 
     def tools_for_run(self, run_id: str, *, limit: int = 100) -> list[dict]:
         with self._connection() as connection:

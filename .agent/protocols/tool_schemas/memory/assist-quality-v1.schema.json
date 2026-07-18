@@ -1,0 +1,28 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "agentic.memory.assist-quality.v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema", "project_id", "measured_at", "source", "completed_episodes", "task_categories", "duplicate_rate", "evaluation_queries", "precision_at_5", "cross_project_leaks", "p95_recall_ms"],
+  "properties": {
+    "schema": {"const": "agentic.memory.assist-quality.v1"},
+    "project_id": {"type": "string", "pattern": "^[0-9a-f]{16}$"},
+    "measured_at": {"type": "string", "format": "date-time"},
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["evaluation_set_sha256", "evaluator"],
+      "properties": {
+        "evaluation_set_sha256": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+        "evaluator": {"type": "string", "minLength": 1, "maxLength": 200}
+      }
+    },
+    "completed_episodes": {"type": "integer", "minimum": 0},
+    "task_categories": {"type": "integer", "minimum": 0},
+    "duplicate_rate": {"type": "number", "minimum": 0, "maximum": 1},
+    "evaluation_queries": {"type": "integer", "minimum": 0},
+    "precision_at_5": {"type": "number", "minimum": 0, "maximum": 1},
+    "cross_project_leaks": {"type": "integer", "minimum": 0},
+    "p95_recall_ms": {"type": "number", "minimum": 0}
+  }
+}

@@ -100,7 +100,7 @@ class CrgEvidenceFixture(unittest.TestCase):
 class CrgHealthAndRequestTest(CrgEvidenceFixture):
     def test_manifest_declares_phase5_evidence_features(self):
         manifest = json.loads((ROOT / ".agent" / "infrastructure.json").read_text())
-        self.assertEqual(manifest["orchestration_phase"], 5)
+        self.assertGreaterEqual(manifest["orchestration_phase"], 5)
         self.assertTrue({
             "crg_evidence_requests", "revision_bound_evidence",
             "bounded_evidence_ledger", "explicit_test_run_evidence",
@@ -210,6 +210,22 @@ class CrgHealthAndRequestTest(CrgEvidenceFixture):
 
 
 class CrgEvidenceRecordTest(CrgEvidenceFixture):
+    def test_current_ledger_rows_retrieve_but_stale_graph_rows_do_not(self):
+        self.provider.record(self.crg_payload())
+        items, health = self.provider.retrieve("handle order")
+        self.assertEqual(len(items), 1)
+        self.assertEqual(items[0].lane, "evidence")
+        self.assertEqual(items[0].status, "fresh")
+        self.assertEqual(health["status"], "healthy")
+
+        with contextlib.closing(sqlite3.connect(self.db)) as conn, conn:
+            conn.execute(
+                "update metadata set value=? where key='git_head_sha'", ("b" * 40,)
+            )
+        stale_items, stale_health = self.provider.retrieve("handle order")
+        self.assertEqual(stale_items, [])
+        self.assertIn("evidence_stale_graph", stale_health["warnings"])
+
     def test_valid_crg_evidence_records_bounded_revision_bound_provenance(self):
         result = self.provider.record(self.crg_payload())
         self.assertEqual(result["status"], "recorded")
@@ -322,6 +338,17 @@ print(provider.record(json.loads(sys.argv[6]))["status"])
                 self.ledger.path.write_bytes(malformed)
                 with self.assertRaisesRegex(CrgEvidenceError, "ledger record"):
                     self.provider.record(self.crg_payload())
+
+    def test_retrieval_rejects_oversized_ledger(self):
+        self.ledger.path.parent.mkdir()
+        with self.ledger.path.open("wb") as stream:
+            stream.truncate(16 * 1024 * 1024 + 1)
+        items, health = self.provider.retrieve("anything")
+        self.assertEqual(items, [])
+        self.assertTrue(any(
+            warning.startswith("evidence_ledger_error:")
+            for warning in health["warnings"]
+        ))
 
     @unittest.skipIf(os.name == "nt", "symlink creation may require Windows privileges")
     def test_ledger_rejects_symbolic_link_targets(self):

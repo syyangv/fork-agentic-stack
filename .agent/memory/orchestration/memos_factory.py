@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import os
+import time
 from contextlib import AbstractContextManager
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -22,15 +23,16 @@ class MemosProviderSession:
     client: MemOSBridgeClient | None
     _worker: AbstractContextManager | None = field(default=None, init=False)
     _entered: bool = field(default=False, init=False)
+    assist_deadline: float | None = None
 
     def close(self) -> None:
         if self._entered:
             try:
                 if self.client is not None:
-                    self.client.close()
+                    self.client.close(deadline=self.assist_deadline)
             finally:
-                assert self._worker is not None
-                self._worker.__exit__(None, None, None)
+                if self._worker is not None:
+                    self._worker.__exit__(None, None, None)
                 self._worker = None
                 self._entered = False
         elif self.client is not None:
@@ -40,8 +42,18 @@ class MemosProviderSession:
     def __enter__(self) -> MemosLocalProvider:
         if self._entered:
             raise RuntimeError("MemOS provider session is already entered")
-        self._worker = self.provider.journal.delivery_worker()
-        self._worker.__enter__()
+        timeout = None
+        if self.provider.mode == "assist" and self.assist_deadline is not None:
+            timeout = max(0.0, self.assist_deadline - time.monotonic())
+        self._worker = self.provider.journal.delivery_worker(timeout=timeout)
+        try:
+            self._worker.__enter__()
+        except TimeoutError:
+            if self.provider.mode != "assist" or self.assist_deadline is None:
+                raise
+            self._worker = None
+            self.provider._session_lock_error = "behavioral_project_lock_timeout"
+        self.provider._assist_deadline = self.assist_deadline
         self._entered = True
         return self.provider
 
@@ -56,13 +68,20 @@ def create_memos_provider(
     mode: str = "shadow",
     code_root: str | Path | None = None,
     data_root: str | Path | None = None,
+    assist_deadline: float | None = None,
 ) -> MemosProviderSession:
     """Provision private state and attach a client only to a pinned install."""
     agent_root = Path(agent_root).expanduser().resolve(strict=False)
     code_root = Path(code_root or agent_root / "runtime" / "providers")
     data_root = Path(data_root or agent_root / "runtime" / "memos")
     paths = prepare_project_runtime(code_root, data_root, project_id)
-    journal = MemosDeliveryJournal(paths.project_root / "delivery.sqlite3")
+    initialize_timeout = None
+    if mode == "assist" and assist_deadline is not None:
+        initialize_timeout = max(0.0, assist_deadline - time.monotonic())
+    journal = MemosDeliveryJournal(
+        paths.project_root / "delivery.sqlite3",
+        initialize_timeout=initialize_timeout,
+    )
     bridge = paths.plugin_dir / "node_modules/@memtensor/memos-local-plugin/dist/bridge.cjs"
     client = None
     if bridge.is_file():
@@ -87,7 +106,9 @@ def create_memos_provider(
     provider = MemosLocalProvider(
         project_id=project_id, journal=journal, client=client, mode=mode,
     )
-    return MemosProviderSession(provider=provider, client=client)
+    return MemosProviderSession(
+        provider=provider, client=client, assist_deadline=assist_deadline,
+    )
 
 
 def _call_timeout() -> float:
