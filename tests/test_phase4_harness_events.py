@@ -409,6 +409,26 @@ class DeliveryAndCorrelationTest(unittest.TestCase):
         self.assertEqual(result, CaptureStatus("degraded", "delivery_timeout"))
         self.assertLess(elapsed, 0.15)
 
+    def test_correlation_lock_contention_is_bounded_on_the_hook_path(self):
+        from orchestration_event import _ensure_private_tree, _exclusive_file_lock, capture_hook_event
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / ".git").mkdir()
+            store = CorrelationStore(root / ".agent")
+            _ensure_private_tree(store.root)
+            with _exclusive_file_lock(store._lock_path("claude-code", "s")) as acquired:
+                self.assertTrue(acquired)
+                started = time.monotonic()
+                event, status = capture_hook_event(
+                    "claude-code", "user_prompt", {"session_id": "s", "prompt": "work"},
+                    repo_root=root, store=store, deliverer=lambda *_args: {"status": "recorded"},
+                )
+                elapsed = time.monotonic() - started
+            self.assertIsNone(event)
+            self.assertEqual(status, CaptureStatus("degraded", "normalization_error"))
+            self.assertLess(elapsed, 0.75)
+
     def test_provider_degraded_health_is_visible_in_capture_status(self):
         from orchestration_event import deliver_with_timeout
 

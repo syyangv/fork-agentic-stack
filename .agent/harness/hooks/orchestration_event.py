@@ -125,16 +125,34 @@ def _atomic_private_write(path: Path, value: str) -> None:
 
 
 @contextlib.contextmanager
-def _exclusive_file_lock(path: Path):
-    """Take a blocking cross-process lock on a private owner-only file."""
+def _exclusive_file_lock(path: Path, *, timeout: float | None = None):
+    """Take a cross-process lock, optionally bounding critical-path waits."""
     descriptor = os.open(path, os.O_RDWR | os.O_CREAT, 0o600)
     os.chmod(path, 0o600)
     stream = os.fdopen(descriptor, "a+")
+    deadline = None if timeout is None else time.monotonic() + timeout
+    acquired = False
+    unlock: Callable[[], None] | None = None
     try:
         try:
             import fcntl
-            fcntl.flock(stream.fileno(), fcntl.LOCK_EX)
-            unlock = lambda: fcntl.flock(stream.fileno(), fcntl.LOCK_UN)
+            try:
+                if timeout is None:
+                    fcntl.flock(stream.fileno(), fcntl.LOCK_EX)
+                    acquired = True
+                else:
+                    while not acquired:
+                        try:
+                            fcntl.flock(stream.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+                            acquired = True
+                        except BlockingIOError:
+                            if deadline is not None and time.monotonic() >= deadline:
+                                break
+                            time.sleep(0.01)
+                if acquired:
+                    unlock = lambda: fcntl.flock(stream.fileno(), fcntl.LOCK_UN)
+            except OSError:
+                acquired = False
         except ImportError:
             try:
                 import msvcrt
@@ -143,29 +161,33 @@ def _exclusive_file_lock(path: Path):
                     stream.write("\0")
                     stream.flush()
                 stream.seek(0)
-                while True:
+                while not acquired:
                     try:
                         msvcrt.locking(stream.fileno(), msvcrt.LK_NBLCK, 1)
-                        break
+                        acquired = True
                     except OSError:
+                        if deadline is not None and time.monotonic() >= deadline:
+                            break
                         time.sleep(0.05)
 
-                def unlock() -> None:
-                    stream.seek(0)
-                    msvcrt.locking(stream.fileno(), msvcrt.LK_UNLCK, 1)
-            except OSError:
-                yield False
-                return
-        except OSError:
+                if acquired:
+                    def unlock() -> None:
+                        stream.seek(0)
+                        msvcrt.locking(stream.fileno(), msvcrt.LK_UNLCK, 1)
+            except (ImportError, OSError):
+                acquired = False
+        if not acquired:
             yield False
             return
-        yield True
-    finally:
         try:
-            if "unlock" in locals():
-                unlock()
-        except OSError:
-            pass
+            yield True
+        finally:
+            try:
+                if unlock is not None:
+                    unlock()
+            except OSError:
+                pass
+    finally:
         stream.close()
 
 
@@ -194,7 +216,9 @@ class CorrelationStore:
     def set(self, harness: str, correlation: Correlation) -> None:
         _ensure_private_tree(self.root)
         path = self._path(harness, correlation.session_id)
-        with _exclusive_file_lock(self._lock_path(harness, correlation.session_id)) as acquired:
+        with _exclusive_file_lock(
+            self._lock_path(harness, correlation.session_id), timeout=0.25,
+        ) as acquired:
             if not acquired:
                 raise OSError("unable to lock correlation state")
             _atomic_private_write(path, json.dumps({
@@ -211,7 +235,7 @@ class CorrelationStore:
 
     def clear(self, harness: str, session_id: str) -> None:
         _ensure_private_tree(self.root)
-        with _exclusive_file_lock(self._lock_path(harness, session_id)) as acquired:
+        with _exclusive_file_lock(self._lock_path(harness, session_id), timeout=0.25) as acquired:
             if not acquired:
                 raise OSError("unable to lock correlation state")
             try:
@@ -222,7 +246,7 @@ class CorrelationStore:
     def clear_if_run(self, harness: str, session_id: str, run_id: str) -> bool:
         """Clear only when the file still belongs to the finalizing run."""
         _ensure_private_tree(self.root)
-        with _exclusive_file_lock(self._lock_path(harness, session_id)) as acquired:
+        with _exclusive_file_lock(self._lock_path(harness, session_id), timeout=0.25) as acquired:
             if not acquired:
                 raise OSError("unable to lock correlation state")
             current = self._read(harness, session_id)
