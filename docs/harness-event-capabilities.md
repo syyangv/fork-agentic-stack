@@ -41,9 +41,12 @@ heuristically, or retained. Raw prompts, environments, complete file bodies,
 complete tool payloads, model reasoning, and unbounded stdout are never
 forwarded. The shared contract redactor runs again when the immutable
 `EventEnvelope` is built. On first worker access after upgrade, valid legacy
-hook events are rewritten with the content-free marker and a newly canonical
-event ID while retaining their idempotency key. Malformed legacy files are
-moved into an owner-only quarantine and are never delivered.
+hook events are rewritten in parent-first order with the content-free marker
+and newly canonical event IDs while retaining their idempotency keys. The
+old-to-new ID map is persisted before file replacement for restart safety and
+is applied to child parent references and correlation start-event IDs.
+Malformed legacy files are moved into an owner-only quarantine and are never
+delivered.
 
 ## Correlation and shutdown behavior
 
@@ -51,16 +54,18 @@ Task start creates a stable run ID and a task-start event ID. Later native
 events for that harness/session use both identifiers; existing episodic tool
 records receive `orchestration_event_id` and `orchestration_run_id`. The
 correlation file contains only these identifiers, a finalization marker, and
-the content-free intent marker. Legacy correlation intents are rewritten
-before reuse. Locally accepted finalization clears correlation only when the
-stored run ID still matches; a timed-out finalization stays retryable but
-cannot block the next prompt.
+the content-free intent marker. A serialized, idempotent first-access migration
+rewrites every legacy correlation file, including inactive sessions, before
+the requested session is reused. Locally accepted finalization clears
+correlation only when the stored run ID still matches; a timed-out
+finalization stays retryable but cannot block the next prompt.
 
 Hooks atomically enqueue an event under private runtime state and start a
 detached, serialized worker; they do not wait for MemOS startup or retrieval.
 Repository identity and revision Git probes share one 500 ms enrichment
 budget, and correlation locks have a 250 ms ceiling, keeping normal
 pre-enqueue work below the host's three-second deadline even when Git stalls.
+Detached-worker environment enrichment has its own 250 ms post-enqueue cap.
 The worker submits bounded batches and moves only locally accepted events to
 the delivered spool. Its structured health file exposes provider failures and
 pending counts. Finalization retains a three-second host-hook budget, but its

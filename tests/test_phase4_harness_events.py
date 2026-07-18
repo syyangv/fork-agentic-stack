@@ -138,13 +138,18 @@ class EventNormalizationTest(unittest.TestCase):
         legacy_prompt = "LEGACY_RAW_PROMPT_SECRET"
         self.store.root.mkdir(parents=True)
         path = self.store._path("claude-code", "legacy")
-        path.write_text(json.dumps({
+        abandoned = self.store._path("claude-code", "abandoned")
+        value = {
             "run_id": "run_" + "a" * 24,
             "session_id": "legacy",
             "start_event_id": "evt_" + "b" * 64,
             "intent": legacy_prompt,
             "finalizing": False,
-        }))
+        }
+        path.write_text(json.dumps(value))
+        abandoned.write_text(json.dumps({**value, "session_id": "abandoned"}))
+        path.chmod(0o644)
+        abandoned.chmod(0o644)
         event = normalize_event(
             "claude-code", "post_tool",
             {
@@ -158,6 +163,9 @@ class EventNormalizationTest(unittest.TestCase):
         self.assertEqual(event.intent, "user request received")
         self.assertNotIn(legacy_prompt, event.canonical_json())
         self.assertNotIn(legacy_prompt, path.read_text())
+        self.assertNotIn(legacy_prompt, abandoned.read_text())
+        self.assertEqual(stat.S_IMODE(path.stat().st_mode), 0o600)
+        self.assertEqual(stat.S_IMODE(abandoned.stat().st_mode), 0o600)
 
     def test_malformed_and_unsupported_inputs_are_rejected(self):
         with self.assertRaises(HookEventError):
@@ -437,12 +445,32 @@ class DeliveryAndCorrelationTest(unittest.TestCase):
                 session_id="legacy", actor="user", intent=legacy_prompt,
                 payload={"source_signal": "user_prompt"},
             )
+            child = EventEnvelope.create(
+                idempotency_key="legacy:child", timestamp="2026-07-18T04:10:01Z",
+                event_type="tool.completed", project_id="a" * 16, repo_root=str(root),
+                revision=None, harness="claude-code", run_id=legacy.run_id,
+                session_id="legacy", actor="tool", intent=legacy_prompt,
+                payload={"tool_name": "Bash", "input_summary": "true", "output_summary": "ok"},
+                parent_event_ids=(legacy.event_id,),
+            )
+            spool.pending_dir.mkdir(parents=True, exist_ok=True)
+            spool.delivered_dir.mkdir(parents=True, exist_ok=True)
+            start_path = spool.pending_dir / f"20260718041000-{legacy.event_id}.json"
+            child_path = spool.delivered_dir / f"20260718041001-{child.event_id}.json"
+            start_path.write_text(legacy.canonical_json())
+            child_path.write_text(child.canonical_json())
             for directory in (spool.pending_dir, spool.delivered_dir):
-                directory.mkdir(parents=True, exist_ok=True)
                 directory.chmod(0o755)
-                path = directory / f"20260718041000-{legacy.event_id}.json"
-                path.write_text(legacy.canonical_json())
+            for path in (start_path, child_path):
                 path.chmod(0o644)
+            correlation_store = CorrelationStore(root / ".agent")
+            correlation_store.root.mkdir(parents=True, exist_ok=True)
+            correlation_path = correlation_store._path("claude-code", "legacy")
+            correlation_path.write_text(json.dumps({
+                "run_id": legacy.run_id, "session_id": "legacy",
+                "start_event_id": legacy.event_id, "intent": legacy_prompt,
+                "finalizing": False,
+            }))
             malformed = spool.pending_dir / "malformed.json"
             malformed.write_text(legacy_prompt)
             malformed.chmod(0o644)
@@ -453,6 +481,7 @@ class DeliveryAndCorrelationTest(unittest.TestCase):
             self.assertEqual([path.name for path in quarantined], ["malformed.json"])
             self.assertEqual(stat.S_IMODE(spool.quarantine_dir.stat().st_mode), 0o700)
             self.assertEqual(stat.S_IMODE(quarantined[0].stat().st_mode), 0o600)
+            migrated = {}
             for directory in (spool.pending_dir, spool.delivered_dir):
                 self.assertEqual(stat.S_IMODE(directory.stat().st_mode), 0o700)
                 files = list(directory.glob("*.json"))
@@ -460,10 +489,16 @@ class DeliveryAndCorrelationTest(unittest.TestCase):
                 self.assertEqual(stat.S_IMODE(files[0].stat().st_mode), 0o600)
                 rendered = files[0].read_text()
                 self.assertNotIn(legacy_prompt, rendered)
-                self.assertEqual(
-                    EventEnvelope.from_external(json.loads(rendered)).intent,
-                    "user request received",
-                )
+                event = EventEnvelope.from_external(json.loads(rendered))
+                self.assertEqual(event.intent, "user request received")
+                migrated[event.event_type] = event
+            self.assertEqual(
+                migrated["tool.completed"].parent_event_ids,
+                (migrated["task.started"].event_id,),
+            )
+            migrated_correlation = correlation_store.current("claude-code", "legacy")
+            self.assertEqual(migrated_correlation.start_event_id, migrated["task.started"].event_id)
+            self.assertEqual(migrated_correlation.intent, "user request received")
 
     def test_timeout_is_degraded_and_bounded(self):
         def slow(_event, _timeout):

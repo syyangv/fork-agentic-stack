@@ -198,6 +198,10 @@ class CorrelationStore:
 
     def __init__(self, agent_root: str | Path = AGENT_ROOT) -> None:
         self.root = Path(agent_root) / "runtime" / "orchestration" / "correlation"
+        self.quarantine_dir = self.root / "quarantine"
+        self.migration_file = self.root / ".privacy-migration-v3"
+        self.migration_lock = self.root / ".migration.lock"
+        self.event_id_map_file = self.root.parent / "event-id-map-v3.json"
 
     def _path(self, harness: str, session_id: str) -> Path:
         digest = hashlib.sha256(f"{harness}\0{session_id}".encode()).hexdigest()
@@ -212,19 +216,15 @@ class CorrelationStore:
             path.chmod(0o600)
             value = json.loads(path.read_text(encoding="utf-8"))
             correlation = Correlation(**value)
-            if correlation.intent != SAFE_INTENT:
+            event_id_map = self._event_id_map()
+            start_event_id = _mapped_event_id(event_id_map, correlation.start_event_id)
+            if correlation.intent != SAFE_INTENT or start_event_id != correlation.start_event_id:
                 correlation = Correlation(
                     correlation.run_id, correlation.session_id,
-                    correlation.start_event_id, SAFE_INTENT,
+                    start_event_id, SAFE_INTENT,
                     finalizing=correlation.finalizing,
                 )
-                _atomic_private_write(path, json.dumps({
-                    "run_id": correlation.run_id,
-                    "session_id": correlation.session_id,
-                    "start_event_id": correlation.start_event_id,
-                    "intent": correlation.intent,
-                    "finalizing": correlation.finalizing,
-                }, sort_keys=True))
+                self._write(path, correlation)
             return correlation
         except (FileNotFoundError, json.JSONDecodeError, OSError, TypeError):
             return None
@@ -247,10 +247,64 @@ class CorrelationStore:
 
     def current(self, harness: str, session_id: str) -> Correlation | None:
         _ensure_private_tree(self.root)
+        self.repair_legacy_artifacts()
         with _exclusive_file_lock(self._lock_path(harness, session_id), timeout=0.25) as acquired:
             if not acquired:
                 raise OSError("unable to lock correlation state")
             return self._read(harness, session_id)
+
+    def _write(self, path: Path, correlation: Correlation) -> None:
+        _atomic_private_write(path, json.dumps({
+            "run_id": correlation.run_id,
+            "session_id": correlation.session_id,
+            "start_event_id": correlation.start_event_id,
+            "intent": correlation.intent,
+            "finalizing": correlation.finalizing,
+        }, sort_keys=True))
+
+    def _event_id_map(self) -> dict[str, str]:
+        try:
+            self.event_id_map_file.chmod(0o600)
+            value = json.loads(self.event_id_map_file.read_text(encoding="utf-8"))
+            return {
+                key: item for key, item in value.items()
+                if isinstance(key, str) and isinstance(item, str)
+            }
+        except (FileNotFoundError, json.JSONDecodeError, OSError, TypeError):
+            return {}
+
+    def repair_legacy_artifacts(
+        self, event_id_map: Mapping[str, str] | None = None, *, force: bool = False,
+    ) -> None:
+        """Sanitize every historical correlation, including inactive sessions."""
+        _ensure_private_tree(self.root)
+        if self.migration_file.exists() and not force:
+            self.migration_file.chmod(0o600)
+            return
+        with _exclusive_file_lock(self.migration_lock, timeout=0.5) as acquired:
+            if not acquired:
+                raise OSError("unable to lock correlation migration")
+            if self.migration_file.exists() and not force:
+                self.migration_file.chmod(0o600)
+                return
+            _ensure_private_dir(self.quarantine_dir)
+            mapping = dict(event_id_map or self._event_id_map())
+            for path in sorted(self.root.glob("*.json")):
+                path.chmod(0o600)
+                try:
+                    correlation = Correlation(**json.loads(path.read_text(encoding="utf-8")))
+                except (json.JSONDecodeError, OSError, TypeError):
+                    destination = self.quarantine_dir / path.name
+                    os.replace(path, destination)
+                    destination.chmod(0o600)
+                    continue
+                correlation = Correlation(
+                    correlation.run_id, correlation.session_id,
+                    _mapped_event_id(mapping, correlation.start_event_id),
+                    SAFE_INTENT, finalizing=correlation.finalizing,
+                )
+                self._write(path, correlation)
+            _atomic_private_write(self.migration_file, "privacy-migration-v3\n")
 
     def clear(self, harness: str, session_id: str) -> None:
         _ensure_private_tree(self.root)
@@ -286,7 +340,8 @@ class HookEventSpool:
         self.pending_dir = self.root / "pending"
         self.delivered_dir = self.root / "delivered"
         self.quarantine_dir = self.root / "quarantine"
-        self.migration_file = self.root / ".privacy-migration-v2"
+        self.migration_file = self.root / ".privacy-migration-v3"
+        self.event_id_map_file = self.root.parent / "event-id-map-v3.json"
         self.health_file = self.root / "health.json"
         self.lock_file = self.root / "worker.lock"
 
@@ -323,6 +378,7 @@ class HookEventSpool:
         _ensure_private_dir(self.pending_dir)
         _ensure_private_dir(self.delivered_dir)
         _ensure_private_dir(self.quarantine_dir)
+        records: list[tuple[Path, EventEnvelope]] = []
         for directory in (self.pending_dir, self.delivered_dir):
             for path in sorted(directory.glob("*.json")):
                 path.chmod(0o600)
@@ -335,18 +391,73 @@ class HookEventSpool:
                     os.replace(path, destination)
                     destination.chmod(0o600)
                     continue
-                if event.intent == SAFE_INTENT:
-                    continue
+                records.append((path, event))
+
+        source_events = {event.event_id: event for _path, event in records}
+        correlation_store = CorrelationStore(self.root.parents[2])
+        prior_event_id_map = correlation_store._event_id_map()
+        migrated: dict[str, EventEnvelope] = {}
+        visiting: set[str] = set()
+
+        def migrate(event_id: str) -> EventEnvelope:
+            if event_id in migrated:
+                return migrated[event_id]
+            if event_id in visiting:
+                raise HookEventError("cyclic parent references in legacy spool")
+            visiting.add(event_id)
+            try:
+                event = source_events[event_id]
+                parents = tuple(
+                    migrate(parent).event_id
+                    if parent in source_events
+                    else _mapped_event_id(prior_event_id_map, parent)
+                    for parent in event.parent_event_ids
+                )
                 values = event.to_dict()
                 values.pop("event_id", None)
                 values["intent"] = SAFE_INTENT
-                sanitized = EventEnvelope.create(**values)
-                prefix = path.name.split("-evt_", 1)[0]
-                destination = directory / f"{prefix}-{sanitized.event_id}.json"
-                _atomic_private_write(destination, sanitized.canonical_json())
-                if destination != path:
-                    path.unlink()
-        _atomic_private_write(self.migration_file, "privacy-migration-v2\n")
+                values["parent_event_ids"] = parents
+                migrated[event_id] = EventEnvelope.create(**values)
+                return migrated[event_id]
+            finally:
+                visiting.discard(event_id)
+
+        failed: set[str] = set()
+        for event_id in source_events:
+            try:
+                migrate(event_id)
+            except HookEventError:
+                failed.add(event_id)
+
+        event_id_map = {
+            **prior_event_id_map,
+            **{old: event.event_id for old, event in migrated.items()},
+        }
+        event_id_map = {
+            old: _mapped_event_id(event_id_map, new)
+            for old, new in event_id_map.items()
+        }
+        _atomic_private_write(self.event_id_map_file, json.dumps(event_id_map, sort_keys=True))
+
+        for path, event in records:
+            if event.event_id in failed or event.event_id not in migrated:
+                destination = self.quarantine_dir / path.name
+                os.replace(path, destination)
+                destination.chmod(0o600)
+                continue
+            sanitized = migrated[event.event_id]
+            if sanitized.canonical_json() == event.canonical_json():
+                continue
+            directory = path.parent
+            prefix = path.name.split("-evt_", 1)[0]
+            destination = directory / f"{prefix}-{sanitized.event_id}.json"
+            _atomic_private_write(destination, sanitized.canonical_json())
+            if destination != path:
+                path.unlink()
+        correlation_store.repair_legacy_artifacts(
+            event_id_map, force=True,
+        )
+        _atomic_private_write(self.migration_file, "privacy-migration-v3\n")
 
     def mark_delivered(self, paths: list[Path]) -> None:
         _ensure_private_tree(self.root)
@@ -574,7 +685,7 @@ def _start_spool_worker(repo_root: Path) -> None:
 def _worker_environment(repo_root: Path) -> dict[str, str]:
     env = os.environ.copy()
     env["AGENTIC_PROJECT_ROOT"] = str(repo_root)
-    remote = _git(repo_root, "config", "--get", "remote.origin.url")
+    remote = _git(repo_root, "config", "--get", "remote.origin.url", timeout=0.25)
     if remote:
         env["AGENTIC_GIT_REMOTE"] = remote
     else:
@@ -749,6 +860,19 @@ def _first_value(payload: Mapping[str, Any], *names: str) -> Any:
         if name in payload and payload[name] is not None:
             return payload[name]
     return None
+
+
+def _mapped_event_id(mapping: Mapping[str, str], event_id: str) -> str:
+    """Resolve a persisted migration chain without looping on corrupt maps."""
+    current = event_id
+    seen: set[str] = set()
+    while current in mapping and current not in seen:
+        seen.add(current)
+        candidate = mapping[current]
+        if not isinstance(candidate, str) or candidate == current:
+            break
+        current = candidate
+    return current
 
 
 def _git_before(root: Path, deadline: float, *args: str) -> str:
