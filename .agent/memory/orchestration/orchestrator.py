@@ -34,6 +34,37 @@ def build_governance_packet(provider, intent: str, top_k: int = 3) -> ContextPac
     )
 
 
+def build_shadow_packet(governance_provider, behavioral_provider, intent: str,
+                        top_k: int = 3) -> ContextPacket:
+    """Add observable behavioral health while suppressing prompt injection."""
+    governance = build_governance_packet(governance_provider, intent, top_k=top_k)
+    behavioral_items, behavioral_health = behavioral_provider.retrieve(
+        intent, top_k=top_k
+    )
+    warnings = list(governance.warnings)
+    for warning in behavioral_health.get("warnings", []):
+        if warning not in warnings:
+            warnings.append(warning)
+    if behavioral_items:
+        warnings.append("behavioral_shadow_items_suppressed")
+    return ContextPacket(
+        schema=governance.schema, intent=governance.intent,
+        project_id=governance.project_id,
+        routing={"governance": True, "behavioral": True, "evidence": False},
+        sections=(
+            governance.sections[0],
+            {"lane": "behavioral", "items": []},
+            governance.sections[2],
+        ),
+        warnings=tuple(warnings),
+        health={
+            "governance": governance.health["governance"],
+            "behavioral": behavioral_health,
+        },
+        token_estimate=governance.token_estimate,
+    )
+
+
 def format_packet_text(packet: ContextPacket) -> str:
     lines = ["Governance memory context", f"Intent: {packet.intent!r}"]
     governance = packet.sections[0]["items"]

@@ -28,7 +28,7 @@ def load_recall():
 class GovernanceOrchestratorTest(unittest.TestCase):
     def test_manifest_declares_phase2_features(self):
         manifest = json.loads((AGENT / "infrastructure.json").read_text())
-        self.assertEqual(manifest["orchestration_phase"], 2)
+        self.assertGreaterEqual(manifest["orchestration_phase"], 2)
         self.assertTrue(
             {"governance_provider", "governance_orchestrator_cli", "legacy_recall_comparison"}
             .issubset(manifest["features"])

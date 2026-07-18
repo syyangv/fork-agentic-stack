@@ -1,0 +1,1 @@
+{"name":"agentic-stack-memos-runtime","version":"2.0.10","private":true,"dependencies":{"@memtensor/memos-local-plugin":"file:plugin.tgz"}}
