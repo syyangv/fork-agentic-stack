@@ -1,0 +1,36 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "agentic.memory.candidate.v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema", "id", "claim", "conditions", "status", "source_layer", "source_kind", "target_kind", "provider_ids", "project_scope", "evidence_refs", "support", "gain", "trial_count", "trial_pass_count", "freshness", "code_specific", "code_refs", "staged_at", "decisions", "support_count", "contradiction_count", "outcome_history", "rejection_count"],
+  "properties": {
+    "schema": {"const": "agentic.memory.candidate.v1"},
+    "id": {"type": "string", "pattern": "^memos_[a-z_]+_[0-9a-f]{24}$"},
+    "claim": {"type": "string", "minLength": 20, "maxLength": 4000},
+    "conditions": {"type": "array", "maxItems": 50, "items": {"type": "string", "minLength": 1, "maxLength": 200}, "uniqueItems": true},
+    "status": {"enum": ["staged", "deferred", "provisional", "accepted", "rejected", "revalidation_needed", "retracted"]},
+    "source_layer": {"const": "behavioral"},
+    "source_kind": {"enum": ["policy", "world_model", "skill", "decision_repair"]},
+    "target_kind": {"enum": ["governance_lesson", "domain_knowledge", "skill_guidance", "decision_rule"]},
+    "provider_ids": {"type": "object", "minProperties": 1, "additionalProperties": {"type": "string", "minLength": 1, "maxLength": 512}},
+    "project_scope": {
+      "type": "object", "additionalProperties": false, "required": ["project_id"],
+      "properties": {"project_id": {"type": "string", "pattern": "^[0-9a-f]{16}$"}}
+    },
+    "evidence_refs": {"type": "array", "maxItems": 100, "items": {"type": "string", "minLength": 1, "maxLength": 128}, "uniqueItems": true},
+    "support": {"type": ["integer", "null"], "minimum": 0, "maximum": 1000000},
+    "gain": {"type": ["number", "null"], "minimum": -1, "maximum": 1},
+    "trial_count": {"type": ["integer", "null"], "minimum": 0, "maximum": 1000000},
+    "trial_pass_count": {"type": ["integer", "null"], "minimum": 0, "maximum": 1000000},
+    "freshness": {"enum": ["fresh", "stale", "unknown"]},
+    "code_specific": {"type": "boolean"},
+    "code_refs": {"type": "array", "maxItems": 50, "items": {"type": "object", "additionalProperties": false, "required": ["file_path", "qualified_name"], "properties": {"file_path": {"type": "string", "minLength": 1, "maxLength": 500}, "qualified_name": {"type": "string", "minLength": 1, "maxLength": 500}}}},
+    "staged_at": {"type": "string", "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[^ ]+(Z|\\+00:00)$", "maxLength": 64},
+    "decisions": {"type": "array", "maxItems": 1000, "items": {"type": "object", "additionalProperties": false, "required": ["ts", "action", "reviewer"], "properties": {"ts": {"type": "string", "maxLength": 64}, "action": {"type": "string", "minLength": 1, "maxLength": 100}, "reviewer": {"type": "string", "minLength": 1, "maxLength": 200}, "notes": {"type": "string", "maxLength": 2000}}}},
+    "support_count": {"type": "integer", "minimum": 0},
+    "contradiction_count": {"type": "integer", "minimum": 0},
+    "outcome_history": {"type": "array", "maxItems": 1000, "items": {"type": "object", "additionalProperties": false, "required": ["outcome_id", "outcome", "observed_at"], "properties": {"outcome_id": {"type": "string", "minLength": 1, "maxLength": 512}, "outcome": {"enum": ["used", "contradicted", "ignored"]}, "observed_at": {"type": "string", "maxLength": 64}}}},
+    "rejection_count": {"type": "integer", "minimum": 0}
+  }
+}

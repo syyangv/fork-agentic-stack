@@ -44,7 +44,7 @@ def _find_prior(slug, candidates_dir):
                 return json.load(f), "staged"
         except (OSError, json.JSONDecodeError):
             pass
-    for sub in ("rejected", "graduated"):
+    for sub in ("rejected", "deferred", "graduated"):
         path = os.path.join(candidates_dir, sub, f"{slug}.json")
         if os.path.isfile(path):
             try:
@@ -143,6 +143,8 @@ def _write_candidates_locked(patterns, candidates_dir):
         # A human rejection is terminal. New evidence may be inspected only
         # after an explicit reopen transition moves the record back to staged.
         if prev_loc == "rejected" and _human_rejection_is_terminal(prev):
+            continue
+        if prev_loc == "deferred":
             continue
 
         # For rejected + provisional-graduated, re-stage ONLY when something

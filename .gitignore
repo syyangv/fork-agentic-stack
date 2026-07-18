@@ -39,6 +39,7 @@ venv/
 # Per-machine runtime coordination/health state (regenerated locally).
 .agent/memory/dream-state.json
 .agent/memory/candidates/.lifecycle.lock
+.agent/memory/evidence/revalidation.sqlite3*
 
 # ...and Python bytecode that lands anywhere under .agent/memory/ when
 # modules there are imported. The negation above re-includes these by

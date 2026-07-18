@@ -98,6 +98,31 @@ def append_lesson(lesson, semantic_dir):
     return path
 
 
+def append_lesson_updates(semantic_dir, build_updates):
+    """Atomically derive and append state transitions from the current log.
+
+    ``build_updates`` receives every valid row while the JSONL lock is held
+    and returns rows to append.  This closes the load-then-append race for
+    idempotent append-only transitions such as revalidation tombstones.
+    """
+    os.makedirs(semantic_dir, exist_ok=True)
+    path = os.path.join(semantic_dir, LESSONS_JSONL)
+    with _locked_jsonl(path) as f:
+        f.seek(0)
+        rows = []
+        for line in f:
+            try:
+                value = json.loads(line)
+            except json.JSONDecodeError:
+                continue
+            if isinstance(value, dict):
+                rows.append(value)
+        updates = list(build_updates(rows))
+        for update in updates:
+            _append_lesson_unlocked(f, update)
+    return updates
+
+
 def load_lessons(semantic_dir):
     path = os.path.join(semantic_dir, LESSONS_JSONL)
     if not os.path.exists(path):
@@ -127,6 +152,8 @@ def _bullet_for(lesson, superseded_by):
         return f"- ~~{claim}~~  <!-- {ann} superseded_by={sup_by} -->"
     if status == "retracted":
         return f"- ~~[RETRACTED] {claim}~~  <!-- {ann} -->"
+    if status == "revalidation_needed":
+        return f"- ~~[REVALIDATION NEEDED] {claim}~~  <!-- {ann} -->"
     if status == "provisional":
         return f"- [PROVISIONAL] {claim}  <!-- {ann} -->"
     return f"- {claim}  <!-- {ann} -->"
@@ -174,7 +201,8 @@ def migrate_legacy_bullets(semantic_dir):
     md_path = os.path.join(semantic_dir, LESSONS_MD)
     if not os.path.exists(md_path):
         return 0
-    content = open(md_path).read()
+    with open(md_path, encoding="utf-8") as stream:
+        content = stream.read()
     if SENTINEL not in content:
         return 0
 
@@ -279,7 +307,8 @@ def render_lessons(semantic_dir):
         auto_section = _build_auto_section(lessons)
 
         if os.path.exists(md_path):
-            existing = open(md_path).read()
+            with open(md_path, encoding="utf-8") as stream:
+                existing = stream.read()
             if SENTINEL in existing:
                 prefix = existing.split(SENTINEL)[0].rstrip()
                 new = f"{prefix}\n\n{SENTINEL}\n\n{auto_section}"
@@ -306,7 +335,8 @@ def render_lessons(semantic_dir):
 
 
 def render_lessons_as_text(semantic_dir):
-    return open(render_lessons(semantic_dir)).read()
+    with open(render_lessons(semantic_dir), encoding="utf-8") as stream:
+        return stream.read()
 
 
 if __name__ == "__main__":

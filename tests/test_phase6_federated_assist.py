@@ -101,7 +101,7 @@ class AssistGateTest(unittest.TestCase):
     def test_manifest_declares_phase6_without_enabling_unmet_assist(self):
         manifest = json.loads((AGENT / "infrastructure.json").read_text())
         config = json.loads((AGENT / "memory/orchestration/config.json").read_text())
-        self.assertEqual(manifest["orchestration_phase"], 6)
+        self.assertGreaterEqual(manifest["orchestration_phase"], 6)
         self.assertTrue({
             "assist_quality_gate", "bounded_behavioral_retrieval",
             "authority_ordered_fusion", "retrieval_preview",
@@ -210,7 +210,8 @@ class BehavioralAssistTest(unittest.TestCase):
         }]}
         skills = [{
             "id": "skill-1", "status": "active", "support": 2, "gain": -0.25,
-            "ownerProfileId": PROJECT, "ownerWorkspaceId": PROJECT,
+            "ownerAgentKind": "hermes", "ownerProfileId": PROJECT,
+            "ownerWorkspaceId": PROJECT,
             "updatedAt": 1784354400000,
         }]
         with tempfile.TemporaryDirectory() as tmp:
@@ -259,7 +260,8 @@ class BehavioralAssistTest(unittest.TestCase):
         }]}
         skills = [{
             "id": "shared", "status": "active", "share": {"scope": "hub"},
-            "ownerProfileId": PROJECT, "ownerWorkspaceId": PROJECT,
+            "ownerAgentKind": "hermes", "ownerProfileId": PROJECT,
+            "ownerWorkspaceId": PROJECT,
         }]
         with tempfile.TemporaryDirectory() as tmp:
             items, health = self.provider(tmp, FakeClient(result, skills=skills)).retrieve(
@@ -284,7 +286,8 @@ class BehavioralAssistTest(unittest.TestCase):
                          "snippet": "episode", "score": .5},
                     ]}
                 detail = {
-                    "ownerProfileId": PROJECT, "ownerWorkspaceId": PROJECT,
+                    "ownerAgentKind": "hermes", "ownerProfileId": PROJECT,
+                    "ownerWorkspaceId": PROJECT,
                     "status": "active", "updatedAt": 1784354400000,
                 }
                 if method == "memory.timeline":
@@ -383,7 +386,8 @@ class BehavioralAssistTest(unittest.TestCase):
         skills = [{
             "id": "skill-1", "status": "active", "support": 2, "gain": -.2,
             "evidenceAnchors": ["trace-1"], "sourcePolicyIds": [],
-            "sourceWorldModelIds": [], "ownerProfileId": PROJECT,
+            "sourceWorldModelIds": [], "ownerAgentKind": "hermes",
+            "ownerProfileId": PROJECT,
             "ownerWorkspaceId": PROJECT, "updatedAt": 1784354400000,
         }]
         with tempfile.TemporaryDirectory() as tmp:

@@ -55,7 +55,9 @@ def _stamp_evidence_and_lessons(cand, candidates_dir):
     if not cand.get("decisions"):
         return
     last = cand["decisions"][-1]
-    last["evidence_snapshot"] = list(cand.get("evidence_ids", []))
+    last["evidence_snapshot"] = list(
+        cand.get("evidence_refs", cand.get("evidence_ids", []))
+    )
     last["lessons_sha"] = _lessons_sha(candidates_dir)
 
 
@@ -167,12 +169,33 @@ def mark_rejected(candidate_id, reviewer, reason, candidates_dir, **extra_stamp)
         return cand
 
 
-def mark_reopened(candidate_id, reviewer, candidates_dir):
-    """Move a rejected candidate back to the staged pool with history intact."""
+def mark_deferred(candidate_id, reviewer, reason, candidates_dir):
+    """Move a staged candidate out of the active queue without rejecting it."""
     with candidate_lifecycle_lock(candidates_dir):
-        src = os.path.join(candidates_dir, "rejected", f"{candidate_id}.json")
+        src = os.path.join(candidates_dir, f"{candidate_id}.json")
         if not os.path.exists(src):
-            raise FileNotFoundError(f"rejected candidate not found: {candidate_id}")
+            raise FileNotFoundError(f"candidate not found: {candidate_id}")
+        cand = load_candidate(src)
+        cand["status"] = "deferred"
+        _touch(cand, "deferred", reviewer, notes=reason)
+        save_candidate(cand, src)
+        deferred_dir = os.path.join(candidates_dir, "deferred")
+        os.makedirs(deferred_dir, exist_ok=True)
+        _move_candidate(src, os.path.join(deferred_dir, f"{candidate_id}.json"))
+        _refresh_queue(candidates_dir)
+        return cand
+
+
+def mark_reopened(candidate_id, reviewer, candidates_dir):
+    """Move a rejected or deferred candidate back with history intact."""
+    with candidate_lifecycle_lock(candidates_dir):
+        src = next((
+            os.path.join(candidates_dir, subdir, f"{candidate_id}.json")
+            for subdir in ("rejected", "deferred")
+            if os.path.exists(os.path.join(candidates_dir, subdir, f"{candidate_id}.json"))
+        ), None)
+        if src is None:
+            raise FileNotFoundError(f"rejected/deferred candidate not found: {candidate_id}")
         cand = load_candidate(src)
         if cand.get("status") != "staged":
             cand["status"] = "staged"

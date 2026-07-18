@@ -17,7 +17,7 @@ CANDIDATES = os.path.join(BASE, "memory/candidates")
 def main():
     p = argparse.ArgumentParser(description="List candidate lessons.")
     p.add_argument("--status", default="staged",
-                   choices=["staged", "rejected", "graduated"])
+                   choices=["staged", "deferred", "rejected", "graduated"])
     p.add_argument("--sort", default="priority",
                    choices=["priority", "age"])
     p.add_argument("--limit", type=int, default=0,
