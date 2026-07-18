@@ -28,14 +28,16 @@ installed adapters exposes an unambiguous user-feedback hook.
 
 | Native signal | EventEnvelope type | Stored content |
 |---|---|---|
-| user prompt | `task.started` | redacted intent and source signal |
+| user prompt | `task.started` | content-free intent marker and source signal |
 | pre-tool | `tool.started` | tool name and bounded input summary |
 | post-tool | `tool.completed` | tool name, bounded input/output summaries, and coarse error code |
 | feedback | `feedback.recorded` | polarity, magnitude, explicit channel, bounded rationale |
 | subagent start | `subagent.started` | agent type and bounded task description |
 | Stop / SessionEnd | `task.completed` | status and source signal |
 
-Raw prompts, environments, complete file bodies, complete tool payloads,
+Native hooks validate that a prompt exists but persist only the fixed
+`user request received` intent marker; prompt text is never hashed, summarized
+heuristically, or retained. Raw prompts, environments, complete file bodies, complete tool payloads,
 model reasoning, and unbounded stdout are never forwarded. The shared
 contract redactor runs again when the immutable `EventEnvelope` is built.
 
@@ -45,7 +47,8 @@ Task start creates a stable run ID and a task-start event ID. Later native
 events for that harness/session use both identifiers; existing episodic tool
 records receive `orchestration_event_id` and `orchestration_run_id`. The
 correlation file contains only these identifiers, a finalization marker, and
-the already-redacted, bounded intent. Locally accepted finalization clears it;
+the content-free intent marker. Locally accepted finalization clears it only
+when the stored run ID still matches;
 a timed-out finalization stays retryable but cannot block the next prompt.
 
 Hooks atomically enqueue an event under private runtime state and start a

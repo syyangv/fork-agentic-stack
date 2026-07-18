@@ -96,6 +96,79 @@ class CaptureStatus:
     reason: str
 
 
+def _ensure_private_dir(path: Path) -> None:
+    """Create or repair a runtime directory so only its owner can traverse it."""
+    path.mkdir(parents=True, exist_ok=True, mode=0o700)
+    path.chmod(0o700)
+
+
+def _ensure_private_tree(path: Path) -> None:
+    # Runtime artifacts live below runtime/orchestration/<store>. Protect the
+    # whole subtree, not only the leaf directory, even when it already exists.
+    for directory in reversed((path, path.parent, path.parent.parent)):
+        _ensure_private_dir(directory)
+
+
+def _atomic_private_write(path: Path, value: str) -> None:
+    temp = path.with_suffix(f".{os.getpid()}.{threading.get_ident()}.{time.time_ns()}.tmp")
+    descriptor = os.open(temp, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+    try:
+        with os.fdopen(descriptor, "w", encoding="utf-8") as stream:
+            stream.write(value)
+        os.replace(temp, path)
+        path.chmod(0o600)
+    finally:
+        try:
+            temp.unlink()
+        except FileNotFoundError:
+            pass
+
+
+@contextlib.contextmanager
+def _exclusive_file_lock(path: Path):
+    """Take a blocking cross-process lock on a private owner-only file."""
+    descriptor = os.open(path, os.O_RDWR | os.O_CREAT, 0o600)
+    os.chmod(path, 0o600)
+    stream = os.fdopen(descriptor, "a+")
+    try:
+        try:
+            import fcntl
+            fcntl.flock(stream.fileno(), fcntl.LOCK_EX)
+            unlock = lambda: fcntl.flock(stream.fileno(), fcntl.LOCK_UN)
+        except ImportError:
+            try:
+                import msvcrt
+                stream.seek(0, os.SEEK_END)
+                if stream.tell() == 0:
+                    stream.write("\0")
+                    stream.flush()
+                stream.seek(0)
+                while True:
+                    try:
+                        msvcrt.locking(stream.fileno(), msvcrt.LK_NBLCK, 1)
+                        break
+                    except OSError:
+                        time.sleep(0.05)
+
+                def unlock() -> None:
+                    stream.seek(0)
+                    msvcrt.locking(stream.fileno(), msvcrt.LK_UNLCK, 1)
+            except OSError:
+                yield False
+                return
+        except OSError:
+            yield False
+            return
+        yield True
+    finally:
+        try:
+            if "unlock" in locals():
+                unlock()
+        except OSError:
+            pass
+        stream.close()
+
+
 class CorrelationStore:
     """Small per-session state files; no prompts or tool payloads are stored."""
 
@@ -106,32 +179,60 @@ class CorrelationStore:
         digest = hashlib.sha256(f"{harness}\0{session_id}".encode()).hexdigest()
         return self.root / f"{digest}.json"
 
-    def set(self, harness: str, correlation: Correlation) -> None:
-        self.root.mkdir(parents=True, exist_ok=True)
-        path = self._path(harness, correlation.session_id)
-        temp = path.with_suffix(f".{os.getpid()}.tmp")
-        temp.write_text(json.dumps({
-            "run_id": correlation.run_id,
-            "session_id": correlation.session_id,
-            "start_event_id": correlation.start_event_id,
-            "intent": correlation.intent[:2000],
-            "finalizing": correlation.finalizing,
-        }, sort_keys=True), encoding="utf-8")
-        os.replace(temp, path)
+    def _lock_path(self, harness: str, session_id: str) -> Path:
+        return self._path(harness, session_id).with_suffix(".lock")
 
-    def current(self, harness: str, session_id: str) -> Correlation | None:
+    def _read(self, harness: str, session_id: str) -> Correlation | None:
         path = self._path(harness, session_id)
         try:
+            path.chmod(0o600)
             value = json.loads(path.read_text(encoding="utf-8"))
             return Correlation(**value)
         except (FileNotFoundError, json.JSONDecodeError, OSError, TypeError):
             return None
 
+    def set(self, harness: str, correlation: Correlation) -> None:
+        _ensure_private_tree(self.root)
+        path = self._path(harness, correlation.session_id)
+        with _exclusive_file_lock(self._lock_path(harness, correlation.session_id)) as acquired:
+            if not acquired:
+                raise OSError("unable to lock correlation state")
+            _atomic_private_write(path, json.dumps({
+                "run_id": correlation.run_id,
+                "session_id": correlation.session_id,
+                "start_event_id": correlation.start_event_id,
+                "intent": correlation.intent[:2000],
+                "finalizing": correlation.finalizing,
+            }, sort_keys=True))
+
+    def current(self, harness: str, session_id: str) -> Correlation | None:
+        _ensure_private_tree(self.root)
+        return self._read(harness, session_id)
+
     def clear(self, harness: str, session_id: str) -> None:
-        try:
-            self._path(harness, session_id).unlink()
-        except FileNotFoundError:
-            pass
+        _ensure_private_tree(self.root)
+        with _exclusive_file_lock(self._lock_path(harness, session_id)) as acquired:
+            if not acquired:
+                raise OSError("unable to lock correlation state")
+            try:
+                self._path(harness, session_id).unlink()
+            except FileNotFoundError:
+                pass
+
+    def clear_if_run(self, harness: str, session_id: str, run_id: str) -> bool:
+        """Clear only when the file still belongs to the finalizing run."""
+        _ensure_private_tree(self.root)
+        with _exclusive_file_lock(self._lock_path(harness, session_id)) as acquired:
+            if not acquired:
+                raise OSError("unable to lock correlation state")
+            current = self._read(harness, session_id)
+            if current is None or current.run_id != run_id:
+                return False
+            try:
+                self._path(harness, session_id).unlink()
+            except FileNotFoundError:
+                return False
+            return True
 
 
 class HookEventSpool:
@@ -145,32 +246,41 @@ class HookEventSpool:
         self.lock_file = self.root / "worker.lock"
 
     def enqueue(self, event: EventEnvelope) -> Path:
-        self.pending_dir.mkdir(parents=True, exist_ok=True)
+        _ensure_private_tree(self.root)
+        _ensure_private_dir(self.pending_dir)
         stamp = "".join(ch for ch in event.timestamp if ch.isdigit())[:20]
         path = self.pending_dir / f"{stamp}-{event.event_id}.json"
         encoded = event.canonical_json()
         if path.exists():
+            path.chmod(0o600)
             if path.read_text(encoding="utf-8") != encoded:
                 raise HookEventError("event spool conflict for stable event ID")
             return path
-        temp = path.with_suffix(f".{os.getpid()}.tmp")
-        temp.write_text(encoded, encoding="utf-8")
-        os.replace(temp, path)
+        _atomic_private_write(path, encoded)
         return path
 
     def pending(self, limit: int = 100) -> list[Path]:
+        _ensure_private_tree(self.root)
         if not self.pending_dir.is_dir():
             return []
-        return sorted(self.pending_dir.glob("*.json"))[:limit]
+        _ensure_private_dir(self.pending_dir)
+        paths = sorted(self.pending_dir.glob("*.json"))[:limit]
+        for path in paths:
+            path.chmod(0o600)
+        return paths
 
     def mark_delivered(self, paths: list[Path]) -> None:
-        self.delivered_dir.mkdir(parents=True, exist_ok=True)
+        _ensure_private_tree(self.root)
+        _ensure_private_dir(self.delivered_dir)
         for path in paths:
             if path.exists():
-                os.replace(path, self.delivered_dir / path.name)
+                path.chmod(0o600)
+                destination = self.delivered_dir / path.name
+                os.replace(path, destination)
+                destination.chmod(0o600)
 
     def write_health(self, status: str, reason: str, pending: int) -> None:
-        self.root.mkdir(parents=True, exist_ok=True)
+        _ensure_private_tree(self.root)
         value = {
             "schema": "agentic.memory.hook-delivery-health.v1",
             "status": status,
@@ -178,42 +288,13 @@ class HookEventSpool:
             "pending": pending,
             "updated_at": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
         }
-        temp = self.health_file.with_suffix(f".{os.getpid()}.tmp")
-        temp.write_text(json.dumps(value, sort_keys=True), encoding="utf-8")
-        os.replace(temp, self.health_file)
+        _atomic_private_write(self.health_file, json.dumps(value, sort_keys=True))
 
     @contextlib.contextmanager
     def worker_lock(self):
-        self.root.mkdir(parents=True, exist_ok=True)
-        stream = self.lock_file.open("a+")
-        try:
-            try:
-                import fcntl
-                fcntl.flock(stream.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
-                unlock = lambda: fcntl.flock(stream.fileno(), fcntl.LOCK_UN)
-            except ImportError:
-                try:
-                    import msvcrt
-                    if stream.tell() == 0:
-                        stream.write("\0")
-                        stream.flush()
-                    stream.seek(0)
-                    msvcrt.locking(stream.fileno(), msvcrt.LK_NBLCK, 1)
-                    unlock = lambda: msvcrt.locking(stream.fileno(), msvcrt.LK_UNLCK, 1)
-                except OSError:
-                    yield False
-                    return
-            except (BlockingIOError, OSError):
-                yield False
-                return
-            yield True
-        finally:
-            try:
-                if "unlock" in locals():
-                    unlock()
-            except OSError:
-                pass
-            stream.close()
+        _ensure_private_tree(self.root)
+        with _exclusive_file_lock(self.lock_file) as acquired:
+            yield acquired
 
 
 def normalize_event(
@@ -254,7 +335,7 @@ def normalize_event(
             raise AlreadyActiveRun(f"run already active for {harness} session {session_id}")
         if correlation is not None:
             store.clear(harness, session_id)
-        intent = _prompt(payload)
+        intent = _prompt_intent(payload)
         if not intent:
             raise HookEventError("user prompt event has no prompt text")
         run_seed = _first(payload, "prompt_id", "promptId", "event_id", "eventId") or timestamp
@@ -391,7 +472,7 @@ def capture_hook_event(
     if signal == "finalize" and (
         status.status == "captured" or status.reason.startswith("provider:")
     ):
-        store.clear(harness, event.session_id)
+        store.clear_if_run(harness, event.session_id, event.run_id)
     return event, status
 
 
@@ -489,8 +570,13 @@ def _session_id(payload: Mapping[str, Any]) -> str:
     return _bounded(value, 512)
 
 
-def _prompt(payload: Mapping[str, Any]) -> str:
-    return _bounded(_first(payload, "prompt", "user_prompt", "input") or "", 2000)
+def _prompt_intent(payload: Mapping[str, Any]) -> str:
+    # Native hooks do not have a trusted local summarizer. Persist a
+    # content-free marker rather than leaking or heuristically transforming
+    # the full prompt. Semantic intent can enter through an explicit policy in
+    # a later contract version.
+    value = _first(payload, "prompt", "user_prompt", "input")
+    return "user request received" if str(value or "").strip() else ""
 
 
 def _tool_payload(payload: Mapping[str, Any], *, include_output: bool) -> dict[str, Any]:

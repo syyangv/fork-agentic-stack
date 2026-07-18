@@ -1,7 +1,10 @@
 import json
+import os
+import stat
 import subprocess
 import sys
 import tempfile
+import threading
 import time
 import unittest
 from pathlib import Path
@@ -116,6 +119,20 @@ class EventNormalizationTest(unittest.TestCase):
         self.assertNotIn("must never", rendered)
         self.assertNotIn('"environment"', rendered)
 
+    def test_prompt_content_never_crosses_the_event_or_correlation_boundary(self):
+        confidential = "Confidential merger plan alpha"
+        event = normalize_event(
+            "claude-code", "user_prompt",
+            {"session_id": "private", "prompt": confidential},
+            repo_root=self.root, agent_root=self.agent_root,
+            timestamp=self.now, store=self.store,
+        )
+        correlation = self.store.current("claude-code", "private")
+        self.assertEqual(event.intent, "user request received")
+        self.assertEqual(correlation.intent, "user request received")
+        self.assertNotIn(confidential, event.canonical_json())
+        self.assertNotIn(confidential, self.store._path("claude-code", "private").read_text())
+
     def test_malformed_and_unsupported_inputs_are_rejected(self):
         with self.assertRaises(HookEventError):
             normalize_event(
@@ -215,6 +232,57 @@ class EventNormalizationTest(unittest.TestCase):
 
 
 class DeliveryAndCorrelationTest(unittest.TestCase):
+    @unittest.skipIf(os.name == "nt", "POSIX permission bits are not portable to Windows")
+    def test_runtime_directories_and_files_are_owner_only_even_with_open_umask(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / ".git").mkdir()
+            agent_root = root / ".agent"
+            store = CorrelationStore(agent_root)
+            spool = HookEventSpool(agent_root)
+            previous = os.umask(0)
+            try:
+                event = normalize_event(
+                    "claude-code", "user_prompt",
+                    {"session_id": "private", "prompt": "work"},
+                    repo_root=root, agent_root=agent_root,
+                    timestamp="2026-07-18T04:10:00Z", store=store,
+                )
+                pending = spool.enqueue(event)
+                spool.write_health("healthy", "queued", pending=1)
+                with spool.worker_lock() as acquired:
+                    self.assertTrue(acquired)
+            finally:
+                os.umask(previous)
+
+            directories = [
+                store.root.parent.parent, store.root.parent, store.root,
+                spool.root, spool.pending_dir,
+            ]
+            files = [store._path("claude-code", "private"), pending, spool.health_file, spool.lock_file]
+            for path in directories:
+                with self.subTest(directory=path):
+                    self.assertEqual(stat.S_IMODE(path.stat().st_mode), 0o700)
+            for path in files:
+                with self.subTest(file=path):
+                    self.assertEqual(stat.S_IMODE(path.stat().st_mode), 0o600)
+
+            for path in directories:
+                path.chmod(0o755)
+            for path in files:
+                path.chmod(0o644)
+            self.assertIsNotNone(store.current("claude-code", "private"))
+            self.assertEqual(spool.pending(), [pending])
+            spool.write_health("healthy", "repaired", pending=1)
+            with spool.worker_lock() as acquired:
+                self.assertTrue(acquired)
+            for path in directories:
+                with self.subTest(repaired_directory=path):
+                    self.assertEqual(stat.S_IMODE(path.stat().st_mode), 0o700)
+            for path in files:
+                with self.subTest(repaired_file=path):
+                    self.assertEqual(stat.S_IMODE(path.stat().st_mode), 0o600)
+
     def test_worker_environment_preserves_remote_based_project_identity(self):
         from orchestration_event import _worker_environment
 
@@ -275,6 +343,34 @@ class DeliveryAndCorrelationTest(unittest.TestCase):
             self.assertEqual([item["event_id"] for item in batches[0]], [first.event_id, second.event_id])
             self.assertEqual(spool.pending(), [])
             self.assertEqual(len(list(spool.delivered_dir.glob("*.json"))), 2)
+
+    def test_lock_contending_worker_waits_and_drains_event_enqueued_during_handoff(self):
+        from orchestration_event import drain_spool
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / ".git").mkdir()
+            store = CorrelationStore(root / ".agent")
+            spool = HookEventSpool(root / ".agent")
+            event = normalize_event(
+                "claude-code", "user_prompt", {"session_id": "s", "prompt": "work"},
+                repo_root=root, timestamp="2026-07-18T04:10:00Z", store=store,
+            )
+            batches = []
+            with spool.worker_lock() as acquired:
+                self.assertTrue(acquired)
+                worker = threading.Thread(target=lambda: drain_spool(
+                    spool,
+                    lambda events, _timeout: batches.append(events) or {"status": "recorded"},
+                ))
+                worker.start()
+                time.sleep(0.05)
+                self.assertTrue(worker.is_alive(), "contending worker exited instead of awaiting handoff")
+                spool.enqueue(event)
+            worker.join(timeout=2)
+            self.assertFalse(worker.is_alive())
+            self.assertEqual([[item["event_id"] for item in batch] for batch in batches], [[event.event_id]])
+            self.assertEqual(spool.pending(), [])
 
     def test_spool_worker_preserves_degraded_provider_health_after_drain(self):
         from orchestration_event import drain_spool
@@ -378,6 +474,36 @@ class DeliveryAndCorrelationTest(unittest.TestCase):
             )
             self.assertNotEqual(first.run_id, second.run_id)
             self.assertFalse(store.current("gemini", "s").finalizing)
+
+    def test_old_finalizer_cannot_clear_a_new_run_started_during_worker_handoff(self):
+        from orchestration_event import capture_hook_event
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / ".git").mkdir()
+            store = CorrelationStore(root / ".agent")
+            spool = HookEventSpool(root / ".agent")
+            first = normalize_event(
+                "claude-code", "user_prompt", {"session_id": "s", "prompt": "first"},
+                repo_root=root, timestamp="2026-07-18T04:10:00Z", store=store,
+            )
+            replacement = []
+
+            def start_worker(_project):
+                replacement.append(normalize_event(
+                    "claude-code", "user_prompt", {"session_id": "s", "prompt": "second"},
+                    repo_root=root, timestamp="2026-07-18T04:12:00Z", store=store,
+                ))
+
+            final, status = capture_hook_event(
+                "claude-code", "finalize", {"session_id": "s"},
+                repo_root=root, store=store, spool=spool, worker_starter=start_worker,
+            )
+            current = store.current("claude-code", "s")
+            self.assertEqual(status, CaptureStatus("captured", "queued"))
+            self.assertEqual(final.run_id, first.run_id)
+            self.assertEqual(current.run_id, replacement[0].run_id)
+            self.assertFalse(current.finalizing)
 
     def test_episodic_entry_carries_behavioral_event_and_run_ids(self):
         import hooks.post_execution as post
