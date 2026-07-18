@@ -148,6 +148,8 @@ class EventNormalizationTest(unittest.TestCase):
         }
         path.write_text(json.dumps(value))
         abandoned.write_text(json.dumps({**value, "session_id": "abandoned"}))
+        malformed = self.store.root / "malformed.json"
+        malformed.write_bytes(b"\xff\xfe\xfd")
         path.chmod(0o644)
         abandoned.chmod(0o644)
         event = normalize_event(
@@ -166,6 +168,10 @@ class EventNormalizationTest(unittest.TestCase):
         self.assertNotIn(legacy_prompt, abandoned.read_text())
         self.assertEqual(stat.S_IMODE(path.stat().st_mode), 0o600)
         self.assertEqual(stat.S_IMODE(abandoned.stat().st_mode), 0o600)
+        quarantined = self.store.quarantine_dir / malformed.name
+        self.assertFalse(malformed.exists())
+        self.assertTrue(quarantined.exists())
+        self.assertEqual(stat.S_IMODE(quarantined.stat().st_mode), 0o600)
 
     def test_malformed_and_unsupported_inputs_are_rejected(self):
         with self.assertRaises(HookEventError):

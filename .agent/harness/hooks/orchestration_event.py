@@ -293,7 +293,7 @@ class CorrelationStore:
                 path.chmod(0o600)
                 try:
                     correlation = Correlation(**json.loads(path.read_text(encoding="utf-8")))
-                except (json.JSONDecodeError, OSError, TypeError):
+                except (OSError, TypeError, UnicodeError, ValueError):
                     destination = self.quarantine_dir / path.name
                     os.replace(path, destination)
                     destination.chmod(0o600)
