@@ -19,6 +19,9 @@ from orchestration.orchestrator import (  # noqa: E402
     build_governance_packet, build_shadow_packet, format_packet_text,
 )
 from orchestration.providers.governance import GovernanceProvider  # noqa: E402
+from orchestration.providers.crg_evidence import (  # noqa: E402
+    CrgEvidenceProvider, EvidenceLedger,
+)
 from text import word_set  # noqa: E402
 
 
@@ -43,6 +46,18 @@ def _provider_session(identity, mode: str):
         mode=mode,
         code_root=os.environ.get("AGENTIC_MEMOS_CODE_ROOT"),
         data_root=os.environ.get("AGENTIC_MEMOS_DATA_ROOT"),
+    )
+
+
+def _evidence_provider(identity) -> CrgEvidenceProvider:
+    registry = os.environ.get("AGENTIC_CRG_REGISTRY")
+    ledger_path = Path(os.environ.get(
+        "AGENTIC_EVIDENCE_LEDGER",
+        AGENT_ROOT / "memory" / "evidence" / "ledger.jsonl",
+    ))
+    return CrgEvidenceProvider(
+        repo_root=identity.repo_root, project_id=identity.project_id,
+        registry_path=registry, ledger=EvidenceLedger(ledger_path),
     )
 
 
@@ -83,12 +98,14 @@ def health_command() -> dict:
     if config.mode == "shadow":
         with _provider_session(identity, "shadow") as provider:
             behavioral = provider.health()
+    evidence = _evidence_provider(identity).health()
     return {
         "schema": "agentic.memory.health.v1",
         "mode": config.mode,
         "project_id": identity.project_id,
         "governance": governance_health,
         "behavioral": behavioral,
+        "evidence": evidence,
     }
 
 
@@ -141,6 +158,45 @@ def export_command(limit: int, max_bytes: int) -> dict:
         return provider.export_shadow(limit=limit, max_bytes=max_bytes)
 
 
+def evidence_health_command() -> dict:
+    identity, _config = _runtime_context()
+    return _evidence_provider(identity).health()
+
+
+def evidence_request_command(
+    operation: str, query: str, target: str, intent: str,
+) -> dict:
+    identity, _config = _runtime_context()
+    provider = _evidence_provider(identity)
+    if operation == "auto":
+        if not intent:
+            raise ValueError("automatic evidence requests require --intent")
+        return provider.request_for_intent(intent)
+    return provider.request(
+        operation=operation, query=query, target=target,
+    )
+
+
+def evidence_record_command(source: str, *, test_run: bool = False) -> dict:
+    identity, _config = _runtime_context()
+    value = _read_json_input(source, max_bytes=64 * 1024)
+    if not isinstance(value, dict):
+        raise ContractError("evidence input must be one JSON object")
+    provider = _evidence_provider(identity)
+    return provider.record_test_run(value) if test_run else provider.record(value)
+
+
+def _read_json_input(source: str, *, max_bytes: int) -> object:
+    if source == "-":
+        encoded = sys.stdin.buffer.read(max_bytes + 1)
+    else:
+        with Path(source).open("rb") as stream:
+            encoded = stream.read(max_bytes + 1)
+    if len(encoded) > max_bytes:
+        raise ContractError(f"input exceeds {max_bytes} bytes")
+    return json.loads(encoded.decode("utf-8"))
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="Federated memory orchestration")
     sub = parser.add_subparsers(dest="command", required=True)
@@ -155,6 +211,20 @@ def main() -> int:
     export = sub.add_parser("export-shadow", help="bounded redacted behavioral export")
     export.add_argument("--limit", type=int, default=20)
     export.add_argument("--max-bytes", type=int, default=64 * 1024)
+    evidence = sub.add_parser("evidence", help="plan and record revision-bound code evidence")
+    evidence_sub = evidence.add_subparsers(dest="evidence_command", required=True)
+    evidence_sub.add_parser("health")
+    request = evidence_sub.add_parser("request")
+    request.add_argument("--operation", default="auto", choices=(
+        "auto", "semantic_search", "graph_query", "impact", "architecture", "change_review",
+    ))
+    request.add_argument("--intent", default="")
+    request.add_argument("--query", default="")
+    request.add_argument("--target", default="")
+    evidence_record = evidence_sub.add_parser("record")
+    evidence_record.add_argument("--input", default="-")
+    test_record = evidence_sub.add_parser("record-test")
+    test_record.add_argument("--input", default="-")
     args = parser.parse_args()
     try:
         if args.command == "recall":
@@ -167,6 +237,18 @@ def main() -> int:
             print(json.dumps(
                 export_command(args.limit, args.max_bytes), indent=2, ensure_ascii=False,
             ))
+        elif args.command == "evidence":
+            if args.evidence_command == "health":
+                value = evidence_health_command()
+            elif args.evidence_command == "request":
+                value = evidence_request_command(
+                    args.operation, args.query, args.target, args.intent,
+                )
+            elif args.evidence_command == "record":
+                value = evidence_record_command(args.input)
+            else:
+                value = evidence_record_command(args.input, test_run=True)
+            print(json.dumps(value, indent=2, ensure_ascii=False))
         return 0
     except (
         ContractError, json.JSONDecodeError, OSError, RuntimeError,

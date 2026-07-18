@@ -1,0 +1,19 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "agentic.memory.evidence-request.v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema", "request_id", "status", "operation", "tool_name", "repository_root", "repository_revision", "parameters", "warnings", "health"],
+  "properties": {
+    "schema": {"type": "string", "const": "agentic.memory.evidence-request.v1"},
+    "request_id": {"type": "string", "pattern": "evr_[0-9a-f]{32}"},
+    "status": {"type": "string", "enum": ["ready", "planned"]},
+    "operation": {"type": "string", "enum": ["semantic_search", "graph_query", "impact", "architecture", "change_review"]},
+    "tool_name": {"type": "string", "enum": ["semantic_search_nodes", "query_graph", "get_impact_radius", "get_architecture_overview", "detect_changes"]},
+    "repository_root": {"type": "string", "minLength": 1, "maxLength": 4096},
+    "repository_revision": {"type": ["string", "null"], "maxLength": 128},
+    "parameters": {"type": "object"},
+    "warnings": {"type": "array", "items": {"type": "string", "maxLength": 500}},
+    "health": {"type": "object"}
+  }
+}

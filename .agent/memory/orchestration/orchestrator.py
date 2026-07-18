@@ -2,6 +2,15 @@
 from __future__ import annotations
 
 from .contracts import ContextPacket
+from .router import LaneRequirement, route_intent
+
+
+def build_evidence_request(provider, intent: str, *, repo_backed: bool = True):
+    """Return a tool plan for structural intents without fabricating results."""
+    route = route_intent(intent, repo_backed=repo_backed)
+    if route.evidence is LaneRequirement.OFF:
+        return None
+    return provider.request_for_intent(intent)
 
 
 def build_governance_packet(provider, intent: str, top_k: int = 3) -> ContextPacket:

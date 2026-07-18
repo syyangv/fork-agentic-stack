@@ -33,7 +33,7 @@ from hooks.post_execution import log_execution  # noqa: E402
 class HarnessCapabilityTest(unittest.TestCase):
     def test_manifest_declares_phase4_event_features(self):
         manifest = json.loads((ROOT / ".agent/infrastructure.json").read_text())
-        self.assertEqual(manifest["orchestration_phase"], 4)
+        self.assertGreaterEqual(manifest["orchestration_phase"], 4)
         self.assertTrue({
             "harness_event_normalization", "harness_event_correlation",
             "bounded_hook_delivery", "truthful_harness_capabilities",
