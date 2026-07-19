@@ -179,6 +179,15 @@ def install_verified_tarball(
             "package": MEMOS_PLUGIN_NAME,
             "version": MEMOS_PLUGIN_VERSION,
         }
+        file_manifest = _build_file_manifest(staging)
+        manifest_path = staging / ".agentic-stack-files.json"
+        manifest_path.write_text(
+            json.dumps(file_manifest, separators=(",", ":"), sort_keys=True) + "\n",
+            encoding="utf-8",
+        )
+        marker["files_manifest_sha256"] = hashlib.sha256(
+            manifest_path.read_bytes()
+        ).hexdigest()
         marker_path = staging / ".agentic-stack-install.json"
         marker_path.write_text(
             json.dumps(marker, indent=2, sort_keys=True) + "\n", encoding="utf-8"
@@ -276,6 +285,39 @@ def _validate_installed_package(
         raise RuntimeError("existing MemOS code directory has an invalid version marker")
     if marker.get("integrity") != integrity or marker.get("package") != MEMOS_PLUGIN_NAME:
         raise RuntimeError("existing MemOS code directory has invalid artifact metadata")
+    manifest_path = plugin_dir / ".agentic-stack-files.json"
+    try:
+        manifest_bytes = manifest_path.read_bytes()
+        manifest = json.loads(manifest_bytes)
+    except (OSError, json.JSONDecodeError) as exc:
+        raise RuntimeError("existing MemOS code inventory is missing or invalid") from exc
+    digest = marker.get("files_manifest_sha256")
+    if (not isinstance(digest, str)
+            or not hmac.compare_digest(digest, hashlib.sha256(manifest_bytes).hexdigest())
+            or manifest != _build_file_manifest(plugin_dir)):
+        raise RuntimeError("existing MemOS code inventory mismatch")
+
+
+def _build_file_manifest(root: Path) -> dict[str, dict[str, object]]:
+    entries: dict[str, dict[str, object]] = {}
+    for directory, directories, files in os.walk(root):
+        directories.sort()
+        files.sort()
+        for name in files:
+            path = Path(directory) / name
+            relative = path.relative_to(root).as_posix()
+            if relative in {".agentic-stack-files.json", ".agentic-stack-install.json"}:
+                continue
+            if path.is_symlink():
+                entries[relative] = {"type": "symlink", "target": os.readlink(path)}
+            elif path.is_file():
+                entries[relative] = {
+                    "type": "file", "size": path.stat().st_size,
+                    "sha256": hashlib.sha256(path.read_bytes()).hexdigest(),
+                }
+            else:
+                raise RuntimeError("MemOS code inventory contains a non-regular file")
+    return entries
 
 
 def _make_tree_immutable(root: Path) -> None:

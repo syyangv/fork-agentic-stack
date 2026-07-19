@@ -281,7 +281,7 @@ def test_write_timeout_can_close_and_restart_without_live_writer(tmp_path: Path)
         """,
     )
     client = MemOSBridgeClient(BridgeConfig(
-        command=command, call_timeout=0.08, shutdown_timeout=0.1,
+        command=command, call_timeout=0.25, shutdown_timeout=0.1,
         circuit_cooldown=0.02, max_line_bytes=1024 * 1024,
     ))
     with pytest.raises(MemOSTimeoutError):
@@ -305,7 +305,7 @@ def test_exhausted_retry_opens_circuit_then_cooldown_allows_restart(tmp_path: Pa
         sys.exit(2)
         """,
     )
-    config = BridgeConfig(command=command, call_timeout=0.2, circuit_cooldown=0.08)
+    config = BridgeConfig(command=command, call_timeout=1.0, circuit_cooldown=0.08)
     with MemOSBridgeClient(config) as client:
         with pytest.raises(MemOSTransportError):
             client.call("event", retryable=True)

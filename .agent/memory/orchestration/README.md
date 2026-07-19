@@ -79,7 +79,7 @@ deferral remain terminal until an explicit reopen. An explicitly accepted
 `revalidation_needed` candidate is live-validated again, appends a new accepted
 lesson state, and only then clears its local MemOS stale override.
 
-## Full-evolution pilot safety gate
+## Opus-only full-evolution pilot safety gate
 
 Phase 8 infrastructure is opt-in through an owner-only, exact-schema
 `AGENTIC_EVOLUTION_PILOT_CONFIG` bound to one canonical repository root and
@@ -87,23 +87,36 @@ project ID. The default profile remains `lightweightMemory.enabled: true`.
 Recognized managed profiles can be switched back to lightweight mode without
 deleting behavioral data.
 
-The host boundary accepts only bounded `agentic.memory.host-dto.v1` objects;
-raw prompts, source, diffs, tool output, absolute home paths, and credential
-slots have no supported representation. Host calls use stdin rather than argv,
-an allowlisted environment, bounded process groups, owner-only transactional
-daily quotas, digest-idempotent caching, and metadata-only audit records.
-Opus review uses Claude's verified no-tools structured-output mode and remains
-non-authoritative: it cannot accept a candidate.
+The `agentic.memory.evolution-pilot.v2` contract permits only provider
+`claude_opus` and an Opus routing label. The native reverse boundary accepts
+only exact, post-normalization MemOS 2.0.10 L2/L3/skill system contracts and
+two-message role shapes. Per-operation allowlist translators reconstruct
+metadata-only DTOs (opaque IDs/digests, bounded taxonomy tags/tool names,
+numeric evidence, and outcome metadata); raw user/agent text, policy bodies,
+reflections, source, prompts, commands, paths, and tool input/output never
+cross. Unknown prompt families—including summarization and session classifiers—
+fail closed. Capture reflection scoring/synthesis, reward scoring, feedback
+repair, L3 trace bodies, and retrieval filtering are disabled in the pilot
+profile; their local deterministic/heuristic paths remain available. Host calls use stdin rather than argv,
+an allowlisted environment containing only process basics, non-secret macOS
+user/keychain routing variables, plus the existing
+`CLAUDE_CODE_OAUTH_TOKEN`, an empty owner-only working directory, Claude's
+preventive no-tools mode, bounded process groups, owner-only transactional daily
+quotas, digest-idempotent caching, and metadata-only audit records.
 
-**Do not set `AGENTIC_EVOLUTION_PILOT_CONFIG` yet.** Codex CLI 0.144.5 still
-exposes shell/web/patch/subagent tools even with its available feature disables,
-empty working directory, ignored configuration, and a read-only sandbox. There
-is therefore no preventive no-tools GPT bridge. The production provider fails
-closed with `evolution_pilot_host_handler_unavailable`, and the GPT adapter
-fails with `codex_no_tools_unavailable`, rather than mislabeling detective event
-auditing as a preventive privacy boundary. Full GPT/Opus evolution and the
-20-task held-out acceptance run remain blocked until a genuinely tool-free GPT
-surface is available.
+Opus output remains non-authoritative: it cannot accept a candidate. The
+20-task paired held-out gate binds both arms to one project/revision and one
+canonical task-definition plus harness protocol, resolves canonical CRG
+test-run evidence, and requires the assisted execution to reference the exact
+orchestrator-recorded context and skill-injection digests. It requires no
+success-rate regression and at least 10% median cost/recovery improvement among
+successful pairs before the pilot can be accepted. GPT/Codex hosting remains
+blocked: `CodexGPTAdapter` fails closed with `codex_no_tools_unavailable` until
+Codex offers a genuinely preventive no-tools execution surface.
+
+The immutable MemOS code prefix carries an installer-generated inventory of
+every regular file and internal symlink. Activation recomputes the complete
+path/type/size/SHA-256 set and rejects modified or extra executable content.
 
 ## Behavioral backup and rollback
 
