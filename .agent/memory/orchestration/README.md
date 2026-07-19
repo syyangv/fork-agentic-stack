@@ -78,3 +78,50 @@ rows, verification metadata, and lesson transitions. Human rejection and
 deferral remain terminal until an explicit reopen. An explicitly accepted
 `revalidation_needed` candidate is live-validated again, appends a new accepted
 lesson state, and only then clears its local MemOS stale override.
+
+## Full-evolution pilot safety gate
+
+Phase 8 infrastructure is opt-in through an owner-only, exact-schema
+`AGENTIC_EVOLUTION_PILOT_CONFIG` bound to one canonical repository root and
+project ID. The default profile remains `lightweightMemory.enabled: true`.
+Recognized managed profiles can be switched back to lightweight mode without
+deleting behavioral data.
+
+The host boundary accepts only bounded `agentic.memory.host-dto.v1` objects;
+raw prompts, source, diffs, tool output, absolute home paths, and credential
+slots have no supported representation. Host calls use stdin rather than argv,
+an allowlisted environment, bounded process groups, owner-only transactional
+daily quotas, digest-idempotent caching, and metadata-only audit records.
+Opus review uses Claude's verified no-tools structured-output mode and remains
+non-authoritative: it cannot accept a candidate.
+
+**Do not set `AGENTIC_EVOLUTION_PILOT_CONFIG` yet.** Codex CLI 0.144.5 still
+exposes shell/web/patch/subagent tools even with its available feature disables,
+empty working directory, ignored configuration, and a read-only sandbox. There
+is therefore no preventive no-tools GPT bridge. The production provider fails
+closed with `evolution_pilot_host_handler_unavailable`, and the GPT adapter
+fails with `codex_no_tools_unavailable`, rather than mislabeling detective event
+auditing as a preventive privacy boundary. Full GPT/Opus evolution and the
+20-task held-out acceptance run remain blocked until a genuinely tool-free GPT
+surface is available.
+
+## Behavioral backup and rollback
+
+MemOS 2.0.10 has no backup RPC. Every compliant provider session holds the
+stable project lifecycle lock for its lifetime. The lock is a sibling of the
+project root rather than a child, so its inode survives an atomic project-tree
+swap and already-waiting providers cannot bypass restore exclusion.
+`memos_backup.create_project_backup`
+first acquires that same lock (and therefore cannot overlap a live compliant
+bridge session), validates the managed profile and SQLite health, then
+snapshots the entire project root
+(journal, profile/config, MemOS data including SQLite WAL/SHM state, skills,
+logs, and daemon state) into an owner-only directory with a SHA-256 manifest.
+The bridge must be cooperatively closed before backup or restore. Restore
+verifies every digest, stages a complete tree, validates its managed config and
+all runtime SQLite databases with read-only `quick_check`, atomically swaps it
+into place, and preserves the replaced tree as an owner-only rollback
+directory. It never copies only a live `memos.db` and never deletes the prior
+state automatically. Callers must still run bridge `core.health` before
+resuming event delivery; the local restore helper cannot attest a process that
+has intentionally not yet been restarted.

@@ -60,6 +60,7 @@ def _provider_session(identity, mode: str, *, assist_deadline: float | None = No
         mode=mode,
         code_root=os.environ.get("AGENTIC_MEMOS_CODE_ROOT"),
         data_root=os.environ.get("AGENTIC_MEMOS_DATA_ROOT"),
+        repo_root=identity.repo_root,
         assist_deadline=assist_deadline,
     )
 

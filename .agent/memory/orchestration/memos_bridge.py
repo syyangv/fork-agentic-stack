@@ -16,13 +16,15 @@ import time
 from collections import deque
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Mapping, Sequence
+from typing import Any, Callable, Mapping, Sequence
 
 
 PINNED_MEMOS_VERSION = "2.0.10"
 _UPSTREAM_CONSOLE_LOG = re.compile(
     rb"^\d{2}:\d{2}:\d{2}\.\d{3} (?:TRACE|DEBUG|INFO|WARN|ERROR|FATAL)\s"
 )
+_REVERSE_REQUEST_ID = re.compile(r"^srv-[1-9][0-9]*$")
+ReverseRequestHandler = Callable[[Any], Any]
 PINNED_CAPABILITIES = (
     "core.health",
     "core.shutdown",
@@ -100,16 +102,30 @@ class BridgeConfig:
     circuit_cooldown: float = 5.0
     max_line_bytes: int = 1024 * 1024
     stderr_history_bytes: int = 16 * 1024
+    request_handlers: Mapping[str, ReverseRequestHandler] | None = None
+    request_timeout: float = 45.0
+    max_request_handlers: int = 1
 
     def __post_init__(self) -> None:
         if not self.command:
             raise ValueError("bridge command must not be empty")
-        if self.call_timeout <= 0 or self.shutdown_timeout <= 0:
+        if (
+            self.call_timeout <= 0
+            or self.shutdown_timeout <= 0
+            or self.request_timeout <= 0
+        ):
             raise ValueError("bridge timeouts must be positive")
         if self.circuit_cooldown < 0:
             raise ValueError("circuit cooldown must not be negative")
         if self.max_line_bytes < 64:
             raise ValueError("maximum line size must be at least 64 bytes")
+        if self.max_request_handlers < 1:
+            raise ValueError("maximum reverse request handlers must be positive")
+        for method, handler in (self.request_handlers or {}).items():
+            if method != "host.llm.complete":
+                raise ValueError(f"reverse request method is not allowed: {method!r}")
+            if not callable(handler):
+                raise ValueError(f"reverse request handler for {method!r} is not callable")
 
 
 class MemOSBridgeClient:
@@ -125,6 +141,9 @@ class MemOSBridgeClient:
         self._write_lock = threading.Lock()
         self._stop_lock = threading.Lock()
         self._writer_threads: set[threading.Thread] = set()
+        self._request_threads: set[threading.Thread] = set()
+        self._request_slots = threading.BoundedSemaphore(config.max_request_handlers)
+        self._response_slots = threading.BoundedSemaphore(config.max_request_handlers)
         self._stderr = deque()  # type: deque[bytes]
         self._stderr_size = 0
         self._closed = False
@@ -463,6 +482,9 @@ class MemOSBridgeClient:
             if "id" not in message:  # JSON-RPC notification; intentionally ignored.
                 continue
             request_id = message["id"]
+            if isinstance(request_id, str):
+                self._dispatch_reverse_request(process, message)
+                continue
             with self._state_lock:
                 target = self._pending.pop(request_id, None)
             # A response can race a timeout. Late responses must not poison the
@@ -478,8 +500,22 @@ class MemOSBridgeClient:
             if not isinstance(message.get("method"), str):
                 raise MemOSProtocolError("notification has no method")
             return
-        if not isinstance(message["id"], int) or isinstance(message["id"], bool):
+        request_id = message["id"]
+        if isinstance(request_id, str):
+            if not _REVERSE_REQUEST_ID.fullmatch(request_id):
+                raise MemOSProtocolError("reverse request id is invalid")
+            if not isinstance(message.get("method"), str):
+                raise MemOSProtocolError("reverse request has no method")
+            if "result" in message or "error" in message:
+                raise MemOSProtocolError("reverse request cannot contain result or error")
+            params = message.get("params")
+            if params is not None and not isinstance(params, (dict, list)):
+                raise MemOSProtocolError("reverse request params are invalid")
+            return
+        if not isinstance(request_id, int) or isinstance(request_id, bool):
             raise MemOSProtocolError("response id must be an integer")
+        if "method" in message:
+            raise MemOSProtocolError("response cannot contain method")
         has_result, has_error = "result" in message, "error" in message
         if has_result == has_error:
             raise MemOSProtocolError("response must contain exactly one of result or error")
@@ -492,6 +528,157 @@ class MemOSBridgeClient:
                 or not isinstance(error.get("message"), str)
             ):
                 raise MemOSProtocolError("response error object is invalid")
+
+    def _dispatch_reverse_request(
+        self, process: subprocess.Popen[bytes], message: Mapping[str, Any],
+    ) -> None:
+        """Run a narrowly allowlisted server request without taking the operation lock."""
+        request_id = message["id"]
+        method = message["method"]
+        handler = (self.config.request_handlers or {}).get(method)
+        if handler is None:
+            self._start_reverse_response(
+                process,
+                request_id,
+                {"error": {"code": -32601, "message": "reverse method is not allowed"}},
+            )
+            return
+        if not self._request_slots.acquire(blocking=False):
+            self._start_reverse_response(
+                process,
+                request_id,
+                {"error": {"code": -32003, "message": "reverse handler is busy"}},
+            )
+            return
+
+        responded = False
+        response_lock = threading.Lock()
+
+        def respond_once(body: Mapping[str, Any]) -> None:
+            nonlocal responded
+            with response_lock:
+                if responded:
+                    return
+                responded = True
+            self._send_reverse_response(process, request_id, body)
+
+        def timed_out() -> None:
+            respond_once(
+                {"error": {"code": -32001, "message": "reverse handler timed out"}}
+            )
+
+        timer = threading.Timer(self.config.request_timeout, timed_out)
+        timer.daemon = True
+
+        def run() -> None:
+            try:
+                try:
+                    result = handler(message.get("params"))
+                    respond_once({"result": result})
+                except BaseException:
+                    respond_once(
+                        {"error": {"code": -32000, "message": "reverse handler failed"}}
+                    )
+            finally:
+                timer.cancel()
+                self._request_slots.release()
+                with self._state_lock:
+                    self._request_threads.discard(threading.current_thread())
+
+        worker = threading.Thread(target=run, name="memos-reverse", daemon=True)
+        with self._state_lock:
+            self._request_threads.add(worker)
+        try:
+            timer.start()
+            worker.start()
+        except RuntimeError:
+            timer.cancel()
+            self._request_slots.release()
+            with self._state_lock:
+                self._request_threads.discard(worker)
+            self._start_reverse_response(
+                process,
+                request_id,
+                {"error": {"code": -32000, "message": "reverse handler failed"}},
+            )
+
+    def _start_reverse_response(
+        self, process: subprocess.Popen[bytes], request_id: str, body: Mapping[str, Any],
+    ) -> None:
+        """Send immediate reverse errors with a strictly bounded worker count."""
+        if not self._response_slots.acquire(blocking=False):
+            error = MemOSProtocolError(
+                "reverse response capacity exceeded", ambiguous=True,
+            )
+            self._fail_all(error, process)
+            self._stop_process(process)
+            return
+
+        def run() -> None:
+            try:
+                self._send_reverse_response(process, request_id, body)
+            finally:
+                self._response_slots.release()
+                with self._state_lock:
+                    self._request_threads.discard(threading.current_thread())
+
+        worker = threading.Thread(target=run, name="memos-reverse-response", daemon=True)
+        with self._state_lock:
+            self._request_threads.add(worker)
+        try:
+            worker.start()
+        except RuntimeError:
+            self._response_slots.release()
+            with self._state_lock:
+                self._request_threads.discard(worker)
+            error = MemOSProtocolError(
+                "reverse response worker failed", ambiguous=True,
+            )
+            self._fail_all(error, process)
+            self._stop_process(process)
+
+    def _send_reverse_response(
+        self, process: subprocess.Popen[bytes], request_id: str, body: Mapping[str, Any],
+    ) -> None:
+        response = {"jsonrpc": "2.0", "id": request_id, **body}
+        try:
+            payload = json.dumps(
+                response, separators=(",", ":"), ensure_ascii=False, allow_nan=False,
+            ).encode("utf-8") + b"\n"
+        except (TypeError, ValueError):
+            payload = self._reverse_error_payload(
+                request_id, -32000, "reverse handler returned invalid JSON",
+            )
+        if len(payload) > self.config.max_line_bytes:
+            payload = self._reverse_error_payload(
+                request_id, -32002, "reverse result exceeds maximum line size",
+            )
+        if len(payload) > self.config.max_line_bytes:
+            self._fail_all(
+                MemOSProtocolError("reverse error exceeds maximum line size", ambiguous=True),
+                process,
+            )
+            self._stop_process(process)
+            return
+        try:
+            self._write_payload(
+                process, payload, time.monotonic() + self.config.request_timeout,
+            )
+        except MemOSBridgeError as exc:
+            self._fail_all(exc, process)
+
+    @staticmethod
+    def _reverse_error_payload(request_id: str, code: int, message: str) -> bytes:
+        return json.dumps(
+            {
+                "jsonrpc": "2.0",
+                "id": request_id,
+                "error": {"code": code, "message": message},
+            },
+            separators=(",", ":"),
+            ensure_ascii=False,
+            allow_nan=False,
+        ).encode("utf-8") + b"\n"
 
     def _drain_stderr(self, process: subprocess.Popen[bytes]) -> None:
         assert process.stderr is not None
