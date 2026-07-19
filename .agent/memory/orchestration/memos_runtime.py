@@ -7,6 +7,8 @@ MEMOS_HOME are never children of that code directory.
 from __future__ import annotations
 
 import json
+import hashlib
+import hmac
 import os
 import re
 import stat
@@ -20,12 +22,26 @@ from .memos_journal import _project_lock, stable_project_lock_path
 
 
 MEMOS_PLUGIN_VERSION = "2.0.10"
+MEMOS_PLUGIN_SHASUM = "d75850ce7340d56b8a255831969950b9fbf96995"
+MEMOS_PLUGIN_INTEGRITY = (
+    "sha512-Rg2NIjGAObTC3zFQ4wOzB+hxR7qHvHWMVI5Nxc+7QEi5wpBUibkniz3SdHOPrbbCkqhatS0DjZ+aUexl/9Q+EA=="
+)
+MEMOS_PINNED_FILE_SHA256 = {
+    "node_modules/@memtensor/memos-local-plugin/dist/bridge.cjs":
+        "fc58eb07a35b6fec9f74646f98dca90ac5576d43ed2d87cad211241efc8a8ad7",
+    "node_modules/@memtensor/memos-local-plugin/package.json":
+        "23455d0245a681f2939236451cf23cb02593c0f0b80413374bd5cfea197f90c2",
+    "package-lock.json":
+        "4da221c70a06c5a14948af73c31661957bb7a36832ab764ee6a3c884cd0e7c2b",
+}
+_PLUGIN_MANIFEST = ".agentic-stack-files.json"
+_PLUGIN_MARKER = ".agentic-stack-install.json"
 _PROJECT_ID = re.compile(r"[0-9a-f]{16}\Z")
 _MODEL_NAME = re.compile(r"[A-Za-z0-9][A-Za-z0-9._:/-]{0,127}\Z")
-_PILOT_SCHEMA = "agentic.memory.evolution-pilot.v1"
+_PILOT_SCHEMA = "agentic.memory.evolution-pilot.v2"
 _PILOT_KEYS = {
-    "schema", "enabled", "project_id", "repo_root", "gpt_model",
-    "opus_model", "daily_caps", "min_distinct_episodes", "timeout_seconds",
+    "schema", "enabled", "project_id", "repo_root", "provider", "model",
+    "daily_caps", "min_distinct_episodes", "timeout_seconds",
 }
 _DAILY_CAP_KEYS = {"policy", "world_model", "skill", "other"}
 
@@ -36,8 +52,8 @@ class EvolutionPilotConfig:
 
     project_id: str
     repo_root: str
-    gpt_model: str
-    opus_model: str
+    provider: str
+    model: str
     daily_caps: Mapping[str, int]
     min_distinct_episodes: int
     timeout_seconds: float
@@ -88,6 +104,86 @@ def runtime_paths(
         home=home,
         config_file=memos_home / "config.yaml",
     )
+
+
+def validate_pinned_plugin(plugin_dir: str | Path) -> Path:
+    """Require the exact installer-attested immutable MemOS 2.0.10 tree."""
+    root = Path(plugin_dir)
+    _reject_symlink_components(root)
+    package_dir = root / "node_modules/@memtensor/memos-local-plugin"
+    bridge = package_dir / "dist/bridge.cjs"
+    try:
+        marker = json.loads((root / _PLUGIN_MARKER).read_text("utf-8"))
+        manifest_bytes = (root / _PLUGIN_MANIFEST).read_bytes()
+        manifest = json.loads(manifest_bytes)
+        package = json.loads((package_dir / "package.json").read_text("utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        raise RuntimeError("pinned MemOS 2.0.10 install is unavailable") from exc
+    expected_marker = {
+        "artifact_sha1": MEMOS_PLUGIN_SHASUM,
+        "integrity": MEMOS_PLUGIN_INTEGRITY,
+        "package": "@memtensor/memos-local-plugin",
+        "version": MEMOS_PLUGIN_VERSION,
+    }
+    manifest_digest = marker.pop("files_manifest_sha256", None)
+    if (marker != expected_marker
+            or not isinstance(manifest_digest, str)
+            or not hmac.compare_digest(
+                manifest_digest, hashlib.sha256(manifest_bytes).hexdigest()
+            )
+            or package.get("version") != MEMOS_PLUGIN_VERSION
+            or not bridge.is_file()):
+        raise RuntimeError("pinned MemOS 2.0.10 install attestation is invalid")
+    if manifest != build_plugin_file_manifest(root):
+        raise RuntimeError("pinned MemOS 2.0.10 file inventory mismatch")
+    if root.is_symlink() or bridge.is_symlink() or root.stat().st_mode & 0o222:
+        raise RuntimeError("pinned MemOS 2.0.10 install must be immutable")
+    for relative, expected_digest in MEMOS_PINNED_FILE_SHA256.items():
+        path = root / relative
+        if path.is_symlink() or not path.is_file():
+            raise RuntimeError("pinned MemOS 2.0.10 required file is unsafe")
+        actual = hashlib.sha256(path.read_bytes()).hexdigest()
+        if actual != expected_digest:
+            raise RuntimeError("pinned MemOS 2.0.10 required file digest mismatch")
+    resolved_root = root.resolve(strict=True)
+    for directory, directories, files in os.walk(root):
+        for name in (*directories, *files):
+            path = Path(directory) / name
+            if path.is_symlink():
+                try:
+                    target = path.resolve(strict=True)
+                except OSError as exc:
+                    raise RuntimeError("pinned MemOS tree has a broken symlink") from exc
+                if not target.is_relative_to(resolved_root):
+                    raise RuntimeError("pinned MemOS tree symlink escapes its root")
+            elif path.stat().st_mode & 0o222:
+                raise RuntimeError("pinned MemOS 2.0.10 install contains writable code")
+    return bridge
+
+
+def build_plugin_file_manifest(root: str | Path) -> dict[str, dict[str, object]]:
+    """Return an exact path/type/size/digest inventory for installed code."""
+    root = Path(root)
+    entries: dict[str, dict[str, object]] = {}
+    for directory, directories, files in os.walk(root):
+        directories.sort()
+        files.sort()
+        for name in files:
+            path = Path(directory) / name
+            relative = path.relative_to(root).as_posix()
+            if relative in {_PLUGIN_MANIFEST, _PLUGIN_MARKER}:
+                continue
+            if path.is_symlink():
+                entries[relative] = {"type": "symlink", "target": os.readlink(path)}
+                continue
+            if not path.is_file():
+                raise RuntimeError("pinned MemOS tree contains a non-regular file")
+            entries[relative] = {
+                "type": "file",
+                "size": path.stat().st_size,
+                "sha256": hashlib.sha256(path.read_bytes()).hexdigest(),
+            }
+    return entries
 
 
 def build_memos_config(
@@ -153,9 +249,20 @@ def build_memos_config(
         config["llm"]["model"] = host_model
         config["algorithm"] = {
             "lightweightMemory": {"enabled": False},
+            "capture": {
+                "alphaScoring": False,
+                "synthReflections": False,
+                "batchMode": "per_step",
+            },
+            "reward": {"llmScoring": False},
             "l2Induction": {"minEpisodesForInduction": min_distinct_episodes},
-            "l3Abstraction": {"minPolicies": 2, "minPolicySupport": 3},
+            "l3Abstraction": {
+                "minPolicies": 2, "minPolicySupport": 3,
+                "traceEvidencePerPolicy": 0,
+            },
             "skill": {"minSupport": 3, "candidateTrials": 3},
+            "feedback": {"useLlm": False},
+            "retrieval": {"llmFilterEnabled": False},
         }
     return config
 
@@ -208,13 +315,12 @@ def load_evolution_pilot_config(
     canonical_root = str(root_path)
     if payload["repo_root"] != canonical_root:
         raise ValueError("evolution pilot config repo_root does not match")
-    for field in ("gpt_model", "opus_model"):
-        if not isinstance(payload[field], str) or _MODEL_NAME.fullmatch(payload[field]) is None:
-            raise ValueError(f"evolution pilot config {field} is invalid")
-    if not payload["gpt_model"].lower().startswith("gpt"):
-        raise ValueError("evolution pilot gpt_model must be a GPT routing label")
-    if "opus" not in payload["opus_model"].lower():
-        raise ValueError("evolution pilot opus_model must be an Opus routing label")
+    if payload["provider"] != "claude_opus":
+        raise ValueError("evolution pilot provider must be claude_opus")
+    if not isinstance(payload["model"], str) or _MODEL_NAME.fullmatch(payload["model"]) is None:
+        raise ValueError("evolution pilot model is invalid")
+    if "opus" not in payload["model"].lower():
+        raise ValueError("evolution pilot model must be an Opus routing label")
     caps = payload["daily_caps"]
     if not isinstance(caps, dict) or set(caps) != _DAILY_CAP_KEYS:
         raise ValueError("evolution pilot daily_caps has an unsupported shape")
@@ -229,8 +335,8 @@ def load_evolution_pilot_config(
     return EvolutionPilotConfig(
         project_id=project_id,
         repo_root=canonical_root,
-        gpt_model=payload["gpt_model"],
-        opus_model=payload["opus_model"],
+        provider=payload["provider"],
+        model=payload["model"],
         daily_caps=MappingProxyType(dict(caps)),
         min_distinct_episodes=episodes,
         timeout_seconds=float(timeout),

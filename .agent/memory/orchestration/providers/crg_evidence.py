@@ -469,6 +469,9 @@ class CrgEvidenceProvider:
         allowed = {
             "repository_root", "repository_revision", "command_digest",
             "exit_code", "completed_at", "test_ids", "source_relation",
+            "duration_ms", "recovery_steps",
+            "protocol_digest",
+            "skill_injection_evidence_id", "injected_skill_digest",
         }
         extras = set(raw) - allowed
         if extras:
@@ -489,11 +492,38 @@ class CrgEvidenceProvider:
         if contains_sensitive_plaintext(test_ids):
             raise CrgEvidenceError("test_ids contain sensitive plaintext")
         completed_at = _utc(str(raw.get("completed_at") or ""))
+        duration_ms = raw.get("duration_ms")
+        recovery_steps = raw.get("recovery_steps")
+        protocol_digest = str(raw.get("protocol_digest") or "")
+        if protocol_digest and not _sha256_value(protocol_digest):
+            raise CrgEvidenceError("protocol_digest must be sha256:<64 hex>")
+        if (duration_ms is not None
+                and (type(duration_ms) is not int or not 1 <= duration_ms <= 86_400_000)):
+            raise CrgEvidenceError("test duration_ms must be a bounded positive integer")
+        if (recovery_steps is not None
+                and (type(recovery_steps) is not int or not 1 <= recovery_steps <= 1_000_000)):
+            raise CrgEvidenceError("test recovery_steps must be a bounded positive integer")
         locator = {
             "command_digest": digest, "exit_code": exit_code,
             "test_ids": test_ids, "completed_at": completed_at,
             "executed_test": True,
         }
+        if protocol_digest:
+            locator["protocol_digest"] = protocol_digest
+        injection_id = str(raw.get("skill_injection_evidence_id") or "")
+        skill_digest = str(raw.get("injected_skill_digest") or "")
+        if bool(injection_id) != bool(skill_digest):
+            raise CrgEvidenceError("skill injection evidence must be supplied as a pair")
+        if injection_id:
+            if (re.fullmatch(r"evi_[0-9a-f]{64}", injection_id) is None
+                    or not _sha256_value(skill_digest)):
+                raise CrgEvidenceError("skill injection evidence is invalid")
+            locator["skill_injection_evidence_id"] = injection_id
+            locator["injected_skill_digest"] = skill_digest
+        if duration_ms is not None:
+            locator["duration_ms"] = duration_ms
+        if recovery_steps is not None:
+            locator["recovery_steps"] = recovery_steps
         seed = canonical_json({
             "kind": "test_run", "project_id": self.project_id,
             "revision": revision, "locator": locator,

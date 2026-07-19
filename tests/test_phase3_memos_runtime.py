@@ -208,6 +208,7 @@ class MemosInstallTest(unittest.TestCase):
             self.assertNotIn("@memtensor/memos-local-plugin@2.0.10", command)
             self.assertEqual(result.version, MEMOS_PLUGIN_VERSION)
             self.assertEqual(stat.S_IMODE(result.plugin_dir.stat().st_mode), 0o555)
+            self.assertTrue((result.plugin_dir / ".agentic-stack-files.json").is_file())
 
             data = root / "state" / PROJECT_ID / "keep.db"
             data.parent.mkdir(parents=True)
@@ -220,6 +221,18 @@ class MemosInstallTest(unittest.TestCase):
             self.assertTrue(again.already_installed)
             self.assertEqual(len(calls), 1)
             self.assertEqual(data.read_text(), "keep")
+            node_modules = result.plugin_dir / "node_modules"
+            os.chmod(node_modules, 0o755)
+            extra = node_modules / "unattested.js"
+            extra.write_text("arbitrary executable code")
+            extra.chmod(0o444)
+            os.chmod(node_modules, 0o555)
+            with self.assertRaisesRegex(RuntimeError, "inventory mismatch"):
+                install_verified_tarball(
+                    artifact, root / "code", integrity=integrity, shasum=shasum,
+                    node_version="20.0.0", npm_command=("offline-npm",), runner=fake_run,
+                    lock_asset_dir=lock_dir,
+                )
 
 
 if __name__ == "__main__":
