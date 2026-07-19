@@ -27,6 +27,8 @@ from orchestration.providers.governance import GovernanceProvider  # noqa: E402
 from orchestration.providers.crg_evidence import (  # noqa: E402
     CrgEvidenceProvider, EvidenceLedger,
 )
+from orchestration.revalidation import record_retrieval_outcome  # noqa: E402
+from orchestration.promotion import stage_behavioral_candidates  # noqa: E402
 from text import word_set  # noqa: E402
 
 
@@ -211,6 +213,8 @@ def record_command(source: str) -> dict:
     with _provider_session(identity, mode) as provider:
         results = [provider.record(event) for event in events]
         health = provider.health()
+    for event in events:
+        record_retrieval_outcome(AGENT_ROOT, event)
     if gate is not None:
         health = {**health, "assist_gate": gate.health(), "effective_mode": mode}
     totals = {
@@ -266,6 +270,28 @@ def evidence_record_command(source: str, *, test_run: bool = False) -> dict:
     return provider.record_test_run(value) if test_run else provider.record(value)
 
 
+def candidates_command(intent: str, top: int, stage: bool) -> dict:
+    identity, _config = _runtime_context()
+    try:
+        with _provider_session(identity, "assist") as provider:
+            candidates, health = provider.discover_candidates(intent, top_k=top)
+    except Exception as exc:
+        return {
+            "status": "degraded", "candidates": [], "staged": 0,
+            "health": {"status": "degraded", "warnings": [
+                "behavioral_unavailable",
+                f"behavioral_provider_error:{type(exc).__name__}",
+            ]},
+        }
+    staged = stage_behavioral_candidates(
+        candidates, AGENT_ROOT / "memory/candidates",
+    ) if stage else 0
+    return {
+        "status": "staged" if stage else "preview",
+        "candidates": candidates, "staged": staged, "health": health,
+    }
+
+
 def _read_json_input(source: str, *, max_bytes: int) -> object:
     if source == "-":
         encoded = sys.stdin.buffer.read(max_bytes + 1)
@@ -295,6 +321,10 @@ def main() -> int:
     export = sub.add_parser("export-shadow", help="bounded redacted behavioral export")
     export.add_argument("--limit", type=int, default=20)
     export.add_argument("--max-bytes", type=int, default=64 * 1024)
+    candidates = sub.add_parser("candidates", help="preview bridge-observable MemOS candidates")
+    candidates.add_argument("--intent", required=True)
+    candidates.add_argument("--top", type=int, default=20)
+    candidates.add_argument("--stage", action="store_true")
     evidence = sub.add_parser("evidence", help="plan and record revision-bound code evidence")
     evidence_sub = evidence.add_subparsers(dest="evidence_command", required=True)
     evidence_sub.add_parser("health")
@@ -323,6 +353,11 @@ def main() -> int:
         elif args.command == "export-shadow":
             print(json.dumps(
                 export_command(args.limit, args.max_bytes), indent=2, ensure_ascii=False,
+            ))
+        elif args.command == "candidates":
+            print(json.dumps(
+                candidates_command(args.intent, args.top, args.stage),
+                indent=2, ensure_ascii=False,
             ))
         elif args.command == "evidence":
             if args.evidence_command == "health":

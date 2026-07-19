@@ -15,6 +15,7 @@ from .memos_runtime import (
     runtime_environment,
 )
 from .providers.memos_local import MemosLocalProvider
+from .revalidation import RevalidationIndex
 
 
 @dataclass(slots=True)
@@ -105,6 +106,9 @@ def create_memos_provider(
         ))
     provider = MemosLocalProvider(
         project_id=project_id, journal=journal, client=client, mode=mode,
+        revalidation_index=RevalidationIndex(
+            agent_root / "memory" / "evidence" / "revalidation.sqlite3"
+        ),
     )
     return MemosProviderSession(
         provider=provider, client=client, assist_deadline=assist_deadline,

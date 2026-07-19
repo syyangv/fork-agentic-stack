@@ -249,6 +249,10 @@ def _validate(
         if value > schema.get("maximum", value):
             raise SchemaValidationError(f"{path}: value above maximum")
     if isinstance(value, Mapping):
+        if len(value) < schema.get("minProperties", 0):
+            raise SchemaValidationError(f"{path}: object below minProperties")
+        if len(value) > schema.get("maxProperties", len(value)):
+            raise SchemaValidationError(f"{path}: object exceeds maxProperties")
         required = schema.get("required", [])
         missing = [name for name in required if name not in value]
         if missing:

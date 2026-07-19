@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "stack_version": "0.18.0",
-  "orchestration_phase": 6,
+  "orchestration_phase": 7,
   "features": [
     "latest_state_recall",
     "serialized_candidate_lifecycle",
@@ -39,6 +39,13 @@
     "authority_ordered_fusion",
     "retrieval_preview",
     "lifecycle_retrieval_observations",
-    "local_governance_fts"
+    "local_governance_fts",
+    "behavioral_candidate_translation",
+    "human_only_candidate_promotion",
+    "evidence_bound_graduation",
+    "support_contradiction_updates",
+    "crg_linked_revalidation",
+    "behavioral_stale_overrides",
+    "unified_memory_review"
   ]
 }

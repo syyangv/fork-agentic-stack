@@ -38,7 +38,7 @@ class MemosLocalProvider:
 
     def __init__(
         self, *, project_id: str, journal: MemosDeliveryJournal,
-        client: Any | None, mode: str = "shadow",
+        client: Any | None, mode: str = "shadow", revalidation_index: Any | None = None,
     ) -> None:
         if mode not in {"off", "shadow", "assist"}:
             raise ValueError("MemOS provider mode must be off, shadow, or assist")
@@ -46,6 +46,7 @@ class MemosLocalProvider:
         self.journal = journal
         self.client = client
         self.mode = mode
+        self.revalidation_index = revalidation_index
         self._validated_health: dict | None = None
         self._assist_deadline: float | None = None
         self._session_lock_error: str | None = None
@@ -395,6 +396,54 @@ class MemosLocalProvider:
         """Persist only items selected by fusion, never all raw provider hits."""
         return self.journal.record_retrievals(run_id, item_ids, reason)
 
+    def discover_candidates(self, intent: str, *, top_k: int = 20):
+        """Translate only bridge-observable enriched reads into staged DTOs."""
+        from ..promotion import PromotionError, translate_memos_record
+
+        items, health = self.retrieve(
+            intent, top_k=top_k, reason="candidate_review", run_id=None,
+        )
+        candidates = []
+        for item in items:
+            if item.type not in {"policy", "world_model", "skill"}:
+                continue
+            locator = item.provenance[0].get("locator", {})
+            record = {
+                "id": item.provenance[0].get("source_id"),
+                "ownerAgentKind": "hermes", "ownerProfileId": self.project_id,
+                "ownerWorkspaceId": self.project_id,
+                "status": locator.get("upstream_status"),
+                "support": locator.get("support"), "gain": locator.get("gain"),
+                "trialsAttempted": locator.get("trials_attempted"),
+                "trialsPassed": locator.get("trials_passed"),
+                "experienceType": locator.get("experience_type"),
+            }
+            candidate_fields = locator.get("candidate_fields")
+            if isinstance(candidate_fields, Mapping):
+                record.update(candidate_fields)
+            evidence_refs = locator.get("evidence_refs", [])
+            if item.type == "skill":
+                record.setdefault("name", item.summary)
+                record.setdefault("invocationGuide", item.summary)
+                record.setdefault("evidenceAnchors", evidence_refs)
+            elif item.type == "policy":
+                record.setdefault("title", item.summary)
+                record.setdefault("procedure", item.summary)
+                record.setdefault("sourceTraceIds", evidence_refs)
+            else:
+                record.setdefault("title", item.summary)
+                record.setdefault("body", item.summary)
+                record.setdefault("policyIds", evidence_refs)
+            try:
+                candidates.append(
+                    translate_memos_record(item.type, record, self.project_id)
+                )
+            except PromotionError:
+                health.setdefault("warnings", []).append(
+                    "behavioral_candidate_translation_rejected"
+                )
+        return candidates, health
+
     def _translate_hits(
         self, result: Any, warnings: list[str], *, top_k: int,
         namespace: Mapping[str, str], deadline: float,
@@ -450,6 +499,15 @@ class MemosLocalProvider:
                 if contains_sensitive_plaintext(detail):
                     warnings.append("behavioral_sensitive_hit")
                     continue
+                if (
+                    self.revalidation_index is not None
+                    and self.revalidation_index.is_provider_stale(
+                        "memos-local", str(raw.get("refId") or ""),
+                        timeout=min(0.01, _remaining(deadline)),
+                    )
+                ):
+                    warnings.append("behavioral_revalidation_needed")
+                    continue
                 translated.append(self._translate_hit(raw, detail, kind))
             except (ContractError, TypeError, ValueError, RuntimeError):
                 warnings.append("behavioral_invalid_hit")
@@ -504,17 +562,27 @@ class MemosLocalProvider:
         score = _bounded_float(raw.get("score", 0.0))
         support = _optional_int(detail.get("support"))
         gain = _optional_signed_float(detail.get("gain"))
+        trials_attempted = _optional_int(detail.get("trialsAttempted"))
+        trials_passed = _optional_int(detail.get("trialsPassed"))
         evidence_refs = _detail_evidence(kind, detail)
+        candidate_fields = _candidate_fields(kind, detail)
         observed = _observed_at(detail.get("updatedAt", detail.get("ts")))
         locator = {
             "tier": str(raw.get("tier", ""))[:20],
             "upstream_type": str(raw.get("refKind", kind))[:100],
             "upstream_status": str(detail.get("status", "raw"))[:100],
             "support": support, "gain": gain, "evidence_refs": evidence_refs,
+            "trials_attempted": trials_attempted,
+            "trials_passed": trials_passed,
+            "experience_type": str(detail.get("experienceType", ""))[:100],
+            "candidate_fields": candidate_fields,
         }
         digest = hashlib.sha256(canonical_json({
             "hit": raw, "status": detail.get("status"),
             "support": support, "gain": gain, "evidence_refs": evidence_refs,
+            "trials_attempted": trials_attempted,
+            "trials_passed": trials_passed,
+            "candidate_fields": candidate_fields,
         }).encode("utf-8")).hexdigest()
         provenance = ProvenanceRef(
             kind=kind, provider="memos-local", source_id=source_id,
@@ -689,7 +757,8 @@ def _remaining(deadline: float) -> float:
 
 def _owned_by_project(detail: Mapping[str, Any], project_id: str) -> bool:
     return (
-        detail.get("ownerProfileId") == project_id
+        detail.get("ownerAgentKind") == "hermes"
+        and detail.get("ownerProfileId") == project_id
         and detail.get("ownerWorkspaceId") == project_id
     )
 
@@ -710,7 +779,60 @@ def _detail_evidence(kind: str, detail: Mapping[str, Any]) -> list[str]:
                 values.append(value[:128])
             if len(values) >= 50:
                 return values
+    if kind == "world_model":
+        structure = detail.get("structure")
+        if isinstance(structure, Mapping):
+            for section in ("environment", "inference", "constraints"):
+                entries = structure.get(section, [])
+                if not isinstance(entries, list):
+                    continue
+                for entry in entries[:50]:
+                    if not isinstance(entry, Mapping):
+                        continue
+                    refs = entry.get("evidenceIds", [])
+                    for value in refs if isinstance(refs, list) else [refs]:
+                        if isinstance(value, str) and value and value not in values:
+                            values.append(value[:128])
+                        if len(values) >= 50:
+                            return values
     return values
+
+
+def _candidate_fields(kind: str, detail: Mapping[str, Any]) -> dict[str, Any]:
+    """Preserve only bounded, translator-relevant DTO fields."""
+    names = {
+        "policy": ("title", "trigger", "procedure", "verification", "boundary",
+                   "preference", "antiPattern"),
+        "world_model": ("title", "body"),
+        "skill": ("name", "invocationGuide"),
+    }.get(kind, ())
+    result: dict[str, Any] = {}
+    for name in names:
+        value = detail.get(name)
+        if isinstance(value, str):
+            result[name] = value[:2000]
+        elif isinstance(value, list):
+            result[name] = [item[:512] for item in value[:50] if isinstance(item, str)]
+    if kind == "skill" and isinstance(detail.get("decisionGuidance"), Mapping):
+        guidance = detail["decisionGuidance"]
+        result["decisionGuidance"] = {
+            name: [item[:512] for item in value[:50] if isinstance(item, str)]
+            for name in ("preference", "antiPattern")
+            if isinstance((value := guidance.get(name)), list)
+        }
+    code_specific = detail.get("codeSpecific")
+    if isinstance(code_specific, bool):
+        result["codeSpecific"] = code_specific
+    code_refs = detail.get("codeRefs", detail.get("code_refs"))
+    if isinstance(code_refs, list):
+        result["codeRefs"] = [
+            {"file_path": str(row.get("file_path", row.get("path", "")))[:500],
+             "qualified_name": str(row.get("qualified_name", row.get("symbol", "")))[:500]}
+            for row in code_refs[:50] if isinstance(row, Mapping)
+            and row.get("file_path", row.get("path"))
+            and row.get("qualified_name", row.get("symbol"))
+        ]
+    return result
 
 
 def _shown(value: int | float | None, *, precision: int | None = None) -> str:

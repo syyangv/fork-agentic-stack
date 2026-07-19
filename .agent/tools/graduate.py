@@ -15,6 +15,9 @@ from review_state import mark_graduated
 from validate import heuristic_check
 from render_lessons import append_lesson, render_lessons, load_lessons
 from candidate_lock import candidate_lifecycle_lock
+from orchestration.revalidation import (
+    EvidenceValidationError, validate_live_candidate_evidence,
+)
 
 CANDIDATES = os.path.join(BASE, "memory/candidates")
 SEMANTIC = os.path.join(BASE, "memory/semantic")
@@ -56,6 +59,31 @@ def _main_unlocked():
     with open(cand_path) as f:
         cand = json.load(f)
 
+    if cand.get("source_layer") == "behavioral":
+        classifications = [
+            row.get("action") for row in cand.get("decisions", [])
+            if isinstance(row, dict) and row.get("action") in {
+                "classified_code", "classified_non_code",
+            }
+        ]
+        if not classifications:
+            print(
+                "ERROR: behavioral candidate requires explicit code-scope classification",
+                file=sys.stderr,
+            )
+            sys.exit(5)
+        if (classifications[-1] == "classified_code") != bool(cand.get("code_specific")):
+            print("ERROR: candidate classification state is inconsistent", file=sys.stderr)
+            sys.exit(5)
+
+    evidence_report = None
+    if cand.get("code_specific"):
+        try:
+            evidence_report = validate_live_candidate_evidence(cand, BASE)
+        except EvidenceValidationError as exc:
+            print(f"ERROR: code-specific graduation blocked: {exc}", file=sys.stderr)
+            sys.exit(4)
+
     lesson_id = _lesson_id(cand)
 
     # Retry-safety: if a prior graduation run got as far as appending to
@@ -91,6 +119,18 @@ def _main_unlocked():
                 file=sys.stderr,
             )
             sys.exit(3)
+        if cand.get("code_specific"):
+            prior_snapshot = prior_lesson.get("evidence_snapshot") or {}
+            comparable = {
+                key: evidence_report.get(key)
+                for key in ("repository_revision", "crg_evidence_ids", "test_evidence_ids")
+            }
+            if any(prior_snapshot.get(key) != value for key, value in comparable.items()):
+                print(
+                    "ERROR: cannot complete retry — validated evidence snapshot changed",
+                    file=sys.stderr,
+                )
+                sys.exit(4)
 
         # Re-render LESSONS.md too. The first attempt could have crashed
         # between append_lesson() and render_lessons(), leaving lessons.jsonl
@@ -156,11 +196,12 @@ def _main_unlocked():
     # reviewer can retry. The retry-safety block above catches the
     # specific "lesson appended but candidate not moved" scenario.
     accepted_at = datetime.datetime.now(datetime.timezone.utc).isoformat()
+    evidence_ids = cand.get("evidence_refs", cand.get("evidence_ids", []))
     lesson = {
         "id": lesson_id,
         "claim": cand.get("claim"),
         "conditions": cand.get("conditions", []),
-        "evidence_ids": cand.get("evidence_ids", []),
+        "evidence_ids": evidence_ids,
         "status": "provisional" if args.provisional else "accepted",
         "accepted_at": accepted_at,
         "reviewer": args.reviewer,
@@ -168,10 +209,23 @@ def _main_unlocked():
         "cluster_size": cand.get("cluster_size", 1),
         "canonical_salience": cand.get("canonical_salience", 0.0),
         "confidence": check["confidence"],
-        "support_count": 0,
-        "contradiction_count": 0,
+        "support_count": cand.get("support_count", 0),
+        "contradiction_count": cand.get("contradiction_count", 0),
+        "outcome_history": cand.get("outcome_history", []),
         "supersedes": args.supersedes,
         "source_candidate": args.candidate_id,
+        "source_layer": cand.get("source_layer", "governance"),
+        "source_kind": cand.get("source_kind"),
+        "target_kind": cand.get("target_kind", "governance_lesson"),
+        "provider_ids": cand.get("provider_ids", {}),
+        "project_scope": cand.get("project_scope", {}),
+        "code_specific": bool(cand.get("code_specific", False)),
+        "code_refs": cand.get("code_refs", []),
+        "evidence_snapshot": evidence_report,
+        "behavioral_support": cand.get("support"),
+        "behavioral_gain": cand.get("gain"),
+        "trial_count": cand.get("trial_count"),
+        "trial_pass_count": cand.get("trial_pass_count"),
     }
     append_lesson(lesson, SEMANTIC)
     md_path = render_lessons(SEMANTIC)
