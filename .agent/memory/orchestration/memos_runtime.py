@@ -9,14 +9,39 @@ from __future__ import annotations
 import json
 import os
 import re
+import stat
 import tempfile
 from dataclasses import dataclass
 from pathlib import Path
+from types import MappingProxyType
 from typing import Mapping
+
+from .memos_journal import _project_lock, stable_project_lock_path
 
 
 MEMOS_PLUGIN_VERSION = "2.0.10"
 _PROJECT_ID = re.compile(r"[0-9a-f]{16}\Z")
+_MODEL_NAME = re.compile(r"[A-Za-z0-9][A-Za-z0-9._:/-]{0,127}\Z")
+_PILOT_SCHEMA = "agentic.memory.evolution-pilot.v1"
+_PILOT_KEYS = {
+    "schema", "enabled", "project_id", "repo_root", "gpt_model",
+    "opus_model", "daily_caps", "min_distinct_episodes", "timeout_seconds",
+}
+_DAILY_CAP_KEYS = {"policy", "world_model", "skill", "other"}
+
+
+@dataclass(frozen=True, slots=True)
+class EvolutionPilotConfig:
+    """Validated, project-bound opt-in for host-assisted evolution."""
+
+    project_id: str
+    repo_root: str
+    gpt_model: str
+    opus_model: str
+    daily_caps: Mapping[str, int]
+    min_distinct_episodes: int
+    timeout_seconds: float
+    source: Path
 
 
 @dataclass(frozen=True, slots=True)
@@ -65,7 +90,13 @@ def runtime_paths(
     )
 
 
-def build_memos_config(project_id: str) -> dict:
+def build_memos_config(
+    project_id: str,
+    *,
+    evolution_pilot: bool = False,
+    host_model: str = "gpt",
+    min_distinct_episodes: int = 3,
+) -> dict:
     """Return the minimal offline/privacy profile accepted by MemOS 2.0.10.
 
     JSON is intentionally emitted into ``config.yaml``: JSON is a YAML subset,
@@ -74,7 +105,13 @@ def build_memos_config(project_id: str) -> dict:
     as tempting empty slots.
     """
     validate_project_id(project_id)
-    return {
+    if not isinstance(evolution_pilot, bool):
+        raise TypeError("evolution_pilot must be boolean")
+    if _MODEL_NAME.fullmatch(host_model) is None:
+        raise ValueError("host model must be a non-sensitive routing label")
+    if type(min_distinct_episodes) is not int or not 3 <= min_distinct_episodes <= 20:
+        raise ValueError("min_distinct_episodes must be between 3 and 20")
+    config = {
         "version": 1,
         "viewer": {
             "bindHost": "127.0.0.1",
@@ -87,7 +124,7 @@ def build_memos_config(project_id: str) -> dict:
             "cache": {"enabled": True, "maxItems": 20_000},
         },
         "llm": {
-            "provider": "local_only",
+            "provider": "host" if evolution_pilot else "local_only",
             "fallbackToHost": False,
             "maxRetries": 0,
         },
@@ -112,6 +149,93 @@ def build_memos_config(project_id: str) -> dict:
             },
         },
     }
+    if evolution_pilot:
+        config["llm"]["model"] = host_model
+        config["algorithm"] = {
+            "lightweightMemory": {"enabled": False},
+            "l2Induction": {"minEpisodesForInduction": min_distinct_episodes},
+            "l3Abstraction": {"minPolicies": 2, "minPolicySupport": 3},
+            "skill": {"minSupport": 3, "candidateTrials": 3},
+        }
+    return config
+
+
+def load_evolution_pilot_config(
+    path: str | Path,
+    *,
+    project_id: str,
+    repo_root: str | Path,
+) -> EvolutionPilotConfig:
+    """Load one owner-only pilot selection and bind it to the current repo.
+
+    The file is intentionally an exact-schema document. Unknown fields are
+    rejected, which also prevents credentials from becoming configuration.
+    """
+    validate_project_id(project_id)
+    candidate = Path(path).expanduser()
+    if not candidate.is_absolute():
+        raise ValueError("evolution pilot config path must be absolute")
+    _reject_symlink_components(candidate)
+    try:
+        metadata = candidate.stat()
+    except OSError as exc:
+        raise RuntimeError("evolution pilot config is unavailable") from exc
+    if not candidate.is_file() or not stat.S_ISREG(metadata.st_mode):
+        raise ValueError("evolution pilot config must be a regular file")
+    if metadata.st_uid != os.getuid() or metadata.st_mode & 0o077:
+        raise PermissionError("evolution pilot config must be owner-only")
+    if metadata.st_size > 16_384:
+        raise ValueError("evolution pilot config is too large")
+    try:
+        payload = json.loads(
+            candidate.read_text(encoding="utf-8"),
+            object_pairs_hook=_reject_duplicate_json_keys,
+        )
+    except (OSError, UnicodeError, json.JSONDecodeError) as exc:
+        raise ValueError("evolution pilot config is invalid JSON") from exc
+    if not isinstance(payload, dict) or set(payload) != _PILOT_KEYS:
+        raise ValueError("evolution pilot config has an unsupported schema shape")
+    if payload["schema"] != _PILOT_SCHEMA or payload["enabled"] is not True:
+        raise ValueError("evolution pilot config must be explicitly enabled")
+    if payload["project_id"] != project_id:
+        raise ValueError("evolution pilot config project_id does not match")
+    try:
+        root_path = Path(repo_root).expanduser().resolve(strict=True)
+    except OSError as exc:
+        raise ValueError("evolution pilot repo_root is unavailable") from exc
+    if not root_path.is_dir():
+        raise ValueError("evolution pilot repo_root must be a directory")
+    canonical_root = str(root_path)
+    if payload["repo_root"] != canonical_root:
+        raise ValueError("evolution pilot config repo_root does not match")
+    for field in ("gpt_model", "opus_model"):
+        if not isinstance(payload[field], str) or _MODEL_NAME.fullmatch(payload[field]) is None:
+            raise ValueError(f"evolution pilot config {field} is invalid")
+    if not payload["gpt_model"].lower().startswith("gpt"):
+        raise ValueError("evolution pilot gpt_model must be a GPT routing label")
+    if "opus" not in payload["opus_model"].lower():
+        raise ValueError("evolution pilot opus_model must be an Opus routing label")
+    caps = payload["daily_caps"]
+    if not isinstance(caps, dict) or set(caps) != _DAILY_CAP_KEYS:
+        raise ValueError("evolution pilot daily_caps has an unsupported shape")
+    if any(type(value) is not int or not 0 <= value <= 10_000 for value in caps.values()):
+        raise ValueError("evolution pilot daily caps must be bounded integers")
+    episodes = payload["min_distinct_episodes"]
+    timeout = payload["timeout_seconds"]
+    if type(episodes) is not int or not 3 <= episodes <= 20:
+        raise ValueError("min_distinct_episodes must be between 3 and 20")
+    if type(timeout) not in (int, float) or not 1 <= timeout <= 300:
+        raise ValueError("timeout_seconds must be between 1 and 300")
+    return EvolutionPilotConfig(
+        project_id=project_id,
+        repo_root=canonical_root,
+        gpt_model=payload["gpt_model"],
+        opus_model=payload["opus_model"],
+        daily_caps=MappingProxyType(dict(caps)),
+        min_distinct_episodes=episodes,
+        timeout_seconds=float(timeout),
+        source=candidate,
+    )
 
 
 def write_config_atomic(path: str | Path, config: Mapping) -> Path:
@@ -152,6 +276,9 @@ def prepare_project_runtime(
     project_id: str,
     *,
     preserve_existing_config: bool = True,
+    evolution_pilot: bool = False,
+    host_model: str = "gpt",
+    min_distinct_episodes: int = 3,
 ) -> MemosRuntimePaths:
     """Provision only mutable project state; never mutate the plugin tree."""
     paths = runtime_paths(code_root, data_root, project_id)
@@ -166,21 +293,93 @@ def prepare_project_runtime(
     ):
         directory.mkdir(parents=True, exist_ok=True, mode=0o700)
         _make_owner_only_directory(directory)
-    if not preserve_existing_config or not paths.config_file.exists():
-        write_config_atomic(paths.config_file, build_memos_config(project_id))
-    else:
-        expected = build_memos_config(project_id)
-        try:
-            existing = json.loads(paths.config_file.read_text(encoding="utf-8"))
-        except (OSError, json.JSONDecodeError) as exc:
-            raise RuntimeError("existing MemOS config is invalid; refusing to start") from exc
-        if existing != expected:
+    expected = build_memos_config(
+        project_id,
+        evolution_pilot=evolution_pilot,
+        host_model=host_model,
+        min_distinct_episodes=min_distinct_episodes,
+    )
+    # The overwhelmingly common same-profile path is read-only and must not
+    # contend with an active delivery worker (assist has a subsecond budget).
+    # A real profile switch is serialized below and rechecked under the lock.
+    if preserve_existing_config and paths.config_file.exists():
+        existing = _read_existing_config(paths.config_file)
+        if existing == expected:
+            os.chmod(paths.config_file, 0o600)
+            return paths
+        if not _is_managed_alternate_config(existing, project_id):
             raise RuntimeError(
                 "existing MemOS config differs from the required privacy profile; "
                 "refusing to start"
             )
-        os.chmod(paths.config_file, 0o600)
+
+    # A profile switch changes how the next event is processed. Serialize it
+    # with delivery so a second compliant bridge cannot keep running against
+    # configuration that was rewritten underneath it.
+    with _project_lock(stable_project_lock_path(paths.project_root)):
+        if not preserve_existing_config or not paths.config_file.exists():
+            write_config_atomic(paths.config_file, expected)
+        else:
+            existing = _read_existing_config(paths.config_file)
+            if existing != expected and _is_managed_alternate_config(existing, project_id):
+                write_config_atomic(paths.config_file, expected)
+            elif existing != expected:
+                raise RuntimeError(
+                    "existing MemOS config differs from the required privacy profile; "
+                    "refusing to start"
+                )
+            os.chmod(paths.config_file, 0o600)
     return paths
+
+
+def _read_existing_config(path: Path) -> object:
+    try:
+        return json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        raise RuntimeError("existing MemOS config is invalid; refusing to start") from exc
+
+
+def _is_managed_alternate_config(value: object, project_id: str) -> bool:
+    if value == build_memos_config(project_id):
+        return True
+    if not isinstance(value, dict):
+        return False
+    llm = value.get("llm")
+    model = llm.get("model") if isinstance(llm, dict) else None
+    return (
+        isinstance(model, str)
+        and _MODEL_NAME.fullmatch(model) is not None
+        and isinstance(value.get("algorithm"), dict)
+        and isinstance(value["algorithm"].get("l2Induction"), dict)
+        and type(value["algorithm"]["l2Induction"].get("minEpisodesForInduction")) is int
+        and 3 <= value["algorithm"]["l2Induction"]["minEpisodesForInduction"] <= 20
+        and value == build_memos_config(
+            project_id,
+            evolution_pilot=True,
+            host_model=model,
+            min_distinct_episodes=value["algorithm"]["l2Induction"]["minEpisodesForInduction"],
+        )
+    )
+
+
+def _reject_symlink_components(path: Path) -> None:
+    current = Path(path.anchor)
+    for part in path.parts[1:]:
+        current /= part
+        try:
+            if current.is_symlink():
+                raise ValueError("evolution pilot config path cannot contain symlinks")
+        except OSError as exc:
+            raise ValueError("cannot validate evolution pilot config path") from exc
+
+
+def _reject_duplicate_json_keys(pairs):
+    result = {}
+    for key, value in pairs:
+        if key in result:
+            raise ValueError("evolution pilot config contains duplicate keys")
+        result[key] = value
+    return result
 
 
 def runtime_environment(

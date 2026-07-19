@@ -5,6 +5,7 @@ import hashlib
 import json
 import os
 import sqlite3
+import stat
 import threading
 import time
 from contextlib import contextmanager
@@ -26,6 +27,28 @@ except ImportError:  # pragma: no cover - POSIX
 _LOCAL_WORKER_LOCKS: dict[str, threading.RLock] = {}
 _LOCAL_WORKER_LOCKS_GUARD = threading.Lock()
 _WORKER_LOCAL = threading.local()
+
+
+def stable_project_lock_path(project_root: str | Path) -> str:
+    """Return an owner-only lifecycle lock outside the swappable project tree."""
+    root = Path(project_root)
+    root.parent.mkdir(parents=True, exist_ok=True)
+    lock = root.parent / f".{root.name}.memos-lifecycle.lock"
+    flags = os.O_RDWR | os.O_CREAT
+    if hasattr(os, "O_NOFOLLOW"):
+        flags |= os.O_NOFOLLOW
+    try:
+        descriptor = os.open(lock, flags, 0o600)
+        info = os.fstat(descriptor)
+        if not stat.S_ISREG(info.st_mode) or (
+            hasattr(os, "getuid") and info.st_uid != os.getuid()
+        ):
+            raise OSError("MemOS lifecycle lock is not an owner regular file")
+        os.fchmod(descriptor, 0o600)
+    finally:
+        if "descriptor" in locals():
+            os.close(descriptor)
+    return str(lock)
 
 
 @contextmanager
@@ -124,9 +147,7 @@ class MemosDeliveryJournal:
         if max_attempts <= 0:
             raise ValueError("maximum attempts must be positive")
         self.path.parent.mkdir(parents=True, exist_ok=True)
-        self._worker_lock_path = str(
-            self.path.with_suffix(self.path.suffix + ".worker.lock")
-        )
+        self._worker_lock_path = stable_project_lock_path(self.path.parent)
         try:
             os.chmod(self.path.parent, 0o700)
         except OSError:

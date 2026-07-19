@@ -10,7 +10,9 @@ from pathlib import Path
 from .memos_bridge import BridgeConfig, MemOSBridgeClient
 from .memos_journal import MemosDeliveryJournal
 from .memos_runtime import (
+    EvolutionPilotConfig,
     bridge_command,
+    load_evolution_pilot_config,
     prepare_project_runtime,
     runtime_environment,
 )
@@ -25,6 +27,7 @@ class MemosProviderSession:
     _worker: AbstractContextManager | None = field(default=None, init=False)
     _entered: bool = field(default=False, init=False)
     assist_deadline: float | None = None
+    evolution_pilot: EvolutionPilotConfig | None = None
 
     def close(self) -> None:
         if self._entered:
@@ -69,13 +72,38 @@ def create_memos_provider(
     mode: str = "shadow",
     code_root: str | Path | None = None,
     data_root: str | Path | None = None,
+    repo_root: str | Path | None = None,
     assist_deadline: float | None = None,
 ) -> MemosProviderSession:
     """Provision private state and attach a client only to a pinned install."""
     agent_root = Path(agent_root).expanduser().resolve(strict=False)
     code_root = Path(code_root or agent_root / "runtime" / "providers")
     data_root = Path(data_root or agent_root / "runtime" / "memos")
-    paths = prepare_project_runtime(code_root, data_root, project_id)
+    evolution_pilot = None
+    pilot_path = os.environ.get("AGENTIC_EVOLUTION_PILOT_CONFIG")
+    if pilot_path:
+        if repo_root is None:
+            raise ValueError(
+                "repo_root is required when AGENTIC_EVOLUTION_PILOT_CONFIG is set"
+            )
+        evolution_pilot = load_evolution_pilot_config(
+            pilot_path, project_id=project_id, repo_root=repo_root,
+        )
+        # Merely accepting an injected callable would forward raw native MemOS
+        # prompts around the strict DTO boundary.  Until a concrete safe
+        # translator and preventive no-tools GPT provider exist, production
+        # activation is unconditionally blocked before runtime state changes.
+        raise RuntimeError("evolution_pilot_host_handler_unavailable")
+    paths = prepare_project_runtime(
+        code_root,
+        data_root,
+        project_id,
+        evolution_pilot=evolution_pilot is not None,
+        host_model=evolution_pilot.gpt_model if evolution_pilot else "gpt",
+        min_distinct_episodes=(
+            evolution_pilot.min_distinct_episodes if evolution_pilot else 3
+        ),
+    )
     initialize_timeout = None
     if mode == "assist" and assist_deadline is not None:
         initialize_timeout = max(0.0, assist_deadline - time.monotonic())
@@ -112,6 +140,7 @@ def create_memos_provider(
     )
     return MemosProviderSession(
         provider=provider, client=client, assist_deadline=assist_deadline,
+        evolution_pilot=evolution_pilot,
     )
 
 
