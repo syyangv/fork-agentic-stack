@@ -78,7 +78,13 @@
     "writing-beats": "revised",
     "writing-fragments": "revised",
     "writing-great-skills": "revised",
-    "writing-shape": "revised"
+    "writing-shape": "revised",
+    "batch-grill-me": "revised",
+    "brain": "custom",
+    "connector-router": "custom",
+    "port-manager": "custom",
+    "skill-inventory": "custom",
+    "to-questionnaire": "revised"
   },
   "claude": {
     "agent-reach": "revised",
@@ -228,7 +234,13 @@
     "weight-sync": "revised",
     "yearly-glance-calendar": "revised",
     "connector-orchestrator": "revised",
-    "security-gate": "revised"
+    "security-gate": "revised",
+    "codex-log-guard": "custom",
+    "paseo": "custom",
+    "paseo-advisor": "custom",
+    "paseo-committee": "custom",
+    "paseo-handoff": "custom",
+    "paseo-loop": "custom"
   },
   "codex": {
     "ask-claude": "custom",
@@ -241,6 +253,12 @@
     "omx-setup": "custom",
     "plan": "custom",
     "web-clone": "custom",
-    "worker": "custom"
+    "worker": "custom",
+    "init-project-repo": "custom",
+    "paseo": "custom",
+    "paseo-advisor": "custom",
+    "paseo-committee": "custom",
+    "paseo-handoff": "custom",
+    "paseo-loop": "custom"
   }
 }
