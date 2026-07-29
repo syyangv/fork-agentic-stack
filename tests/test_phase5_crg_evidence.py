@@ -210,6 +210,119 @@ class CrgHealthAndRequestTest(CrgEvidenceFixture):
 
 
 class CrgEvidenceRecordTest(CrgEvidenceFixture):
+    def test_count_only_freshness_audit_reconciles_live_crg_drift(self):
+        self.provider.record(self.crg_payload())
+        crg_row = json.loads(self.ledger.path.read_text(encoding="utf-8"))
+        test_row = json.loads(json.dumps(crg_row))
+        test_row["evidence_id"] = "evi_" + "c" * 64
+        test_row["summary"] = "bounded test execution evidence"
+        test_row["provenance"].update({
+            "kind": "test_run",
+            "provider": "test-runner",
+            "source_id": test_row["evidence_id"],
+            "source_hash": "sha256:" + "d" * 64,
+            "locator": {"executed_test": True},
+        })
+        test_row["verification"].update({
+            "files_reconciled": False,
+            "symbols_reconciled": False,
+            "executed_test": True,
+        })
+        with self.ledger.path.open("a", encoding="utf-8") as stream:
+            stream.write(json.dumps(test_row) + "\n")
+        current = self.provider.audit_ledger_freshness()
+        self.assertEqual(
+            {key: current[key] for key in ("status", "current", "stale", "malformed")},
+            {"status": "healthy", "current": 2, "stale": 0, "malformed": 0},
+        )
+        self.assertNotIn("summary", current)
+        self.assertNotIn("symbols", current)
+
+        with contextlib.closing(sqlite3.connect(self.db)) as conn, conn:
+            conn.execute(
+                "update metadata set value=? where key='last_updated'",
+                ("2026-07-18T05:00:00Z",),
+            )
+        timestamp_drift = self.provider.audit_ledger_freshness()
+        self.assertEqual(timestamp_drift["stale"], 1)
+        self.assertEqual(timestamp_drift["current"], 1)
+
+        with contextlib.closing(sqlite3.connect(self.db)) as conn, conn:
+            conn.execute(
+                "update metadata set value=? where key='last_updated'",
+                ("2026-07-18T04:00:00Z",),
+            )
+        original = self.source.read_bytes()
+        self.source.write_text("def handle_order():\n    return False\n")
+        self.assertEqual(self.provider.audit_ledger_freshness()["stale"], 1)
+        self.source.write_bytes(original)
+
+        with contextlib.closing(sqlite3.connect(self.db)) as conn, conn:
+            conn.execute(
+                "delete from nodes where qualified_name='pkg/service.py::handle_order'"
+            )
+        self.assertEqual(self.provider.audit_ledger_freshness()["stale"], 1)
+
+    def test_freshness_audit_distinguishes_stale_and_unusable_graphs(self):
+        self.provider.record(self.crg_payload())
+        with contextlib.closing(sqlite3.connect(self.db)) as conn, conn:
+            conn.execute(
+                "update metadata set value=? where key='git_head_sha'", ("b" * 40,)
+            )
+        revision_drift = self.provider.audit_ledger_freshness()
+        self.assertEqual(revision_drift["status"], "degraded")
+        self.assertEqual(revision_drift["stale"], 1)
+
+        with contextlib.closing(sqlite3.connect(self.db)) as conn, conn:
+            conn.execute(
+                "update metadata set value='99' where key='schema_version'"
+            )
+        unsupported = self.provider.audit_ledger_freshness()
+        self.assertEqual(unsupported["status"], "unavailable")
+        self.assertEqual(unsupported["current"], 0)
+        self.assertIn("graph_unavailable", unsupported["warnings"])
+
+    def test_freshness_audit_bounds_rows_and_classifies_malformed_records(self):
+        self.provider.record(self.crg_payload())
+        row = json.loads(self.ledger.path.read_text(encoding="utf-8"))
+        exact = self.provider.audit_ledger_freshness(max_rows=1)
+        self.assertFalse(exact["truncated"])
+        second = json.loads(json.dumps(row))
+        second["evidence_id"] = "evi_" + "b" * 64
+        second["provenance"]["source_id"] = second["evidence_id"]
+        with self.ledger.path.open("a", encoding="utf-8") as stream:
+            stream.write(json.dumps(second) + "\n")
+        truncated = self.provider.audit_ledger_freshness(max_rows=1)
+        self.assertTrue(truncated["truncated"])
+        self.assertEqual(truncated["status"], "degraded")
+
+        second["provenance"]["project_id"] = "2" * 16
+        self.ledger.path.write_text(
+            json.dumps(row) + "\n" + json.dumps(second) + "\nnot-json\n",
+            encoding="utf-8",
+        )
+        os.chmod(self.ledger.path, 0o600)
+        classified = self.provider.audit_ledger_freshness()
+        self.assertEqual(classified["current"], 1)
+        self.assertEqual(classified["malformed"], 2)
+        self.assertEqual(classified["records"], 1)
+
+        os.chmod(self.ledger.path, 0o644)
+        unsafe = self.provider.audit_ledger_freshness()
+        self.assertEqual(unsafe["status"], "degraded")
+        self.assertIn("ledger_unreadable", unsafe["warnings"])
+
+    def test_freshness_audit_rejects_symlinks_and_strictly_bounds_limit(self):
+        self.provider.record(self.crg_payload())
+        with self.assertRaisesRegex(ValueError, "integer"):
+            self.provider.audit_ledger_freshness(max_rows=True)
+        original = self.ledger.path.with_name("original-ledger.jsonl")
+        self.ledger.path.rename(original)
+        self.ledger.path.symlink_to(original)
+        result = self.provider.audit_ledger_freshness()
+        self.assertEqual(result["status"], "degraded")
+        self.assertEqual(result["current"], 0)
+
     def test_current_ledger_rows_retrieve_but_stale_graph_rows_do_not(self):
         self.provider.record(self.crg_payload())
         items, health = self.provider.retrieve("handle order")

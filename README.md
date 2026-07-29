@@ -338,6 +338,9 @@ decision history so recurring churn is visible, not fresh. Retracted lessons
 stay in history with `status=retracted` but are excluded from proactive recall.
 
 See [`docs/architecture.md`](docs/architecture.md) for the full lifecycle.
+For implemented backup, restore, adapter-removal, transfer, CRG, and retention
+boundaries, see
+[`docs/backup-restore-uninstall-retention.md`](docs/backup-restore-uninstall-retention.md).
 
 ---
 

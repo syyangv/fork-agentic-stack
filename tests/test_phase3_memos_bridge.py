@@ -47,6 +47,81 @@ def test_calls_use_monotonic_ids_and_ignore_notifications(tmp_path: Path) -> Non
         assert client.call("episode.add", {"value": 2}) == 2
 
 
+def test_bridge_attestation_is_atomic_and_removed_on_close(tmp_path: Path) -> None:
+    command = _script(tmp_path, """
+        import time
+        time.sleep(10)
+    """)
+    project = tmp_path / "runtime" / "0123456789abcdef"
+    bridge = tmp_path / "plugin" / "dist" / "bridge.cjs"
+    bridge.parent.mkdir(parents=True)
+    bridge.write_text("bridge", encoding="utf-8")
+    attestation = project / "bridge-process.json"
+    client = MemOSBridgeClient(BridgeConfig(
+        command=command, process_attestation=attestation,
+        project_root=project, bridge_path=bridge,
+    ))
+    process = client._ensure_process()
+    record = json.loads(attestation.read_text(encoding="utf-8"))
+    assert record == {
+        "bridge": str(bridge.resolve()), "pid": process.pid,
+        "project_root": str(project.resolve()),
+    }
+    assert attestation.stat().st_mode & 0o777 == 0o600
+    client.close()
+    assert not attestation.exists()
+
+
+def test_bridge_attestation_preserves_mismatched_pid_and_cleans_failure(tmp_path: Path) -> None:
+    command = _script(tmp_path, """
+        import time
+        time.sleep(10)
+    """)
+    project = tmp_path / "runtime" / "0123456789abcdef"
+    bridge = tmp_path / "plugin" / "dist" / "bridge.cjs"
+    bridge.parent.mkdir(parents=True)
+    bridge.write_text("bridge", encoding="utf-8")
+    attestation = project / "bridge-process.json"
+    client = MemOSBridgeClient(BridgeConfig(
+        command=command, process_attestation=attestation,
+        project_root=project, bridge_path=bridge,
+    ))
+    attestation.parent.mkdir(parents=True)
+    attestation.write_text(json.dumps({"pid": 999, "bridge": str(bridge), "project_root": str(project)}))
+    client._remove_process_attestation(123)
+    assert attestation.exists()
+    process = client._ensure_process()
+    assert json.loads(attestation.read_text())["pid"] == process.pid
+    client._fail_all(MemOSTransportError("simulated bridge failure"), process)
+    # A transport failure does not prove process exit, so ownership remains.
+    assert attestation.exists()
+    process.terminate()
+    process.wait(timeout=1)
+    client._fail_all(MemOSTransportError("confirmed-dead bridge"), process)
+    assert not attestation.exists()
+
+
+def test_bridge_attestation_is_removed_after_normal_stop(tmp_path: Path) -> None:
+    command = _script(tmp_path, """
+        import time
+        time.sleep(10)
+    """)
+    project = tmp_path / "runtime" / "0123456789abcdef"
+    bridge = tmp_path / "plugin" / "dist" / "bridge.cjs"
+    bridge.parent.mkdir(parents=True)
+    bridge.write_text("bridge", encoding="utf-8")
+    attestation = project / "bridge-process.json"
+    client = MemOSBridgeClient(BridgeConfig(
+        command=command, process_attestation=attestation,
+        project_root=project, bridge_path=bridge,
+    ))
+    process = client._ensure_process()
+    assert attestation.exists()
+    client._stop_process(process)
+    assert process.poll() is not None
+    assert not attestation.exists()
+
+
 def test_known_upstream_preinit_console_log_is_bounded_and_ignored(tmp_path: Path) -> None:
     command = _script(
         tmp_path,

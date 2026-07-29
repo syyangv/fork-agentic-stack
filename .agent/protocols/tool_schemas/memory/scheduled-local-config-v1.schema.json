@@ -1,0 +1,27 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Agentic Stack Scheduled Local Configuration v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema", "obsidian_path", "notification", "maintenance_schedule", "review_schedule", "review_server_host", "review_server_port"],
+  "properties": {
+    "schema": {"const": "agentic.memory.scheduled-local.v1"},
+    "obsidian_path": {"type": ["string", "null"]},
+    "notification": {"enum": ["disabled", "requested"]},
+    "maintenance_schedule": {"$ref": "#/$defs/schedule"},
+    "review_schedule": {"$ref": "#/$defs/schedule"},
+    "review_server_host": {"const": "127.0.0.1"},
+    "review_server_port": {"type": "integer", "minimum": 1024, "maximum": 65535}
+  },
+  "$defs": {
+    "schedule": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["hour", "minute"],
+      "properties": {
+        "hour": {"type": "integer", "minimum": 0, "maximum": 23},
+        "minute": {"type": "integer", "minimum": 0, "maximum": 59}
+      }
+    }
+  }
+}

@@ -8,10 +8,16 @@ from typing import Iterable
 
 
 VALID_TARGETS = ("codex", "gemini", "cursor", "windsurf", "terminal")
-CORE_SCOPES = ("preferences", "accepted_lessons", "skills")
-DEFAULT_SCOPES = CORE_SCOPES + ("working", "episodic", "candidates")
+CORE_SCOPES = (
+    "preferences",
+    "decisions",
+    "accepted_lessons",
+    "evidence_ledger",
+)
+DEFAULT_SCOPES = CORE_SCOPES
+OPTIONAL_SCOPES = ("skills",)
 SENSITIVE_SCOPES = ("working", "episodic", "candidates", "data_layer", "flywheel")
-VALID_SCOPES = CORE_SCOPES + SENSITIVE_SCOPES
+VALID_SCOPES = CORE_SCOPES + OPTIONAL_SCOPES + SENSITIVE_SCOPES
 
 TARGET_ALIASES = {
     "codex": "codex",
@@ -35,11 +41,16 @@ SCOPE_ALIASES = {
     "preference": "preferences",
     "preferences": "preferences",
     "prefs": "preferences",
+    "decision": "decisions",
+    "decisions": "decisions",
     "lesson": "accepted_lessons",
     "lessons": "accepted_lessons",
     "semantic": "accepted_lessons",
     "memory": "full_memory",
     "memories": "full_memory",
+    "evidence": "evidence_ledger",
+    "ledger": "evidence_ledger",
+    "evidence_ledger": "evidence_ledger",
     "skill": "skills",
     "skills": "skills",
     "working": "working",

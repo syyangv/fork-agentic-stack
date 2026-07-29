@@ -238,6 +238,83 @@ def upsert_adapter(
         _save_locked(p, doc)
 
 
+def upsert_adapter_with_profile(
+    target_root: Path | str,
+    adapter_name: str,
+    entry: dict,
+    agentic_stack_version: str,
+    record: dict[str, object],
+) -> None:
+    """Atomically persist one adapter mutation and its checked profile state."""
+    _validate_profile_record(record)
+    p = install_state_path(target_root)
+    with _lock(p):
+        doc = _load_no_lock(p) or empty(target_root, agentic_stack_version)
+        existing = doc.get("orchestration")
+        _validate_existing_profile(existing, record["profile"])
+        next_record = dict(existing) if isinstance(existing, dict) else {}
+        next_record.update(record)
+        doc["adapters"][adapter_name] = entry
+        doc["orchestration"] = next_record
+        doc["installed_at"] = _iso_now()
+        _save_locked(p, doc)
+
+
+def set_orchestration_profile(target_root: Path | str, record: dict[str, object]) -> None:
+    """Persist fresh-install profile state without rewriting governance data."""
+    _validate_profile_record(record)
+    profile = record["profile"]
+    p = install_state_path(target_root)
+    with _lock(p):
+        doc = _load_no_lock(p)
+        if doc is None:
+            raise FileNotFoundError("install.json must exist before recording a profile")
+        existing = doc.get("orchestration")
+        _validate_existing_profile(existing, profile)
+        next_record = dict(existing) if isinstance(existing, dict) else {}
+        next_record.update(record)
+        doc["orchestration"] = next_record
+        _save_locked(p, doc)
+
+
+def _validate_profile_record(record: dict[str, object]) -> None:
+    profile = record.get("profile")
+    if not isinstance(profile, str):
+        raise ValueError("installation profile record must contain a profile name")
+    if record.get("phase8_quality_gate") != "blocked":
+        raise ValueError("Phase 8 quality gate must be recorded as 'blocked'")
+    if record.get("memos_mode") in {"shadow", "assist"}:
+        raise ValueError("Phase 8 quality gate is blocked: recorded behavioral mode is active")
+    if record.get("evolution_enabled") is True:
+        raise ValueError("Phase 8 quality gate is blocked: evolution is enabled")
+    if record.get("r7_skill_promoted") is True:
+        raise ValueError("Phase 8 quality gate is blocked: the R7 skill is promoted")
+    from . import scheduled_runtime
+    scheduled_runtime.validate_record_data(record.get("scheduled_runtime"))
+
+
+def _validate_existing_profile(existing: object, profile: object) -> None:
+    if not isinstance(existing, dict):
+        return
+    prior = existing.get("profile")
+    if isinstance(prior, str) and prior != profile:
+        raise ValueError(
+            "cannot change installation profile in place; "
+            "use a fresh project installation"
+        )
+    if prior is not None and existing.get("phase8_quality_gate") != "blocked":
+        raise ValueError("Phase 8 quality gate must be recorded as 'blocked'")
+    if existing.get("memos_mode") in {"shadow", "assist"}:
+        raise ValueError("Phase 8 quality gate is blocked: recorded behavioral mode is active")
+    if existing.get("evolution_enabled") is True:
+        raise ValueError("Phase 8 quality gate is blocked: evolution is enabled")
+    if existing.get("r7_skill_promoted") is True:
+        raise ValueError("Phase 8 quality gate is blocked: the R7 skill is promoted")
+    if prior is not None:
+        from . import scheduled_runtime
+        scheduled_runtime.validate_record_data(existing.get("scheduled_runtime"))
+
+
 def remove_adapter(target_root: Path | str, adapter_name: str) -> bool:
     """Drop an adapter from install.json. Returns True if present, False if not.
 

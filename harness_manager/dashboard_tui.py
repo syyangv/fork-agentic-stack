@@ -7,14 +7,22 @@ brain, skills, instances, transfer, and local dashboard exports.
 """
 from __future__ import annotations
 
+import contextlib
 import os
 import json
+import re
+import sqlite3
+import stat
 import sys
+import tempfile
+from itertools import islice
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
 from . import __version__
 from . import doctor as doctor_mod
+from . import profiles as profiles_mod
 from . import schema as schema_mod
 from . import state as state_mod
 from . import status as status_mod
@@ -24,6 +32,7 @@ SECTIONS = (
     "Overview",
     "Adapters",
     "Doctor",
+    "Orchestration",
     "Verify",
     "Memory",
     "Team Brain",
@@ -40,6 +49,11 @@ TEAM_FILES = {
     "INCIDENTS.md": "# Team Incident Learnings\n\n",
     "APPROVED_SKILLS.md": "# Approved Skills\n\n",
 }
+
+_PROJECT_ID = re.compile(r"[0-9a-f]{16}\Z")
+_MAX_DASHBOARD_ROWS = 1_000
+_MAX_DASHBOARD_DATABASE_BYTES = 64 * 1024 * 1024
+_MAX_DASHBOARD_WAL_BYTES = 64 * 1024 * 1024
 
 
 def _logical_path(path: Path | str) -> Path:
@@ -77,6 +91,257 @@ def _read_json(path: Path) -> Any:
         return json.loads(path.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError):
         return None
+
+
+def _safe_age_seconds(value: object) -> int | None:
+    if not isinstance(value, str):
+        return None
+    try:
+        parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    if parsed.tzinfo is None:
+        return None
+    return max(0, int((datetime.now(timezone.utc) - parsed.astimezone(timezone.utc)).total_seconds()))
+
+
+def _orchestration_config(agent: Path) -> tuple[dict[str, Any] | None, str | None]:
+    path = agent / "memory" / "orchestration" / "config.json"
+    if path.is_symlink() or not path.is_file():
+        return None, "missing_config"
+    try:
+        payload = doctor_mod.validate_orchestration_config_data(path)
+    except ValueError:
+        return None, "invalid_config"
+    if payload.get("mode") != "off":
+        return None, "active_mode"
+    return payload, None
+
+
+def _copy_regular_snapshot(source: Path, destination: Path, maximum: int) -> None:
+    before = source.lstat()
+    if (
+        not stat.S_ISREG(before.st_mode)
+        or before.st_size > maximum
+        or before.st_mode & 0o022
+        or (hasattr(os, "getuid") and before.st_uid != os.getuid())
+    ):
+        raise OSError("unsafe runtime database file")
+    source_fd = os.open(source, os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0))
+    destination_fd: int | None = None
+    try:
+        opened = os.fstat(source_fd)
+        identity = (
+            before.st_dev, before.st_ino, before.st_size, before.st_mtime_ns,
+        )
+        if (
+            not stat.S_ISREG(opened.st_mode)
+            or (opened.st_dev, opened.st_ino, opened.st_size, opened.st_mtime_ns)
+            != identity
+        ):
+            raise OSError("runtime database changed before snapshot")
+        destination_fd = os.open(
+            destination,
+            os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_NOFOLLOW", 0),
+            0o600,
+        )
+        remaining = opened.st_size
+        while remaining:
+            chunk = os.read(source_fd, min(1024 * 1024, remaining))
+            if not chunk:
+                raise OSError("runtime database changed during snapshot")
+            view = memoryview(chunk)
+            while view:
+                written = os.write(destination_fd, view)
+                if written <= 0:
+                    raise OSError("short dashboard snapshot write")
+                view = view[written:]
+            remaining -= len(chunk)
+        if os.read(source_fd, 1):
+            raise OSError("runtime database grew during snapshot")
+        after = os.fstat(source_fd)
+        if (
+            after.st_dev, after.st_ino, after.st_size, after.st_mtime_ns
+        ) != identity:
+            raise OSError("runtime database changed during snapshot")
+        os.fchmod(destination_fd, 0o600)
+    finally:
+        if destination_fd is not None:
+            os.close(destination_fd)
+        os.close(source_fd)
+
+
+def _optional_file_identity(path: Path) -> tuple[int, int, int, int] | None:
+    try:
+        info = path.lstat()
+    except FileNotFoundError:
+        return None
+    if stat.S_ISLNK(info.st_mode) or not stat.S_ISREG(info.st_mode):
+        raise OSError("unsafe runtime database topology")
+    return info.st_dev, info.st_ino, info.st_size, info.st_mtime_ns
+
+
+@contextlib.contextmanager
+def _read_only_sqlite_snapshot(database: Path):
+    """Copy bounded DB/WAL bytes without opening the source through SQLite."""
+    with tempfile.TemporaryDirectory(prefix="agentic-dashboard-") as temporary:
+        root = Path(temporary)
+        os.chmod(root, 0o700)
+        copied = root / "delivery.sqlite3"
+        database_identity = _optional_file_identity(database)
+        if database_identity is None:
+            raise OSError("runtime database disappeared")
+        wal = database.with_name(database.name + "-wal")
+        wal_identity = _optional_file_identity(wal)
+        _copy_regular_snapshot(database, copied, _MAX_DASHBOARD_DATABASE_BYTES)
+        if wal_identity is not None:
+            _copy_regular_snapshot(
+                wal, copied.with_name(copied.name + "-wal"),
+                _MAX_DASHBOARD_WAL_BYTES,
+            )
+        if (
+            _optional_file_identity(database) != database_identity
+            or _optional_file_identity(wal) != wal_identity
+        ):
+            raise OSError("runtime database topology changed during snapshot")
+        yield copied
+
+
+def _read_event_lag(agent: Path) -> dict[str, Any]:
+    result: dict[str, Any] = {
+        "status": "unavailable", "reason": "no_journal", "projects": 0,
+        "pending": 0, "inflight": 0, "deferred": 0, "ambiguous": 0, "dead": 0,
+        "oldest_age_seconds": None, "truncated": False,
+    }
+    root = agent / "runtime" / "memos"
+    if root.is_symlink() or not root.is_dir():
+        return result
+    oldest: list[int] = []
+    errors = 0
+    try:
+        projects = list(islice(root.iterdir(), _MAX_DASHBOARD_ROWS + 1))
+    except OSError:
+        return {**result, "status": "degraded", "reason": "runtime_directory_unreadable"}
+    if len(projects) > _MAX_DASHBOARD_ROWS:
+        result["truncated"] = True
+        projects.pop()
+    for project in sorted(projects):
+        if project.is_symlink() or not project.is_dir() or _PROJECT_ID.fullmatch(project.name) is None:
+            continue
+        database = project / "delivery.sqlite3"
+        if database.is_symlink() or not database.is_file():
+            continue
+        result["projects"] += 1
+        try:
+            with _read_only_sqlite_snapshot(database) as snapshot:
+                with sqlite3.connect(
+                    snapshot.resolve(strict=True).as_uri() + "?mode=ro", uri=True,
+                ) as connection:
+                    for state, count, created_at in connection.execute(
+                        "select state,count(*),min(created_at) from deliveries group by state"
+                    ):
+                        if state in {"pending", "inflight", "ambiguous", "dead"}:
+                            result[state] += int(count)
+                            if state in {"pending", "inflight"}:
+                                age = _safe_age_seconds(created_at)
+                                if age is not None:
+                                    oldest.append(age)
+                    result["deferred"] += int(connection.execute(
+                        "select count(*) from deferred_completions where state='pending'"
+                    ).fetchone()[0])
+        except (OSError, sqlite3.Error, ValueError):
+            errors += 1
+    if result["truncated"] and not result["projects"]:
+        return {**result, "status": "degraded", "reason": "runtime_project_limit"}
+    if not result["projects"]:
+        return result
+    result["oldest_age_seconds"] = max(oldest) if oldest else None
+    if result["truncated"]:
+        result.update(status="degraded", reason="runtime_project_limit")
+    elif errors:
+        result.update(status="degraded", reason="journal_unreadable")
+    elif any(result[key] for key in ("pending", "inflight", "deferred", "ambiguous", "dead")):
+        result.update(status="degraded", reason="delivery_lag")
+    else:
+        result.update(status="healthy", reason="no_delivery_lag")
+    return result
+
+
+def _retrieval_latency(agent: Path) -> dict[str, Any]:
+    # The current journal records invocations but no durations. Never infer a
+    # latency from timestamps or provider configuration.
+    root = agent / "runtime" / "memos"
+    journal_present = False
+    if not root.is_symlink() and root.is_dir():
+        try:
+            journal_present = any(
+                path.is_file() and not path.is_symlink()
+                for path in islice(root.glob("[0-9a-f]*/delivery.sqlite3"), _MAX_DASHBOARD_ROWS + 1)
+            )
+        except OSError:
+            pass
+    return {
+        "status": "unavailable", "reason": "no_latency_samples",
+        "samples": 0, "p50_ms": None, "p95_ms": None,
+        "journal_present": journal_present,
+    }
+
+
+def _review_backlog(agent: Path) -> dict[str, Any]:
+    path = agent / "memory" / "candidates"
+    result: dict[str, Any] = {"status": "unavailable", "staged": 0, "malformed": 0, "bounded": False}
+    if path.is_symlink() or not path.is_dir():
+        return result
+    try:
+        items = list(islice(path.glob("*.json"), _MAX_DASHBOARD_ROWS + 1))
+    except OSError:
+        return {**result, "status": "degraded", "malformed": 1}
+    result["bounded"] = len(items) > _MAX_DASHBOARD_ROWS
+    for item in sorted(items[:_MAX_DASHBOARD_ROWS]):
+        if item.is_symlink():
+            result["malformed"] += 1
+            continue
+        payload = _read_json(item)
+        if not isinstance(payload, dict):
+            result["malformed"] += 1
+        elif payload.get("status", "staged") == "staged":
+            result["staged"] += 1
+    result["status"] = "degraded" if result["malformed"] or result["bounded"] else ("pending" if result["staged"] else "healthy")
+    return result
+
+
+def _orchestration_observability(agent: Path, doc: dict[str, Any] | None, target: Path, stack: Path) -> dict[str, Any]:
+    config, config_error = _orchestration_config(agent)
+    recorded = doc.get("orchestration") if isinstance(doc, dict) else None
+    blocked = False
+    profile = None
+    if isinstance(recorded, dict):
+        try:
+            profiles_mod.validate_blocked_profile_state(recorded)
+            profile = recorded.get("profile")
+            if not isinstance(profile, str):
+                raise ValueError
+            profiles_mod.validate_profile(profile)
+            blocked = True
+        except ValueError:
+            blocked = False
+    config_off = config is not None and config.get("mode") == "off"
+    governance = "healthy" if blocked and config_off else "unavailable"
+    behavioral = "expected_disabled" if blocked and config_off and profile in {"standard", "minimal"} else "unavailable"
+    stale = doctor_mod.audit_crg_ledger_freshness(target, agent, stack)
+    return {
+        "lanes": {
+            "governance": {"status": governance, "budget": config.get("lane_reserves", {}).get("governance") if config else None},
+            "behavioral": {"status": behavioral, "budget": config.get("lane_reserves", {}).get("behavioral") if config else None},
+            "evidence": {"status": "healthy" if stale["status"] == "healthy" else stale["status"], "budget": config.get("lane_reserves", {}).get("evidence") if config else None},
+        },
+        "config_status": "healthy" if config is not None else "unavailable",
+        "config_reason": config_error,
+        "event_lag": _read_event_lag(agent),
+        "retrieval_latency": _retrieval_latency(agent),
+        "stale_links": stale,
+        "review_backlog": _review_backlog(agent),
+    }
 
 
 def _load_jsonl(path: Path) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
@@ -340,7 +605,10 @@ def collect_dashboard(
     target = _logical_path(target_root)
     stack = Path(stack_root)
     agent = target / ".agent"
-    doc = state_mod.load(target)
+    try:
+        doc = state_mod.load(target)
+    except (OSError, json.JSONDecodeError):
+        doc = None
     installed = sorted((doc.get("adapters") or {}).keys()) if doc else []
     available = _available_adapters(stack)
     missing = sorted(name for name in available if name not in installed)
@@ -354,6 +622,7 @@ def collect_dashboard(
     skill_names, skill_errors = _load_skill_names(agent)
     team = _team_status(agent)
     instances = _instances_status(agent)
+    orchestration = _orchestration_observability(agent, doc, target, stack)
 
     checks = [
         _check("pass" if agent.is_dir() else "fail", ".agent directory", "present" if agent.is_dir() else "missing"),
@@ -420,6 +689,7 @@ def collect_dashboard(
         "team": team,
         "skills": {"count": len(skill_names), "names": skill_names},
         "instances": instances,
+        "orchestration": orchestration,
         "transfer": {
             "ready": agent.is_dir(),
             "detail": "ready" if agent.is_dir() else ".agent/ missing",
@@ -460,6 +730,7 @@ def _nav_lines(model: dict[str, Any], selected: str = "Overview") -> list[str]:
         ("Overview", f"{model['score']}%  {_plural(model['warnings'], 'warning')}"),
         ("Adapters", f"{adapter_count} installed"),
         ("Doctor", f"{len(model['checks'])} checks"),
+        ("Orchestration", model["orchestration"]["event_lag"]["status"]),
         ("Verify", f"{len(model['verify'])} harnesses"),
         ("Memory", f"{_plural(memory['lessons'], 'lesson')}, {_plural(memory['candidates'], 'candidate')}"),
         ("Team Brain", team_detail),
@@ -530,6 +801,30 @@ def _doctor_lines(model: dict[str, Any]) -> list[str]:
         lines.extend(["", "Adapter wiring"])
         for row in model["adapters"]:
             lines.append(f"  {_status_word(row['status']):<4} {row['name']:<22} {row['detail']}")
+    return lines
+
+
+def _orchestration_lines(model: dict[str, Any]) -> list[str]:
+    state = model["orchestration"]
+    lag = state["event_lag"]
+    latency = state["retrieval_latency"]
+    stale = state["stale_links"]
+    backlog = state["review_backlog"]
+    lines = ["Orchestration", "", "  Lane health"]
+    for name in ("governance", "behavioral", "evidence"):
+        lane = state["lanes"][name]
+        budget = lane["budget"] if lane["budget"] is not None else "unavailable"
+        lines.append(f"  {name:<12} {lane['status']:<18} budget={budget}")
+    lines.extend([
+        "", "  Event delivery lag",
+        f"  {lag['status']:<12} pending={lag['pending']} inflight={lag['inflight']} deferred={lag['deferred']} ambiguous={lag['ambiguous']} dead={lag['dead']}",
+        f"  projects={lag['projects']} oldest_age_seconds={lag['oldest_age_seconds'] if lag['oldest_age_seconds'] is not None else 'unavailable'} reason={lag['reason']} truncated={lag['truncated']}",
+        "", "  Retrieval latency",
+        f"  {latency['status']:<12} samples={latency['samples']} p50_ms={latency['p50_ms'] if latency['p50_ms'] is not None else 'unavailable'} p95_ms={latency['p95_ms'] if latency['p95_ms'] is not None else 'unavailable'} reason={latency['reason']}",
+        "", "  Evidence and review",
+        f"  stale links: {stale['status']} records={stale['records']} current={stale['current']} stale={stale['stale']} malformed={stale['malformed']} truncated={stale['truncated']}",
+        f"  review backlog: {backlog['status']} staged={backlog['staged']} malformed={backlog['malformed']} bounded={backlog['bounded']}",
+    ])
     return lines
 
 
@@ -663,6 +958,8 @@ def _section_lines(section: str, model: dict[str, Any]) -> list[str]:
         return _adapter_lines(model)
     if section == "Doctor":
         return _doctor_lines(model)
+    if section == "Orchestration":
+        return _orchestration_lines(model)
     if section == "Verify":
         return _verify_lines(model)
     if section == "Memory":
@@ -734,6 +1031,8 @@ def _draw(stdscr: Any, section_idx: int, target_root: Path, stack_root: Path, cu
             detail = str(len(model["installed"]))
         elif name == "Verify":
             detail = str(len(model["verify"]))
+        elif name == "Orchestration":
+            detail = model["orchestration"]["event_lag"]["status"]
         elif name == "Memory":
             detail = str(model["memory"]["lessons"])
         elif name == "Team Brain":

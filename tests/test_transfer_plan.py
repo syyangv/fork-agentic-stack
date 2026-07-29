@@ -21,9 +21,9 @@ class TransferPlanTest(unittest.TestCase):
         self.assertEqual(plan.operation, "generate-curl")
         self.assertEqual(
             plan.scopes,
-            ("preferences", "accepted_lessons", "skills", "working", "episodic", "candidates"),
+            ("preferences", "decisions", "accepted_lessons", "evidence_ledger"),
         )
-        self.assertEqual(plan.sensitive_scopes, ("working", "episodic", "candidates"))
+        self.assertEqual(plan.sensitive_scopes, ())
         # Skills remain an exported data scope, but the Codex adapter itself
         # wires only AGENTS.md. Codex loads skills from the original user
         # registries; it must not recreate a copied/symlinked skill mirror.

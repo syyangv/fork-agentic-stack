@@ -179,6 +179,9 @@ def create_memos_provider(
                 evolution_pilot.timeout_seconds + 5.0
                 if evolution_pilot is not None else 45.0
             ),
+            process_attestation=paths.project_root / "bridge-process.json",
+            project_root=paths.project_root,
+            bridge_path=bridge,
         ))
     provider = MemosLocalProvider(
         project_id=project_id, journal=journal, client=client, mode=mode,

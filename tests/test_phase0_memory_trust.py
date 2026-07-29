@@ -51,12 +51,24 @@ class ScheduledReviewPolicyTest(unittest.TestCase):
         self.assertEqual([c["id"] for c in decision.needs_review], ["strong"])
         self.assertFalse(hasattr(decision, "graduated"))
         self.assertNotIn("graduate.py", (TOOLS / "scheduled_review_policy.py").read_text())
+        with self.assertRaisesRegex(ValueError, "bounded"):
+            policy.triage_candidates(
+                [{"id": str(index), "claim": "review"} for index in range(1001)]
+            )
+        with self.assertRaisesRegex(ValueError, "malformed"):
+            policy.triage_candidates([{"id": "missing-claim"}])
 
     def test_installed_scheduler_has_no_graduation_path_when_present(self):
-        scheduler = Path.home() / "Library" / "Scripts" / "agentic_stack_review_notify.py"
-        if not scheduler.is_file():
-            self.skipTest("host scheduler is not installed")
-        text = scheduler.read_text(encoding="utf-8")
+        from harness_manager.scheduled_launchers import (
+            build_review_compatibility_shim_from_state,
+        )
+        from harness_manager.scheduled_runtime import select_runtime
+
+        runtime = select_runtime()
+        text = build_review_compatibility_shim_from_state(
+            {"orchestration": {"scheduled_runtime": runtime.record()}},
+            ROOT / ".agent",
+        ).decode("utf-8")
         self.assertNotIn("graduate.py", text)
         self.assertNotIn("auto_graduated", text)
 

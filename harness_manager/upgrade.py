@@ -9,7 +9,15 @@ import tempfile
 from pathlib import Path
 from typing import Callable
 
+from . import profiles
+from . import state
 from . import skill_manifest
+from .local_schedule_config import (
+    DEFAULT_LOCAL_CONFIG,
+    DEFAULT_LOCAL_TEMPLATE,
+    seed_local_schedule_config,
+    validate_local_schedule_config_for_upgrade,
+)
 
 
 def upgrade(
@@ -30,8 +38,23 @@ def upgrade(
     if not dst_agent.is_dir():
         print(f"error: {dst_agent} not found; install agentic-stack first", file=sys.stderr)
         return 2
+    try:
+        profile, record_migration = profiles.resolve_upgrade_profile(
+            state.load(target_root), dst_agent,
+        )
+        profiles.validate_blocked_configuration(dst_agent)
+        validate_local_schedule_config_for_upgrade(dst_agent)
+        migration_record = (
+            profiles.profile_record(
+                profile, forbidden_roots=(target_root, stack_root),
+            )
+            if record_migration else None
+        )
+    except ValueError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 2
 
-    actions = _plan(src_agent, dst_agent)
+    actions = _plan(src_agent, dst_agent, profile)
     if not actions:
         log(f"{target_root}: .agent infrastructure already current")
     else:
@@ -54,10 +77,21 @@ def upgrade(
 
     for src, dst in actions:
         dst.parent.mkdir(parents=True, exist_ok=True)
-        shutil.copy2(src, dst)
+        if (
+            src == src_agent / DEFAULT_LOCAL_TEMPLATE
+            and dst == dst_agent / DEFAULT_LOCAL_CONFIG
+        ):
+            seed_local_schedule_config(src, dst)
+        elif src == src_agent / "infrastructure.json":
+            profiles.copy_infrastructure(src, dst, profile)
+        else:
+            shutil.copy2(src, dst)
 
     _merge_agent_gitignore(src_agent, dst_agent, log=log)
     skill_manifest.sync_manifest(target_root, log=log)
+    if record_migration:
+        assert migration_record is not None
+        state.set_orchestration_profile(target_root, migration_record)
     return 0
 
 
@@ -106,12 +140,12 @@ def _merge_agent_gitignore(
     return True
 
 
-def _plan(src_agent: Path, dst_agent: Path) -> list[tuple[Path, Path]]:
+def _plan(src_agent: Path, dst_agent: Path, profile: str) -> list[tuple[Path, Path]]:
     actions: list[tuple[Path, Path]] = []
-    for rel in _infrastructure_files(src_agent):
+    for rel in _infrastructure_files(src_agent, profile):
         src = src_agent / rel
         dst = dst_agent / rel
-        if _needs_copy(src, dst):
+        if _needs_copy(src, dst, profile=profile, relative=rel):
             actions.append((src, dst))
 
     # Orchestration config is user-owned after first creation. Install the
@@ -123,9 +157,19 @@ def _plan(src_agent: Path, dst_agent: Path) -> list[tuple[Path, Path]]:
     if src_config.is_file() and not dst_config.exists():
         actions.append((src_config, dst_config))
 
+    # This document is user-owned after its first creation.  Seed the safe
+    # default for pre-Gate-11 brains, but never parse, normalize, or rewrite an
+    # existing local file during upgrade.
+    src_schedule_template = src_agent / DEFAULT_LOCAL_TEMPLATE
+    dst_schedule_config = dst_agent / DEFAULT_LOCAL_CONFIG
+    if src_schedule_template.is_file() and not dst_schedule_config.exists():
+        actions.append((src_schedule_template, dst_schedule_config))
+
     src_index = src_agent / "skills" / "_index.md"
     dst_index = dst_agent / "skills" / "_index.md"
-    if src_index.is_file() and _needs_copy(src_index, dst_index):
+    if src_index.is_file() and _needs_copy(
+        src_index, dst_index, profile=profile, relative=Path("skills/_index.md"),
+    ):
         actions.append((src_index, dst_index))
 
     src_skills = src_agent / "skills"
@@ -140,7 +184,7 @@ def _plan(src_agent: Path, dst_agent: Path) -> list[tuple[Path, Path]]:
     return actions
 
 
-def _infrastructure_files(src_agent: Path) -> list[Path]:
+def _infrastructure_files(src_agent: Path, profile: str) -> list[Path]:
     rels: list[Path] = []
     manifest = src_agent / "infrastructure.json"
     if manifest.is_file():
@@ -163,7 +207,12 @@ def _infrastructure_files(src_agent: Path) -> list[Path]:
     memory_schemas = src_agent / "protocols" / "tool_schemas" / "memory"
     if memory_schemas.is_dir():
         rels.extend(p.relative_to(src_agent) for p in memory_schemas.rglob("*.json"))
-    return sorted(rels)
+    return sorted(rel for rel in rels if profiles.includes_infrastructure(rel, profile))
+
+
+def profile_infrastructure_files(src_agent: Path, profile: str) -> list[Path]:
+    """Public read-only inventory of stack-owned files for profile drift checks."""
+    return _infrastructure_files(src_agent, profile)
 
 
 def _ignored(path: Path) -> bool:
@@ -173,10 +222,19 @@ def _ignored(path: Path) -> bool:
     return any(fnmatch.fnmatch(path.name, pattern) for pattern in ("*.pyc", "*.pyo"))
 
 
-def _needs_copy(src: Path, dst: Path) -> bool:
+def _needs_copy(src: Path, dst: Path, *, profile: str, relative: Path) -> bool:
     if not dst.is_file():
         return True
     try:
-        return src.read_bytes() != dst.read_bytes()
+        expected = (
+            profiles.infrastructure_bytes(src, profile)
+            if relative == Path("infrastructure.json") else src.read_bytes()
+        )
+        return expected != dst.read_bytes()
     except OSError:
         return True
+
+
+def needs_profile_copy(src: Path, dst: Path, *, profile: str, relative: Path) -> bool:
+    """Public read-only byte comparison used by doctor and upgrade planning."""
+    return _needs_copy(src, dst, profile=profile, relative=relative)
