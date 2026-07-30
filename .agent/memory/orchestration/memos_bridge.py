@@ -11,6 +11,7 @@ import os
 import queue
 import re
 import subprocess
+import tempfile
 import threading
 import time
 from collections import deque
@@ -105,6 +106,9 @@ class BridgeConfig:
     request_handlers: Mapping[str, ReverseRequestHandler] | None = None
     request_timeout: float = 45.0
     max_request_handlers: int = 1
+    process_attestation: str | Path | None = None
+    project_root: str | Path | None = None
+    bridge_path: str | Path | None = None
 
     def __post_init__(self) -> None:
         if not self.command:
@@ -121,6 +125,9 @@ class BridgeConfig:
             raise ValueError("maximum line size must be at least 64 bytes")
         if self.max_request_handlers < 1:
             raise ValueError("maximum reverse request handlers must be positive")
+        attestation = (self.process_attestation, self.project_root, self.bridge_path)
+        if any(item is not None for item in attestation) and any(item is None for item in attestation):
+            raise ValueError("bridge attestation requires path, project root, and bridge path")
         for method, handler in (self.request_handlers or {}).items():
             if method != "host.llm.complete":
                 raise ValueError(f"reverse request method is not allowed: {method!r}")
@@ -275,6 +282,8 @@ class MemOSBridgeClient:
             self._join_writers(timeout=(
                 None if deadline is None else max(0.0, deadline - time.monotonic())
             ))
+            if process is not None and process.poll() is not None:
+                self._remove_process_attestation(process.pid)
             self._closed = True
             self._process = None
             self._fail_all(MemOSUnavailableError("MemOS bridge client closed"), process)
@@ -429,6 +438,11 @@ class MemOSBridgeClient:
             except (OSError, ValueError) as exc:
                 raise MemOSUnavailableError(f"cannot start MemOS bridge: {exc}") from exc
             self._process = process
+            try:
+                self._write_process_attestation(process)
+            except OSError as exc:
+                self._stop_process(process)
+                raise MemOSUnavailableError(f"cannot attest MemOS bridge process: {exc}") from exc
             threading.Thread(
                 target=self._read_stdout, args=(process,), name="memos-stdout", daemon=True
             ).start()
@@ -707,6 +721,8 @@ class MemOSBridgeClient:
                 return
             pending = tuple(self._pending.values())
             self._pending.clear()
+        if process is not None and process.poll() is not None:
+            self._remove_process_attestation(process.pid)
         for target in pending:
             try:
                 target.put_nowait(error)
@@ -750,6 +766,8 @@ class MemOSBridgeClient:
             with self._state_lock:
                 if self._process is process:
                     self._process = None
+            if process.poll() is not None:
+                self._remove_process_attestation(process.pid)
         finally:
             self._stop_lock.release()
 
@@ -770,6 +788,40 @@ class MemOSBridgeClient:
                 process.stdin.close()
             except (OSError, ValueError):
                 pass
+
+    def _write_process_attestation(self, process: subprocess.Popen[bytes]) -> None:
+        if self.config.process_attestation is None:
+            return
+        path = Path(self.config.process_attestation)
+        project_root = Path(self.config.project_root or "").resolve(strict=False)
+        bridge = Path(self.config.bridge_path or "").resolve(strict=False)
+        path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
+        payload = json.dumps({
+            "pid": process.pid, "bridge": str(bridge), "project_root": str(project_root),
+        }, sort_keys=True).encode("utf-8") + b"\n"
+        fd, temporary = tempfile.mkstemp(prefix=".bridge-process.", suffix=".tmp", dir=path.parent)
+        try:
+            os.fchmod(fd, 0o600)
+            with os.fdopen(fd, "wb") as stream:
+                stream.write(payload)
+                stream.flush()
+                os.fsync(stream.fileno())
+            os.replace(temporary, path)
+        finally:
+            if os.path.exists(temporary):
+                os.unlink(temporary)
+
+    def _remove_process_attestation(self, pid: int) -> None:
+        if self.config.process_attestation is None:
+            return
+        path = Path(self.config.process_attestation)
+        try:
+            value = json.loads(path.read_text(encoding="utf-8"))
+            if value.get("pid") != pid:
+                return
+            path.unlink()
+        except (OSError, json.JSONDecodeError, AttributeError):
+            return
 
 
 __all__ = [

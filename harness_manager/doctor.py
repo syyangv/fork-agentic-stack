@@ -15,11 +15,19 @@ import json
 import shlex
 import shutil
 import sys
+import hashlib
+import importlib.util
+import subprocess
+from contextlib import contextmanager
 from pathlib import Path
-from typing import Callable
+from typing import Callable, Mapping
 
 from . import schema as schema_mod
 from . import state as state_mod
+from . import scheduled_runtime
+from . import scheduler_doctor
+from . import profiles as profiles_mod
+from . import upgrade as upgrade_mod
 from . import __version__
 from .scheduled_review_health import default_scheduler_path, inspect_scheduler
 
@@ -79,7 +87,12 @@ def audit(target_root: Path | str, log: Callable[[str], None] | None = None) -> 
     # recover the agent from ~/.openclaw/openclaw.json, and a later
     # remove has no agent_name to unregister, orphaning the entry.
     target_root = Path(os.path.abspath(str(target_root)))
-    doc = state_mod.load(target_root)
+    try:
+        doc = state_mod.load(target_root)
+    except (OSError, json.JSONDecodeError) as exc:
+        log("✗ install-state red")
+        log(f"    install.json is unreadable: {type(exc).__name__}")
+        return 1
 
     if doc is None:
         base_result = _audit_pre_v090(target_root, log)
@@ -99,6 +112,14 @@ def audit(target_root: Path | str, log: Callable[[str], None] | None = None) -> 
         if status == RED:
             any_red = True
 
+    orchestration_status, orchestration_lines = _audit_orchestration(target_root)
+    glyph = {GREEN: "✓", YELLOW: "⚠", RED: "✗"}[orchestration_status]
+    log(f"{glyph} orchestration       {orchestration_status}")
+    for line in orchestration_lines:
+        log(f"    {line}")
+    if orchestration_status == RED:
+        any_red = True
+
     if _audit_scheduled_reviewer(log=log):
         any_red = True
 
@@ -110,6 +131,11 @@ def audit(target_root: Path | str, log: Callable[[str], None] | None = None) -> 
 def _audit_scheduled_reviewer(
     *, log: Callable[[str], None] = print, home: Path | None = None
 ) -> int:
+    # Host homes are never inspected by doctor.  Tests/approved callers may
+    # inject a temporary home to audit a legacy shim fixture.
+    if home is None:
+        log("⚠ scheduled-reviewer observations require an injected fixture")
+        return 0
     health = inspect_scheduler(default_scheduler_path(home))
     if health.status != RED:
         return 0
@@ -402,6 +428,364 @@ def _summary(doc: dict, any_red: bool) -> str:
     if any_red:
         return f"{n} adapter(s), at least 1 red — see above"
     return f"{n} adapter(s), all green or yellow"
+
+
+# ---- orchestration supportability audit -----------------------------
+
+def _audit_orchestration(
+    target_root: Path, *, stack_root: Path | None = None,
+    environ: dict[str, str] | None = None,
+    scheduler_fixture: Mapping[str, object] | None = None,
+) -> tuple[str, list[str]]:
+    """Observe Gate 2 provider/configuration state without changing it.
+
+    This intentionally has no repair/start/rebuild operation.  It only opens
+    the CRG database through the provider's read-only health path and validates
+    the pinned MemOS tree without constructing a bridge client.
+    """
+    target_root = Path(target_root)
+    agent = target_root / ".agent"
+    stack_root = Path(stack_root or os.environ.get("AGENTIC_STACK_ROOT", Path(__file__).parent.parent))
+    env = dict(os.environ if environ is None else environ)
+    lines: list[str] = []
+    status = GREEN
+
+    def add(level: str, message: str) -> None:
+        nonlocal status
+        lines.append(message)
+        status = max(status, level, key=_status_rank)
+
+    try:
+        doc = state_mod.load(target_root)
+    except (OSError, json.JSONDecodeError) as exc:
+        return RED, [f"install-state unreadable: {type(exc).__name__}"]
+    if not isinstance(doc, dict):
+        return RED, ["install-state missing; install with an explicit profile"]
+    if doc.get("schema_version") != state_mod.SCHEMA_VERSION:
+        add(RED, f"unsupported install-state schema {doc.get('schema_version')!r}; supported {state_mod.SCHEMA_VERSION}")
+    if not isinstance(doc.get("adapters"), dict):
+        add(RED, "install-state adapters must be an object")
+    orchestration = doc.get("orchestration")
+    profile: str | None = None
+    if not isinstance(orchestration, dict):
+        add(RED, "installation profile is missing or malformed")
+    else:
+        profile = orchestration.get("profile") if isinstance(orchestration.get("profile"), str) else None
+        try:
+            if profile is None:
+                raise ValueError("installation profile is missing")
+            profiles_mod.validate_profile(profile)
+            profiles_mod.validate_blocked_profile_state(orchestration)
+            add(GREEN, f"profile {profile}; Phase 8 quality gate blocked")
+        except ValueError as exc:
+            add(RED, f"Phase 8/profile invariant failed: {exc}")
+        try:
+            runtime = scheduled_runtime.runtime_from_record(
+                orchestration.get("scheduled_runtime"),
+                forbidden_roots=(target_root, stack_root),
+            )
+            add(GREEN, f"scheduled Python runtime {runtime.path} ({runtime.version})")
+        except ValueError as exc:
+            add(RED, str(exc))
+
+    config_path = agent / "memory" / "orchestration" / "config.json"
+    config = None
+    if not config_path.is_file():
+        add(RED, "orchestration config missing")
+    else:
+        try:
+            config = validate_orchestration_config_data(config_path)
+            if config["mode"] != "off":
+                add(RED, f"Phase 8 quality gate blocked: orchestration mode must remain off (found {config['mode']!r})")
+            else:
+                add(GREEN, "orchestration config schema and lane budgets valid; effective mode off")
+        except Exception as exc:
+            add(RED, f"orchestration config invalid: {type(exc).__name__}: {exc}")
+
+    infra = agent / "infrastructure.json"
+    try:
+        infra_doc = json.loads(infra.read_text(encoding="utf-8"))
+        if not isinstance(infra_doc, dict) or infra_doc.get("schema_version") != 1:
+            add(RED, f"unsupported infrastructure schema {infra_doc.get('schema_version') if isinstance(infra_doc, dict) else None!r}; supported 1")
+        else:
+            add(GREEN, "infrastructure schema 1 supported")
+    except (OSError, json.JSONDecodeError) as exc:
+        add(RED, f"infrastructure inventory invalid: {type(exc).__name__}")
+
+    if profile == profiles_mod.MINIMAL:
+        incompatible = [rel for rel in sorted(profiles_mod.minimal_omitted_paths()) if (agent / rel).exists()]
+        if incompatible:
+            add(RED, "profile-incompatible MemOS capability files present: " + ", ".join(incompatible))
+        else:
+            add(GREEN, "MemOS capability absent as expected for minimal profile")
+    elif profile == profiles_mod.STANDARD:
+        factory = agent / "memory" / "orchestration" / "memos_factory.py"
+        if not factory.is_file():
+            add(RED, "standard profile MemOS capability module missing")
+        else:
+            _audit_memos_artifact(agent, stack_root, env, add)
+
+    _audit_crg(target_root, agent, stack_root, env, add)
+    _audit_drift(agent, stack_root / ".agent", profile, add)
+    if scheduler_fixture is not None:
+        fixture_now = scheduler_fixture.get("now") if isinstance(scheduler_fixture, Mapping) else None
+        if not isinstance(fixture_now, str):
+            add(RED, "scheduler fixture missing bounded observation timestamp")
+        else:
+            scheduler_status, scheduler_lines = scheduler_doctor.audit_scheduler_fixture(
+                scheduler_fixture, now=fixture_now,
+            )
+            for line in scheduler_lines:
+                add({scheduler_doctor.GREEN: GREEN, scheduler_doctor.YELLOW: YELLOW,
+                     scheduler_doctor.RED: RED}[scheduler_status], "scheduler " + line)
+    return status, lines
+
+
+@contextmanager
+def _trusted_orchestration_module(source_agent: Path, dotted: str):
+    """Load one deployed orchestration module under a throw-away package name.
+
+    A doctor run can inspect two different brains in one interpreter.  Loading
+    under a unique package and removing every temporary module afterwards
+    avoids a global ``sys.path`` insertion or a stale ``orchestration.*`` cache.
+    """
+    package_root = source_agent / "memory" / "orchestration"
+    init = package_root / "__init__.py"
+    module_path = package_root.joinpath(*dotted.split(".")).with_suffix(".py")
+    if dotted.startswith("providers."):
+        module_path = package_root / "providers" / (dotted.rsplit(".", 1)[1] + ".py")
+    if not init.is_file() or not module_path.is_file():
+        raise FileNotFoundError(f"deployed orchestration module missing: {dotted}")
+    token = hashlib.sha256(str(source_agent.resolve(strict=False)).encode()).hexdigest()[:16]
+    package = f"_doctor_orchestration_{token}"
+    created: set[str] = set()
+    prior_dont_write_bytecode = sys.dont_write_bytecode
+    sys.dont_write_bytecode = True
+    try:
+        spec = importlib.util.spec_from_file_location(
+            package, init, submodule_search_locations=[str(package_root)],
+        )
+        if spec is None or spec.loader is None:
+            raise ImportError("cannot create deployed orchestration package spec")
+        root = importlib.util.module_from_spec(spec)
+        sys.modules[package] = root
+        created.add(package)
+        spec.loader.exec_module(root)
+        if "." in dotted:
+            parent_name, leaf = dotted.rsplit(".", 1)
+            parent_path = package_root.joinpath(*parent_name.split("."))
+            parent_spec = importlib.util.spec_from_file_location(
+                f"{package}.{parent_name}", parent_path / "__init__.py",
+                submodule_search_locations=[str(parent_path)],
+            )
+            if parent_spec is None or parent_spec.loader is None:
+                raise ImportError(f"cannot create deployed package spec: {parent_name}")
+            parent = importlib.util.module_from_spec(parent_spec)
+            sys.modules[parent_spec.name] = parent
+            created.add(parent_spec.name)
+            parent_spec.loader.exec_module(parent)
+            name = f"{parent_spec.name}.{leaf}"
+        else:
+            name = f"{package}.{dotted}"
+        module_spec = importlib.util.spec_from_file_location(name, module_path)
+        if module_spec is None or module_spec.loader is None:
+            raise ImportError(f"cannot create deployed module spec: {dotted}")
+        module = importlib.util.module_from_spec(module_spec)
+        sys.modules[name] = module
+        created.add(name)
+        module_spec.loader.exec_module(module)
+        yield module
+    finally:
+        sys.dont_write_bytecode = prior_dont_write_bytecode
+        for name in sorted((key for key in sys.modules if key == package or key.startswith(package + ".")), reverse=True):
+            sys.modules.pop(name, None)
+
+
+def _read_process_command(pid: int) -> str | None:
+    """Read a process command only; never signal, start, or stop it."""
+    try:
+        result = subprocess.run(
+            ["ps", "-o", "command=", "-p", str(pid)],
+            check=False, capture_output=True, text=True, timeout=1,
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        return None
+    command = result.stdout.strip()
+    return command or None
+
+
+def _audit_owned_memos_processes(data_root: str | Path, bridge: Path, add: Callable[[str, str], None]) -> None:
+    """Recognize only attestations bound to this exact bridge and runtime root."""
+    root = Path(data_root).expanduser().resolve(strict=False)
+    if not root.is_dir():
+        return
+    observed = False
+    for attestation in sorted(root.glob("*/bridge-process.json")):
+        try:
+            record = json.loads(attestation.read_text(encoding="utf-8"))
+            pid = record["pid"]
+            recorded_bridge = Path(record["bridge"]).resolve(strict=False)
+            project_root = Path(record["project_root"]).resolve(strict=False)
+            if not isinstance(pid, int) or recorded_bridge != bridge.resolve(strict=False):
+                continue
+            if project_root != attestation.parent.resolve(strict=False):
+                continue
+            command = _read_process_command(pid)
+        except (OSError, ValueError, TypeError, KeyError, json.JSONDecodeError):
+            continue
+        observed = True
+        if command is not None and str(recorded_bridge) in command:
+            add(RED, f"MemOS bridge unexpectedly running for {project_root} (pid {pid}); doctor did not stop it")
+        else:
+            add(YELLOW, f"MemOS bridge attestation present but process observation unavailable for {project_root}")
+    if not observed:
+        # No process state is the normal disabled condition; do not invent one.
+        return
+
+
+def _trusted_source_agent(stack_root: Path) -> Path | None:
+    """Accept executable provider code only from this harness-manager's source tree."""
+    own_root = Path(__file__).resolve().parent.parent
+    try:
+        if stack_root.resolve(strict=False) != own_root:
+            return None
+    except OSError:
+        return None
+    candidate = own_root / ".agent"
+    return candidate if candidate.is_dir() else None
+
+
+def validate_orchestration_config_data(path: Path) -> dict[str, object]:
+    """Strictly validate deployed config as JSON data, never by importing it."""
+    try:
+        value = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        raise ValueError(f"cannot read orchestration config: {exc}") from exc
+    if not isinstance(value, dict):
+        raise ValueError("orchestration config must be an object")
+    required = {"schema", "mode", "total_token_budget", "lane_reserves", "project_aliases"}
+    if set(value) != required or value.get("schema") != "agentic.memory.config.v1":
+        raise ValueError("unsupported orchestration config schema or keys")
+    if value.get("mode") not in {"off", "shadow", "assist"}:
+        raise ValueError("orchestration mode is invalid")
+    total = value.get("total_token_budget")
+    lanes = value.get("lane_reserves")
+    aliases = value.get("project_aliases")
+    if (not isinstance(total, int) or isinstance(total, bool) or not 1000 <= total <= 12000
+            or not isinstance(lanes, dict) or set(lanes) != {"governance", "behavioral", "evidence"}
+            or any(not isinstance(v, int) or isinstance(v, bool) or not 0 <= v <= 12000 for v in lanes.values())
+            or sum(lanes.values()) != total or not isinstance(aliases, dict)
+            or any(not isinstance(k, str) or not isinstance(v, str) or __import__("re").fullmatch(r"[0-9a-f]{16}", v) is None for k, v in aliases.items())):
+        raise ValueError("orchestration config lane budgets or aliases are invalid")
+    return value
+
+
+def _audit_memos_artifact(agent: Path, stack_root: Path, env: dict[str, str], add: Callable[[str, str], None]) -> None:
+    code_root = Path(env.get("AGENTIC_MEMOS_CODE_ROOT", agent / "runtime" / "providers"))
+    if not code_root.exists():
+        add(YELLOW, "MemOS disabled; pinned artifact unavailable (no code root configured)")
+        return
+    try:
+        source_agent = _trusted_source_agent(stack_root)
+        if source_agent is None:
+            add(YELLOW, "MemOS artifact inspection unavailable: trusted source is unavailable")
+            return
+        with _trusted_orchestration_module(source_agent, "memos_runtime") as runtime:
+            plugin = code_root / "memos-local-plugin" / runtime.MEMOS_PLUGIN_VERSION
+            if plugin.exists():
+                runtime.validate_pinned_plugin(plugin)
+        if not plugin.exists():
+            add(YELLOW, "MemOS disabled; pinned artifact invalid/unavailable")
+        else:
+            add(GREEN, "MemOS pinned artifact valid and disabled; doctor did not start it")
+            _audit_owned_memos_processes(
+                env.get("AGENTIC_MEMOS_DATA_ROOT", str(agent / "runtime" / "memos")),
+                plugin / "node_modules/@memtensor/memos-local-plugin/dist/bridge.cjs", add,
+            )
+    except Exception as exc:
+        add(YELLOW, f"MemOS pinned artifact invalid: {type(exc).__name__}: {exc}")
+
+
+def _audit_crg(target_root: Path, agent: Path, stack_root: Path, env: dict[str, str], add: Callable[[str, str], None]) -> None:
+    try:
+        source_agent = _trusted_source_agent(stack_root)
+        if source_agent is None:
+            add(YELLOW, "CRG inspection unavailable: trusted source is unavailable")
+            return
+        with _trusted_orchestration_module(source_agent, "providers.crg_evidence") as crg:
+            revision = env.get("AGENTIC_CRG_REVISION")
+            provider = crg.CrgEvidenceProvider(
+                repo_root=target_root, project_id="0" * 16,
+                registry_path=env.get("AGENTIC_CRG_REGISTRY"),
+                ledger=crg.EvidenceLedger(agent / "memory" / "evidence" / "ledger.jsonl"),
+                revision_resolver=(lambda _root: revision) if revision is not None else None,
+            )
+            health = provider.health()
+            supported_schemas = crg.SUPPORTED_GRAPH_SCHEMA_VERSIONS
+    except Exception as exc:
+        add(YELLOW, f"CRG unavailable: health inspection failed ({type(exc).__name__})")
+        return
+    level = GREEN if health.get("status") == "healthy" else YELLOW
+    warnings = ", ".join(str(item) for item in health.get("warnings", [])) or "none"
+    if any("volatile" in str(item) or "graph_schema_version" in str(item) for item in health.get("warnings", [])):
+        level = RED
+    schema_version = health.get("schema_version")
+    schema_checked = bool(health.get("database"))
+    schema_note = (
+        "not observed" if not schema_checked else
+        "supported" if str(schema_version) in supported_schemas else "unsupported"
+    )
+    if schema_checked and schema_note == "unsupported":
+        level = RED
+    add(level, "CRG " + str(health.get("status")) + "; "
+        f"registry={provider.registry_path}; data={health.get('data_dir')}; database={health.get('database')}; "
+        f"durable={health.get('durable')}; revision={health.get('graph_revision')}; "
+        f"updated={health.get('graph_updated_at')}; nodes={health.get('nodes')}; files={health.get('files')}; "
+        f"schema={schema_version} ({schema_note}; supported {sorted(supported_schemas)}); warnings={warnings}")
+
+
+def audit_crg_ledger_freshness(target_root: Path, agent_root: Path, stack_root: Path) -> dict[str, object]:
+    """Trusted-source, count-only CRG ledger audit for observational callers."""
+    source_agent = _trusted_source_agent(stack_root)
+    if source_agent is None:
+        return {"status": "unavailable", "current": 0, "stale": 0, "malformed": 0,
+                "records": 0, "truncated": False, "warnings": ["trusted_source_unavailable"]}
+    try:
+        with _trusted_orchestration_module(source_agent, "providers.crg_evidence") as crg, _trusted_orchestration_module(source_agent, "identity") as identity_mod:
+            identity = identity_mod.derive_project_identity(
+                target_root, os.environ.get("AGENTIC_GIT_REMOTE")
+            ).project_id
+            provider = crg.CrgEvidenceProvider(
+                repo_root=target_root, project_id=identity,
+                registry_path=os.environ.get("AGENTIC_CRG_REGISTRY"),
+                ledger=crg.EvidenceLedger(agent_root / "memory" / "evidence" / "ledger.jsonl"),
+                revision_resolver=(lambda _root: os.environ["AGENTIC_CRG_REVISION"])
+                if "AGENTIC_CRG_REVISION" in os.environ else None,
+            )
+            return provider.audit_ledger_freshness()
+    except Exception:
+        return {"status": "unavailable", "current": 0, "stale": 0, "malformed": 0,
+                "records": 0, "truncated": False, "warnings": ["crg_audit_unavailable"]}
+
+
+def _audit_drift(agent: Path, source_agent: Path, profile: str | None, add: Callable[[str, str], None]) -> None:
+    if profile is None:
+        return
+    if not source_agent.is_dir():
+        add(YELLOW, "source infrastructure unavailable; source/deployed drift not checked")
+        return
+    try:
+        paths = upgrade_mod.profile_infrastructure_files(source_agent, profile)
+        changed = [rel.as_posix() for rel in paths if upgrade_mod.needs_profile_copy(
+            source_agent / rel, agent / rel, profile=profile, relative=rel,
+        )]
+    except (OSError, ValueError) as exc:
+        add(YELLOW, f"source/deployed drift unavailable: {type(exc).__name__}")
+        return
+    if changed:
+        add(RED, "source/deployed drift (missing or changed stack-owned files): " + ", ".join(changed))
+    else:
+        add(GREEN, "source/deployed stack-owned infrastructure matches recorded profile")
 
 
 # ---- pre-v0.9.0 migration prompt -------------------------------------

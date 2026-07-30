@@ -2,7 +2,7 @@
 # install.sh — agentic-stack installer.
 #
 # Usage:
-#   ./install.sh <adapter-name> [target-dir] [--yes|--reconfigure|--force]
+#   ./install.sh <adapter-name> [target-dir] [--profile standard|minimal] [--python /absolute/python] [--yes|--reconfigure|--force]
 #                                                # install one adapter
 #   ./install.sh add <adapter-name> [target-dir] # add an adapter to an
 #                                                # already-set-up project

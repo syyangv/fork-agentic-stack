@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import argparse
+import subprocess
 import json
 import os
 import re
@@ -10,25 +11,22 @@ import sys
 from pathlib import Path
 
 AGENT_ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(Path(__file__).resolve().parent))
 sys.path.insert(0, str(AGENT_ROOT / "memory"))
 sys.path.insert(0, str(AGENT_ROOT / "harness"))
+import scheduled_review_policy  # noqa: E402
 from orchestration.identity import derive_project_identity  # noqa: E402
 from orchestration._core import contains_sensitive_plaintext  # noqa: E402
 from orchestration import legacy_recall_baseline  # noqa: E402
-from orchestration.assist_gate import AssistQualityGate  # noqa: E402
 from orchestration.config import load_config  # noqa: E402
 from orchestration.contracts import ContractError, EventEnvelope  # noqa: E402
-from orchestration.memos_factory import create_memos_provider  # noqa: E402
 from orchestration.orchestrator import (  # noqa: E402
-    build_assist_packet, build_governance_packet, build_shadow_packet,
-    format_packet_text, mark_assist_blocked,
+    build_governance_packet, format_packet_text,
 )
 from orchestration.providers.governance import GovernanceProvider  # noqa: E402
 from orchestration.providers.crg_evidence import (  # noqa: E402
     CrgEvidenceProvider, EvidenceLedger,
 )
-from orchestration.revalidation import record_retrieval_outcome  # noqa: E402
-from orchestration.promotion import stage_behavioral_candidates  # noqa: E402
 from text import word_set  # noqa: E402
 
 
@@ -42,7 +40,27 @@ def _runtime_context():
     return identity, config
 
 
-def _assist_gate(identity) -> AssistQualityGate:
+def _effective_mode(config) -> str:
+    """Honor the persisted Phase 8 block before loading behavioral modules."""
+    state_path = AGENT_ROOT / "install.json"
+    if not state_path.exists():
+        return config.mode
+    try:
+        install_state = json.loads(state_path.read_text(encoding="utf-8"))
+        orchestration = install_state.get("orchestration")
+    except (OSError, json.JSONDecodeError, AttributeError):
+        return "off"
+    if not isinstance(orchestration, dict):
+        return "off"
+    if orchestration.get("phase8_quality_gate") != "blocked":
+        return "off"
+    if isinstance(orchestration.get("profile"), str):
+        return "off"
+    return config.mode
+
+
+def _assist_gate(identity):
+    from orchestration.assist_gate import AssistQualityGate
     data_root = Path(os.environ.get(
         "AGENTIC_MEMOS_DATA_ROOT", AGENT_ROOT / "runtime" / "memos",
     ))
@@ -54,6 +72,7 @@ def _assist_gate(identity) -> AssistQualityGate:
 
 
 def _provider_session(identity, mode: str, *, assist_deadline: float | None = None):
+    from orchestration.memos_factory import create_memos_provider
     return create_memos_provider(
         AGENT_ROOT,
         identity.project_id,
@@ -103,7 +122,9 @@ def recall_command(
     identity, config = _runtime_context()
     provider = GovernanceProvider(AGENT_ROOT, identity.project_id, word_set)
     preview = None
-    if config.mode == "assist":
+    mode = _effective_mode(config)
+    if mode == "assist":
+        from orchestration.orchestrator import build_assist_packet, mark_assist_blocked
         gate = _assist_gate(identity)
         if gate.eligible:
             deadline = time.monotonic() + 0.7
@@ -130,7 +151,8 @@ def recall_command(
             packet = mark_assist_blocked(
                 build_governance_packet(provider, intent, top_k=top), gate.health(),
             )
-    elif config.mode == "shadow":
+    elif mode == "shadow":
+        from orchestration.orchestrator import build_shadow_packet
         with _provider_session(identity, "shadow") as behavioral:
             packet = build_shadow_packet(provider, behavioral, intent, top_k=top)
     else:
@@ -163,10 +185,11 @@ def health_command() -> dict:
     behavioral = {
         "status": "disabled", "mode": "off", "warnings": [],
     }
-    gate = _assist_gate(identity) if config.mode == "assist" else None
+    mode = _effective_mode(config)
+    gate = _assist_gate(identity) if mode == "assist" else None
     effective_mode = (
         "assist" if gate is not None and gate.eligible else
-        "shadow" if config.mode in {"shadow", "assist"} else "off"
+        "shadow" if mode in {"shadow", "assist"} else "off"
     )
     if effective_mode != "off":
         with _provider_session(identity, effective_mode) as provider:
@@ -177,7 +200,7 @@ def health_command() -> dict:
     evidence = _evidence_provider(identity).health()
     return {
         "schema": "agentic.memory.health.v1",
-        "mode": config.mode,
+        "mode": mode,
         "project_id": identity.project_id,
         "governance": governance_health,
         "behavioral": behavioral,
@@ -202,18 +225,19 @@ def record_command(source: str) -> dict:
     events = [EventEnvelope.from_external(item) for item in values]
     if any(event.project_id != identity.project_id for event in events):
         raise ContractError("event project does not match the active project")
-    if config.mode == "off":
+    mode = _effective_mode(config)
+    if mode == "off":
         return {
             "status": "disabled", "mode": "off",
             "event_ids": [event.event_id for event in events],
         }
-    mode = config.mode
     gate = _assist_gate(identity) if mode == "assist" else None
     if gate is not None and not gate.eligible:
         mode = "shadow"
     with _provider_session(identity, mode) as provider:
         results = [provider.record(event) for event in events]
         health = provider.health()
+    from orchestration.revalidation import record_retrieval_outcome
     for event in events:
         record_retrieval_outcome(AGENT_ROOT, event)
     if gate is not None:
@@ -233,13 +257,14 @@ def record_command(source: str) -> dict:
 
 def export_command(limit: int, max_bytes: int) -> dict:
     identity, config = _runtime_context()
-    if config.mode not in {"shadow", "assist"}:
+    mode = _effective_mode(config)
+    if mode not in {"shadow", "assist"}:
         raise RuntimeError("behavioral export requires shadow or assist mode")
     if not 1 <= limit <= 100:
         raise ValueError("export limit must be between 1 and 100")
     if not 256 <= max_bytes <= 1024 * 1024:
         raise ValueError("export max-bytes must be between 256 and 1048576")
-    with _provider_session(identity, config.mode) as provider:
+    with _provider_session(identity, mode) as provider:
         return provider.export_shadow(limit=limit, max_bytes=max_bytes)
 
 
@@ -272,7 +297,10 @@ def evidence_record_command(source: str, *, test_run: bool = False) -> dict:
 
 
 def candidates_command(intent: str, top: int, stage: bool) -> dict:
-    identity, _config = _runtime_context()
+    identity, config = _runtime_context()
+    if _effective_mode(config) == "off":
+        return {"status": "disabled", "candidates": [], "staged": 0,
+                "health": {"status": "disabled", "mode": "off"}}
     try:
         with _provider_session(identity, "assist") as provider:
             candidates, health = provider.discover_candidates(intent, top_k=top)
@@ -284,9 +312,11 @@ def candidates_command(intent: str, top: int, stage: bool) -> dict:
                 f"behavioral_provider_error:{type(exc).__name__}",
             ]},
         }
-    staged = stage_behavioral_candidates(
-        candidates, AGENT_ROOT / "memory/candidates",
-    ) if stage else 0
+    if stage:
+        from orchestration.promotion import stage_behavioral_candidates
+        staged = stage_behavioral_candidates(candidates, AGENT_ROOT / "memory/candidates")
+    else:
+        staged = 0
     return {
         "status": "staged" if stage else "preview",
         "candidates": candidates, "staged": staged, "health": health,
@@ -302,6 +332,80 @@ def _read_json_input(source: str, *, max_bytes: int) -> object:
     if len(encoded) > max_bytes:
         raise ContractError(f"input exceeds {max_bytes} bytes")
     return json.loads(encoded.decode("utf-8"))
+
+
+def scheduled_maintain_command() -> dict:
+    """Run the existing staging-only cycle; no acceptance/provider surface."""
+    environment = dict(os.environ)
+    environment["AGENTIC_SCHEDULER_RESULT"] = "1"
+    try:
+        completed = subprocess.run(
+            [sys.executable, str(AGENT_ROOT / "memory" / "auto_dream.py")],
+            cwd=AGENT_ROOT, check=False,
+            stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
+            timeout=300, shell=False, env=environment,
+        )
+    except subprocess.TimeoutExpired as exc:
+        raise RuntimeError("scheduled maintenance failed") from exc
+    if completed.returncode:
+        raise RuntimeError("scheduled maintenance failed")
+    if len(completed.stdout) > 4096:
+        raise RuntimeError("scheduled maintenance result exceeded bound")
+    try:
+        result = json.loads(completed.stdout.decode("utf-8"))
+    except (UnicodeError, json.JSONDecodeError, AttributeError) as exc:
+        raise RuntimeError("scheduled maintenance result was invalid") from exc
+    if (
+        not isinstance(result, dict)
+        or set(result) != {"candidate_count", "rejection_count", "pending_count"}
+        or any(type(result[key]) is not int or not 0 <= result[key] <= 1_000_000
+               for key in result)
+    ):
+        raise RuntimeError("scheduled maintenance result was invalid")
+    return {
+        "status": "staged",
+        "authority": "no_auto_accept",
+        "candidate_count": result["candidate_count"],
+        "rejection_count": result["rejection_count"],
+    }
+
+
+def scheduled_review_prepare_command() -> dict:
+    """Prepare a body-free, bounded review snapshot; delivery remains deferred."""
+    queue = AGENT_ROOT / "memory" / "working" / "REVIEW_QUEUE.md"
+    maintenance_state = AGENT_ROOT / "memory" / "dream-state.json"
+    local_config = AGENT_ROOT / "memory" / "orchestration" / "scheduled-local.json"
+    return scheduled_review_policy.prepare_review_snapshot(
+        queue, maintenance_state, local_config,
+    )
+
+
+def _scheduled_with_health(label: str, command):
+    """Record only bounded operational metadata for generated LaunchAgent runs."""
+    if os.environ.get("AGENTIC_SCHEDULER_RUN") != "1":
+        return command()
+    from orchestration.scheduler_health import SchedulerHealthStore
+    store = SchedulerHealthStore(AGENT_ROOT)
+    revision = os.environ.get("AGENTIC_SOURCE_REVISION", "unknown")
+    running = store.start(label, tool_version="memory_orchestrate.v1", source_revision=revision)
+    run_token = running["run_token"]
+    started = time.monotonic()
+    try:
+        value = command()
+    except BaseException:
+        store.finish(label, run_token=run_token, success=False,
+                     duration_ms=int((time.monotonic() - started) * 1000))
+        raise
+    notification = value.get("notification") if isinstance(value, dict) else None
+    outcome = "deferred" if notification == "requested_deferred" else "not_requested"
+    store.finish(
+        label, run_token=run_token, success=True,
+        duration_ms=int((time.monotonic() - started) * 1000),
+        candidate_count=value.get("candidate_count") if isinstance(value, dict) else None,
+        rejection_count=value.get("rejection_count") if isinstance(value, dict) else None,
+        notification=outcome,
+    )
+    return value
 
 
 def main() -> int:
@@ -340,6 +444,14 @@ def main() -> int:
     evidence_record.add_argument("--input", default="-")
     test_record = evidence_sub.add_parser("record-test")
     test_record.add_argument("--input", default="-")
+    maintain = sub.add_parser("maintain")
+    maintain.add_argument("--stage-candidates", action="store_true", required=True)
+    maintain.add_argument("--scheduled", action="store_true", required=True)
+    review = sub.add_parser("review")
+    review_sub = review.add_subparsers(dest="review_command", required=True)
+    prepare = review_sub.add_parser("prepare")
+    prepare.add_argument("--scheduled", action="store_true", required=True)
+    prepare.add_argument("--notify", action="store_true", required=True)
     args = parser.parse_args()
     try:
         if args.command == "recall":
@@ -360,6 +472,14 @@ def main() -> int:
                 candidates_command(args.intent, args.top, args.stage),
                 indent=2, ensure_ascii=False,
             ))
+        elif args.command == "maintain":
+            print(json.dumps(_scheduled_with_health(
+                "com.syang.agentic-stack.auto-dream", scheduled_maintain_command,
+            ), indent=2))
+        elif args.command == "review":
+            print(json.dumps(_scheduled_with_health(
+                "com.syang.agentic-stack.review-notify", scheduled_review_prepare_command,
+            ), indent=2))
         elif args.command == "evidence":
             if args.evidence_command == "health":
                 value = evidence_health_command()
@@ -374,7 +494,7 @@ def main() -> int:
             print(json.dumps(value, indent=2, ensure_ascii=False))
         return 0
     except (
-        ContractError, json.JSONDecodeError, OSError, RuntimeError,
+        ContractError, json.JSONDecodeError, OSError, RuntimeError, subprocess.TimeoutExpired,
         UnicodeError, ValueError,
     ) as exc:
         print(json.dumps({

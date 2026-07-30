@@ -1,7 +1,7 @@
 # install.ps1 — agentic-stack installer (Windows PowerShell parallel to install.sh)
 #
 # Usage:
-#   .\install.ps1 <adapter-name> [target-dir] [-Yes] [-Reconfigure] [-Force]
+#   .\install.ps1 <adapter-name> [target-dir] [-Profile standard|minimal] [-Python C:\absolute\python.exe] [-Yes] [-Reconfigure] [-Force]
 #                                              # install one adapter
 #   .\install.ps1 add <adapter-name> [target-dir]
 #                                              # add an adapter to an
@@ -37,7 +37,12 @@ param(
 
     [switch]$Yes,
     [switch]$Reconfigure,
-    [switch]$Force
+    [switch]$Force,
+
+    [ValidateSet('standard', 'minimal')]
+    [string]$Profile,
+
+    [string]$Python
 )
 
 $ErrorActionPreference = 'Stop'
@@ -73,6 +78,8 @@ if ($Args) { $cliArgs += $Args }
 if ($Yes)         { $cliArgs += '--yes' }
 if ($Reconfigure) { $cliArgs += '--reconfigure' }
 if ($Force)       { $cliArgs += '--force' }
+if ($Profile)     { $cliArgs += @('--profile', $Profile) }
+if ($Python)      { $cliArgs += @('--python', $Python) }
 
 # Hand off. -m runs the module; the dispatcher owns argv parsing.
 & $python.Source -m harness_manager.cli @cliArgs

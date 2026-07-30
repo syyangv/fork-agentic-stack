@@ -12,6 +12,7 @@ from pathlib import Path
 from typing import Callable, Iterable
 
 from . import post_install as post_install_mod
+from . import profiles as profiles_mod
 from . import schema as schema_mod
 from . import skill_manifest as skill_manifest_mod
 from . import state as state_mod
@@ -211,6 +212,8 @@ def install(
     target_root: Path | str,
     adapter_dir: Path | str,
     stack_root: Path | str,
+    profile: str = profiles_mod.STANDARD,
+    scheduled_python: str | Path | None = None,
     log: Callable[[str], None] | None = None,
 ) -> dict:
     """Apply one adapter's manifest to target_root. Returns install.json entry."""
@@ -227,9 +230,31 @@ def install(
     # 1. Drop .agent/ brain if not present (top-level concern, before any
     #    file entry; some entries depend on .agent/ existing, e.g. pi's
     #    skills_link target = .agent/skills).
+    profile = profiles_mod.validate_profile(profile)
     target_agent = target_root / ".agent"
+    prior_doc = state_mod.load(target_root)
+    if target_agent.exists():
+        profiles_mod.validate_existing_install(profile, prior_doc, target_agent)
+    else:
+        profiles_mod.validate_blocked_configuration(stack_root / ".agent")
+    # Select a fresh runtime before any installer mutation. Existing projects
+    # retain their already-validated record; changing it is a later lifecycle
+    # operation, never an incidental adapter reinstall side effect.
+    if target_agent.exists() and isinstance(prior_doc, dict) and isinstance(prior_doc.get("orchestration"), dict):
+        runtime = profiles_mod.scheduled_runtime.runtime_from_record(
+            prior_doc["orchestration"].get("scheduled_runtime"),
+            forbidden_roots=(target_root, stack_root),
+        )
+        if scheduled_python is not None and profiles_mod.scheduled_runtime.select_runtime(
+            scheduled_python, forbidden_roots=(target_root, stack_root),
+        ) != runtime:
+            raise ValueError("cannot change scheduled Python runtime during an adapter install")
+    else:
+        runtime = profiles_mod.scheduled_runtime.select_runtime(
+            scheduled_python, forbidden_roots=(target_root, stack_root),
+        )
     if not target_agent.exists():
-        shutil.copytree(stack_root / ".agent", target_agent)
+        profiles_mod.copy_brain(stack_root / ".agent", target_agent, profile=profile)
         log("  + .agent/ (portable brain)")
     if (target_agent / "skills").is_dir():
         skill_manifest_mod.sync_manifest(target_root, log=lambda _msg: None)
@@ -245,7 +270,7 @@ def install(
     # installer-created files as user-owned the second time around — then
     # `remove` would silently leave behind CLAUDE.md / .cursor/rules/*.mdc
     # because it stopped seeing them as ours.
-    prior_doc = state_mod.load(target_root) or {}
+    prior_doc = prior_doc or {}
     prior_entry = (prior_doc.get("adapters") or {}).get(adapter_name) or {}
     prior_owned = set(prior_entry.get("files_written") or [])
     # Intentionally NOT promoting synthesized files_overwritten or
@@ -379,7 +404,10 @@ def install(
     if manifest.get("brain_root_primitive"):
         entry["brain_root_primitive"] = manifest["brain_root_primitive"]
 
-    state_mod.upsert_adapter(target_root, adapter_name, entry, __version__)
+    state_mod.upsert_adapter_with_profile(
+        target_root, adapter_name, entry, __version__,
+        profiles_mod.profile_record(profile, runtime=runtime),
+    )
     if files_alerted:
         log(f"  ! adapter installed BUT requires manual merge into: {', '.join(files_alerted)}")
         log("    `./install.sh doctor` will flag this until you merge the snippet above.")

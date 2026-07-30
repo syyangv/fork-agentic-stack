@@ -55,6 +55,17 @@ def versioned_plugin_dir(code_root: str | Path) -> Path:
     )
 
 
+def validate_installed_plugin(code_root: str | Path) -> Path:
+    """Validate the immutable, pinned installed plugin without running it."""
+    plugin_dir = versioned_plugin_dir(code_root)
+    package_dir = plugin_dir / "node_modules" / "@memtensor" / "memos-local-plugin"
+    _validate_installed_package(
+        plugin_dir, package_dir, MEMOS_PLUGIN_SHASUM, MEMOS_PLUGIN_INTEGRITY,
+    )
+    _validate_tree_immutable(plugin_dir)
+    return plugin_dir
+
+
 def verify_tarball(
     tarball: str | Path,
     *,
@@ -221,6 +232,8 @@ def _validate_package_version(package_dir: Path) -> None:
         package = json.loads((package_dir / "package.json").read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError) as exc:
         raise RuntimeError("installed MemOS package metadata is missing or invalid") from exc
+    if not isinstance(package, dict):
+        raise RuntimeError("installed MemOS package metadata is missing or invalid")
     if package.get("version") != MEMOS_PLUGIN_VERSION:
         raise RuntimeError(
             f"installed MemOS version mismatch: expected {MEMOS_PLUGIN_VERSION}, "
@@ -278,7 +291,9 @@ def _validate_installed_package(
             (plugin_dir / ".agentic-stack-install.json").read_text(encoding="utf-8")
         )
     except (OSError, json.JSONDecodeError) as exc:
-        raise RuntimeError(f"existing MemOS code directory is incomplete: {plugin_dir}") from exc
+        raise RuntimeError("existing MemOS code directory metadata is incomplete or invalid") from exc
+    if not isinstance(marker, dict):
+        raise RuntimeError("existing MemOS code directory metadata is incomplete or invalid")
     if marker.get("artifact_sha1") != artifact_sha1:
         raise RuntimeError("existing MemOS code directory came from a different artifact")
     if marker.get("version") != MEMOS_PLUGIN_VERSION:

@@ -5,6 +5,8 @@ import tempfile
 import unittest
 from pathlib import Path
 
+from harness_manager import scheduled_runtime
+
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -35,6 +37,21 @@ class UpgradeManifestDoctorTest(unittest.TestCase):
         (agent / "skills").mkdir(parents=True)
         (agent / "tools").mkdir(parents=True)
         (agent / "AGENTS.md").write_text("# Brain\n", encoding="utf-8")
+        (agent / "install.json").write_text(
+            json.dumps({
+                "schema_version": 1,
+                "agentic_stack_version": "test",
+                "abs_target": str(root.resolve()),
+                "installed_at": "2026-07-28T00:00:00Z",
+                "adapters": {},
+                "orchestration": {
+                    "profile": "standard",
+                    "phase8_quality_gate": "blocked",
+                    "scheduled_runtime": scheduled_runtime.select_runtime().record(),
+                },
+            }),
+            encoding="utf-8",
+        )
         return agent
 
     def manifest_rows(self, project: Path) -> list[dict]:

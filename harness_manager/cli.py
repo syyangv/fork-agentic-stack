@@ -6,6 +6,7 @@ Anything else in first position → treated as an adapter name (existing
 `./install.sh <adapter>` UX preserved).
 """
 import argparse
+import datetime as dt
 import os
 import subprocess
 import sys
@@ -13,6 +14,7 @@ from pathlib import Path
 
 from . import doctor as doctor_mod
 from . import install as install_mod
+from . import profiles as profiles_mod
 from . import remove as remove_mod
 from . import schema as schema_mod
 from . import skill_manifest as skill_manifest_mod
@@ -37,6 +39,7 @@ VERBS = {
     "transfer",
     "upgrade",
     "sync-manifest",
+    "scheduler",
 }
 
 
@@ -76,6 +79,15 @@ def _list_adapters() -> str:
     return ", ".join(names)
 
 
+def _existing_profile(target: Path) -> str:
+    """Keep an existing project on its recorded profile when adding adapters."""
+    document = state_mod.load(target) or {}
+    orchestration = document.get("orchestration")
+    if isinstance(orchestration, dict) and isinstance(orchestration.get("profile"), str):
+        return orchestration["profile"]
+    return profiles_mod.STANDARD
+
+
 def _maybe_run_onboard(target: Path, wizard_flags: list[str]) -> int:
     """Run onboard.py against target after install (mirrors install.sh:249).
 
@@ -113,7 +125,13 @@ def _maybe_run_onboard(target: Path, wizard_flags: list[str]) -> int:
 
 # ---- subcommands -----------------------------------------------------
 
-def cmd_install(adapter_name: str, target: Path, wizard_flags: list[str]) -> int:
+def cmd_install(
+    adapter_name: str,
+    target: Path,
+    wizard_flags: list[str],
+    profile: str | None = None,
+    scheduled_python: str | None = None,
+) -> int:
     """Install one adapter into target. Existing `./install.sh <adapter>` UX.
 
     Refuses on pre-v0.9 projects (no install.json) when STRONG adapter
@@ -145,13 +163,20 @@ def cmd_install(adapter_name: str, target: Path, wizard_flags: list[str]) -> int
             file=sys.stderr,
         )
         return 2
-    manifest = _adapter_manifest(adapter_name)
-    install_mod.install(
-        manifest=manifest,
-        target_root=target,
-        adapter_dir=_adapter_dir(adapter_name),
-        stack_root=_stack_root(),
-    )
+    profile = profiles_mod.validate_profile(profile or _existing_profile(target))
+    try:
+        manifest = _adapter_manifest(adapter_name)
+        install_mod.install(
+            manifest=manifest,
+            target_root=target,
+            adapter_dir=_adapter_dir(adapter_name),
+            stack_root=_stack_root(),
+            profile=profile,
+            scheduled_python=scheduled_python,
+        )
+    except ValueError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 2
     # Propagate the onboarding wizard's exit code: Ctrl-C, exception, or
     # explicit failure inside onboard.py should fail the install command,
     # matching the pre-v0.9.0 `exec python3 onboard.py` semantics.
@@ -202,7 +227,10 @@ def _maybe_offer_manage(target: Path) -> None:
         manage_tui.run(target_root=target, stack_root=_stack_root())
 
 
-def cmd_add(adapter_name: str, target: Path) -> int:
+def cmd_add(
+    adapter_name: str, target: Path, profile: str | None = None,
+    scheduled_python: str | None = None,
+) -> int:
     """Append one adapter to an existing project (no onboard wizard re-run).
 
     Refuses on pre-v0.9 projects (no install.json yet). Without this check,
@@ -226,13 +254,20 @@ def cmd_add(adapter_name: str, target: Path) -> int:
             file=sys.stderr,
         )
         return 2
-    manifest = _adapter_manifest(adapter_name)
-    install_mod.install(
-        manifest=manifest,
-        target_root=target,
-        adapter_dir=_adapter_dir(adapter_name),
-        stack_root=_stack_root(),
-    )
+    profile = profiles_mod.validate_profile(profile or _existing_profile(target))
+    try:
+        manifest = _adapter_manifest(adapter_name)
+        install_mod.install(
+            manifest=manifest,
+            target_root=target,
+            adapter_dir=_adapter_dir(adapter_name),
+            stack_root=_stack_root(),
+            profile=profile,
+            scheduled_python=scheduled_python,
+        )
+    except ValueError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 2
     return 0
 
 
@@ -240,8 +275,51 @@ def cmd_remove(adapter_name: str, target: Path, yes: bool) -> int:
     return remove_mod.remove(target_root=target, adapter_name=adapter_name, yes=yes)
 
 
-def cmd_doctor(target: Path) -> int:
-    return doctor_mod.audit(target_root=target)
+def cmd_doctor(target: Path, *, scheduler_home: Path | None = None,
+               scheduler_runner: object | None = None) -> int:
+    result = doctor_mod.audit(target_root=target)
+    if (scheduler_home is None
+            and os.path.abspath(target) == os.path.abspath(Path.home())):
+        scheduler_home = Path.home()
+    if scheduler_home is None:
+        return result
+    from . import scheduler_control, scheduler_doctor
+    try:
+        status, lines, _evidence = scheduler_control.collect_doctor(
+            target=target, home=scheduler_home, runner=scheduler_runner,
+            now=dt.datetime.now(dt.timezone.utc).isoformat().replace("+00:00", "Z"),
+        )
+    except (OSError, ValueError, scheduler_control.scheduler_lifecycle.LifecycleError) as exc:
+        print(f"[RED] scheduler: {exc}")
+        return 1
+    for line in lines:
+        print(f"[scheduler] {line}")
+    return 1 if status == scheduler_doctor.RED else result
+
+
+def cmd_scheduler(args: list[str], *, yes: bool, runner: object | None = None,
+                  plist_validator: object | None = None) -> int:
+    """Manage the user-level scheduler only through an explicit home."""
+    if yes is not True:
+        print("error: scheduler lifecycle requires explicit --yes", file=sys.stderr)
+        return 2
+    parser = argparse.ArgumentParser(prog="./install.sh scheduler")
+    parser.add_argument("action", choices=("install", "upgrade", "rollback", "uninstall"))
+    parser.add_argument("target", nargs="?")
+    parser.add_argument("--home", required=True)
+    ns = parser.parse_args(args)
+    target = Path(ns.target) if ns.target else Path(ns.home)
+    from . import scheduler_control
+    try:
+        scheduler_control.run_lifecycle(
+            ns.action, target=target, home=Path(ns.home), yes=yes,
+            runner=runner, plist_validator=plist_validator,
+        )
+    except (OSError, ValueError, scheduler_control.scheduler_lifecycle.LifecycleError) as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 2
+    print(f"scheduler {ns.action} complete for {ns.home}")
+    return 0
 
 
 def cmd_status(target: Path) -> int:
@@ -344,7 +422,7 @@ def cmd_upgrade(args: list[str], yes: bool) -> int:
     )
 
 
-def cmd_bare(target: Path, wizard_flags: list[str]) -> int:
+def cmd_bare(target: Path, wizard_flags: list[str], profile: str | None = None) -> int:
     """`./install.sh` with no args.
 
     Behavior:
@@ -355,6 +433,13 @@ def cmd_bare(target: Path, wizard_flags: list[str]) -> int:
     """
     doc = state_mod.load(target)
     if doc is not None:
+        if profile is not None:
+            print(
+                "error: --profile cannot change an installed project; "
+                "use its recorded profile or a fresh installation",
+                file=sys.stderr,
+            )
+            return 2
         if "--yes" not in wizard_flags and sys.stdin.isatty() and sys.stdout.isatty():
             return cmd_dashboard(target)
         installed = set(doc.get("adapters", {}).keys())
@@ -409,10 +494,10 @@ def cmd_bare(target: Path, wizard_flags: list[str]) -> int:
 
     # No install.json and not a legacy install — fresh project. Two paths.
     if sys.stdin.isatty() and sys.stdout.isatty():
-        return _run_install_wizard(target, wizard_flags)
+        return _run_install_wizard(target, wizard_flags, profile or profiles_mod.STANDARD)
 
     # Non-TTY (CI, scripted) → print usage, exit 2.
-    print("usage: ./install.sh <adapter-name> [target-dir]")
+    print("usage: ./install.sh <adapter-name> [target-dir] [--profile standard|minimal]")
     print(f"adapters: {_list_adapters()}")
     print()
     print("on a project that's already installed, run:")
@@ -430,7 +515,7 @@ def cmd_bare(target: Path, wizard_flags: list[str]) -> int:
     return 2
 
 
-def _run_install_wizard(target: Path, wizard_flags: list[str]) -> int:
+def _run_install_wizard(target: Path, wizard_flags: list[str], profile: str) -> int:
     """Onboarding wizard: detect → multi-select → install each → PREFERENCES.md.
 
     The original "give people options like Claude Code and all of that"
@@ -490,12 +575,17 @@ def _run_install_wizard(target: Path, wizard_flags: list[str]) -> int:
     for name in chosen:
         manifest_path = _stack_root() / "adapters" / name / "adapter.json"
         manifest = schema_mod.validate(manifest_path)
-        install_mod.install(
-            manifest=manifest,
-            target_root=target,
-            adapter_dir=_stack_root() / "adapters" / name,
-            stack_root=_stack_root(),
-        )
+        try:
+            install_mod.install(
+                manifest=manifest,
+                target_root=target,
+                adapter_dir=_stack_root() / "adapters" / name,
+                stack_root=_stack_root(),
+                profile=profile,
+            )
+        except ValueError as exc:
+            print(f"error: {exc}", file=sys.stderr)
+            return 2
 
     # Continue to existing PREFERENCES.md flow.
     return _maybe_run_onboard(target, wizard_flags)
@@ -513,6 +603,8 @@ def main(argv: list[str] | None = None) -> int:
     rest: list[str] = []
     i = 0
     yes = False
+    profile: str | None = None
+    scheduled_python: str | None = None
     while i < len(argv):
         a = argv[i]
         if a in ("--yes", "-y"):
@@ -522,15 +614,51 @@ def main(argv: list[str] | None = None) -> int:
             wizard_flags.append("--reconfigure")
         elif a == "--force":
             wizard_flags.append("--force")
+        elif a == "--profile":
+            if i + 1 >= len(argv):
+                print("error: --profile requires standard or minimal", file=sys.stderr)
+                return 2
+            i += 1
+            profile = argv[i]
+        elif a.startswith("--profile="):
+            profile = a.split("=", 1)[1]
+        elif a == "--python":
+            if i + 1 >= len(argv):
+                print("error: --python requires an absolute interpreter path", file=sys.stderr)
+                return 2
+            i += 1
+            scheduled_python = argv[i]
+        elif a.startswith("--python="):
+            scheduled_python = a.split("=", 1)[1]
         else:
             rest.append(a)
         i += 1
 
+    if profile is not None:
+        try:
+            profiles_mod.validate_profile(profile)
+        except ValueError as exc:
+            print(f"error: {exc}", file=sys.stderr)
+            return 2
+
     if not rest:
+        if scheduled_python is not None:
+            print("error: --python is only supported when installing an adapter", file=sys.stderr)
+            return 2
         target = Path.cwd()
-        return cmd_bare(target, wizard_flags)
+        return cmd_bare(target, wizard_flags, profile)
 
     first = rest[0]
+
+    if profile is not None and first in VERBS and first != "add":
+        print(
+            "error: --profile is only supported when installing an adapter or fresh project",
+            file=sys.stderr,
+        )
+        return 2
+    if scheduled_python is not None and first in VERBS and first != "add":
+        print("error: --python is only supported when installing an adapter", file=sys.stderr)
+        return 2
 
     if first in VERBS:
         verb = first
@@ -540,7 +668,7 @@ def main(argv: list[str] | None = None) -> int:
                 return 2
             adapter = rest[1]
             target = Path(rest[2]) if len(rest) >= 3 else Path.cwd()
-            return cmd_add(adapter, target)
+            return cmd_add(adapter, target, profile, scheduled_python)
         if verb == "remove":
             if len(rest) < 2:
                 print("usage: ./install.sh remove <adapter-name> [target-dir] [--yes]", file=sys.stderr)
@@ -549,8 +677,20 @@ def main(argv: list[str] | None = None) -> int:
             target = Path(rest[2]) if len(rest) >= 3 else Path.cwd()
             return cmd_remove(adapter, target, yes=yes)
         if verb == "doctor":
-            target = Path(rest[1]) if len(rest) >= 2 else Path.cwd()
-            return cmd_doctor(target)
+            doctor_args = list(rest[1:])
+            scheduler_home = None
+            if "--scheduler-home" in doctor_args:
+                index = doctor_args.index("--scheduler-home")
+                if index + 1 >= len(doctor_args):
+                    print("error: --scheduler-home requires an absolute path", file=sys.stderr)
+                    return 2
+                scheduler_home = Path(doctor_args[index + 1])
+                del doctor_args[index:index + 2]
+            if len(doctor_args) > 1:
+                print("usage: ./install.sh doctor [target-dir] [--scheduler-home HOME]", file=sys.stderr)
+                return 2
+            target = Path(doctor_args[0]) if doctor_args else Path.cwd()
+            return cmd_doctor(target, scheduler_home=scheduler_home)
         if verb == "status":
             target = Path(rest[1]) if len(rest) >= 2 else Path.cwd()
             return cmd_status(target)
@@ -588,11 +728,13 @@ def main(argv: list[str] | None = None) -> int:
         if verb == "sync-manifest":
             target = Path(rest[1]) if len(rest) >= 2 else Path.cwd()
             return cmd_sync_manifest(target)
+        if verb == "scheduler":
+            return cmd_scheduler(rest[1:], yes=yes)
 
     # Treat as adapter name (existing UX)
     adapter = first
     target = Path(rest[1]) if len(rest) >= 2 else Path.cwd()
-    return cmd_install(adapter, target, wizard_flags)
+    return cmd_install(adapter, target, wizard_flags, profile, scheduled_python)
 
 
 if __name__ == "__main__":

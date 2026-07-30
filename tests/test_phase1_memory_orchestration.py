@@ -24,6 +24,7 @@ from orchestration.identity import ProjectIdentityResolver, derive_project_ident
 from orchestration.router import LaneRequirement, allocate_lane_budgets, route_intent
 from orchestration._core import canonical_json
 from harness_manager.upgrade import upgrade
+from harness_manager.scheduled_runtime import select_runtime
 
 
 class EventEnvelopeTest(unittest.TestCase):
@@ -381,7 +382,7 @@ class ConfigurationTest(unittest.TestCase):
             local_config.parent.mkdir(parents=True)
             custom = {
                 "schema": "agentic.memory.config.v1",
-                "mode": "shadow",
+                "mode": "off",
                 "total_token_budget": 12000,
                 "lane_reserves": {
                     "governance": 5000,
@@ -391,6 +392,16 @@ class ConfigurationTest(unittest.TestCase):
                 "project_aliases": {},
             }
             local_config.write_text(json.dumps(custom), encoding="utf-8")
+            (agent / "install.json").write_text(json.dumps({
+                "schema_version": 1, "agentic_stack_version": "test",
+                "abs_target": str(project.resolve()), "installed_at": "2026-07-28T00:00:00Z",
+                "adapters": {},
+                "orchestration": {
+                    "profile": "standard",
+                    "phase8_quality_gate": "blocked",
+                    "scheduled_runtime": select_runtime().record(),
+                },
+            }), encoding="utf-8")
 
             self.assertEqual(upgrade(project, ROOT, yes=True, log=lambda _msg: None), 0)
 

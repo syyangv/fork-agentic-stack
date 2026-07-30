@@ -2,3 +2,4 @@
 memory/dream-state.json
 memory/candidates/.lifecycle.lock
 runtime/
+memory/orchestration/scheduled-local.json

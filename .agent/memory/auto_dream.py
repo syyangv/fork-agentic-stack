@@ -218,7 +218,11 @@ def run_dream_cycle():
             # hides real work.
             pending = write_review_queue_summary(CANDIDATES, REVIEW_QUEUE)
             _status(f"dream cycle: no entries (queue has {pending} pending)")
-            return
+            return {
+                "candidate_count": 0,
+                "rejection_count": 0,
+                "pending_count": pending,
+            }
 
         cluster_entries = _entries_for_clustering(entries)
         patterns = cluster_and_extract(cluster_entries, threshold=CLUSTER_SIMILARITY)
@@ -243,6 +247,11 @@ def run_dream_cycle():
         f"archived={len(archived)} kept={len(kept)} "
         f"clustered={len(cluster_entries)}/{len(entries)}"
     )
+    return {
+        "candidate_count": staged,
+        "rejection_count": prefiltered,
+        "pending_count": pending,
+    }
 
 
 def main():
@@ -250,7 +259,7 @@ def main():
     run_id = start_cycle(DREAM_STATE)
     try:
         _append_marker(STOP_ENTRY_MARKER, "entry", run_id)
-        run_dream_cycle()
+        result = run_dream_cycle()
         _append_marker(STOP_COMPLETION_MARKER, "completed", run_id)
     except BaseException as exc:
         fail_cycle(DREAM_STATE, run_id, exc, started_monotonic=started)
@@ -259,6 +268,8 @@ def main():
         # This is deliberately the last write: success means the entire cycle,
         # including queue rendering and archival, completed without error.
         finish_cycle(DREAM_STATE, run_id, started_monotonic=started)
+        if os.environ.get("AGENTIC_SCHEDULER_RESULT") == "1":
+            print(json.dumps(result, sort_keys=True, separators=(",", ":")))
 
 
 if __name__ == "__main__":

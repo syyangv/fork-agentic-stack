@@ -16,6 +16,7 @@ sys.path.insert(0, str(AGENT / "harness"))
 from orchestration.orchestrator import build_governance_packet, format_packet_text
 from orchestration.providers.governance import GovernanceProvider
 from text import word_set
+from harness_manager.scheduled_runtime import select_runtime
 
 
 def load_recall():
@@ -238,7 +239,18 @@ class GovernanceOrchestratorTest(unittest.TestCase):
         from harness_manager.upgrade import upgrade
         with tempfile.TemporaryDirectory() as tmp:
             project = Path(tmp)
-            (project / ".agent").mkdir()
+            agent = project / ".agent"
+            agent.mkdir()
+            (agent / "install.json").write_text(json.dumps({
+                "schema_version": 1, "agentic_stack_version": "test",
+                "abs_target": str(project.resolve()), "installed_at": "2026-07-28T00:00:00Z",
+                "adapters": {},
+                "orchestration": {
+                    "profile": "minimal",
+                    "phase8_quality_gate": "blocked",
+                    "scheduled_runtime": select_runtime().record(),
+                },
+            }))
             self.assertEqual(upgrade(project, ROOT, yes=True, log=lambda _msg: None), 0)
             self.assertTrue((project / ".agent/tools/memory_orchestrate.py").is_file())
             self.assertTrue((project / ".agent/memory/orchestration/providers/governance.py").is_file())

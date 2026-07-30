@@ -34,6 +34,7 @@ SAFE_TOOLS = {
     "change_review": "detect_changes",
 }
 CRG_TOOL_NAMES = frozenset(SAFE_TOOLS.values())
+SUPPORTED_GRAPH_SCHEMA_VERSIONS = frozenset({"9"})
 GRAPH_QUERY_PATTERNS = frozenset({
     "callers_of", "callees_of", "imports_of", "importers_of", "children_of",
     "tests_for", "inheritors_of", "file_summary",
@@ -210,10 +211,16 @@ class CrgEvidenceProvider:
             warnings.append("missing_graph_revision")
         elif revision and graph_revision != revision:
             warnings.append("revision_mismatch")
+        graph_schema = metadata.get("schema_version")
+        if not graph_schema:
+            warnings.append("missing_graph_schema_version")
+        elif str(graph_schema) not in SUPPORTED_GRAPH_SCHEMA_VERSIONS:
+            warnings.append("unsupported_graph_schema_version")
         unavailable = any(item in warnings for item in (
             "volatile_data_directory", "zero_nodes", "zero_files",
             "missing_repository_revision", "missing_graph_timestamp",
             "invalid_graph_timestamp", "missing_graph_revision",
+            "missing_graph_schema_version", "unsupported_graph_schema_version",
         ))
         status = "unavailable" if unavailable else (
             "stale" if "revision_mismatch" in warnings else "healthy"
@@ -222,10 +229,147 @@ class CrgEvidenceProvider:
             status, warnings, revision=revision, data_dir=str(data_dir),
             database=str(database), durable=durable, nodes=nodes, files=files,
             graph_revision=graph_revision, graph_updated_at=graph_updated,
-            schema_version=metadata.get("schema_version"),
+            schema_version=graph_schema,
             embedding_provider=metadata.get("embedding_provider"),
             embedding_model=metadata.get("embedding_model"),
         )
+
+    def audit_ledger_freshness(self, max_rows: int = 1000) -> dict[str, Any]:
+        """Return bounded count-only current/stale ledger reconciliation.
+
+        This is intentionally observational: it opens only the ledger and graph
+        read-only, exposes no row content, and reuses the provider's current
+        graph/symbol validation boundary.
+        """
+        if type(max_rows) is not int or not 1 <= max_rows <= 1000:
+            raise ValueError("max_rows must be an integer between 1 and 1000")
+        limit = max_rows
+        summary = {"status": "unavailable", "current": 0, "stale": 0,
+                   "malformed": 0, "records": 0, "truncated": False,
+                   "warnings": []}
+        health = self.health()
+        if health.get("status") == "unavailable":
+            summary["warnings"] = ["graph_unavailable"]
+            return summary
+        graph_stale = health.get("status") == "stale"
+        if graph_stale:
+            summary["warnings"] = ["graph_stale"]
+        database = health.get("database")
+        revision = health.get("repository_revision")
+        timestamp = health.get("graph_updated_at")
+        if not isinstance(database, str) or not isinstance(revision, str) or not isinstance(timestamp, str):
+            summary["warnings"] = ["graph_unavailable"]
+            return summary
+        path = self.ledger.path
+        descriptor: int | None = None
+        try:
+            _reject_symlink_components(path.parent)
+            info = path.lstat()
+            if (stat.S_ISLNK(info.st_mode) or not stat.S_ISREG(info.st_mode)
+                    or info.st_size > MAX_LEDGER_READ_BYTES or info.st_mode & 0o077
+                    or (hasattr(os, "getuid") and info.st_uid != os.getuid())):
+                raise OSError("unsafe ledger")
+            descriptor = os.open(path, os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0))
+            opened = os.fstat(descriptor)
+            if (
+                not stat.S_ISREG(opened.st_mode)
+                or (opened.st_dev, opened.st_ino, opened.st_size)
+                != (info.st_dev, info.st_ino, info.st_size)
+                or opened.st_mode & 0o077
+                or (hasattr(os, "getuid") and opened.st_uid != os.getuid())
+            ):
+                raise OSError("ledger raced")
+        except FileNotFoundError:
+            if descriptor is not None:
+                os.close(descriptor)
+            summary["warnings"] = ["ledger_missing"]
+            return summary
+        except (OSError, CrgEvidenceError):
+            if descriptor is not None:
+                os.close(descriptor)
+            summary.update(status="degraded", malformed=1, warnings=["ledger_unreadable"])
+            return summary
+        processed = 0
+        total_bytes = 0
+        try:
+            with os.fdopen(descriptor, "rb", closefd=False) as stream:
+                for raw in stream:
+                    total_bytes += len(raw)
+                    if total_bytes > MAX_LEDGER_READ_BYTES:
+                        summary.update(
+                            status="degraded", malformed=summary["malformed"] + 1,
+                            warnings=["ledger_read_limit"],
+                        )
+                        return summary
+                    if not raw.strip():
+                        continue
+                    if processed >= limit:
+                        summary.update(status="degraded", truncated=True, warnings=["ledger_row_limit"])
+                        return summary
+                    processed += 1
+                    if len(raw) > MAX_RECORD_BYTES + 1:
+                        summary["malformed"] += 1
+                        continue
+                    try:
+                        row = json.loads(raw)
+                        validate_schema(row, "evidence-ledger-v1.schema.json")
+                        provenance = row.get("provenance") if isinstance(row, Mapping) else None
+                        locator = provenance.get("locator") if isinstance(provenance, Mapping) else None
+                        evidence_id = row.get("evidence_id") if isinstance(row, Mapping) else None
+                        if (not isinstance(evidence_id, str) or not isinstance(provenance, Mapping)
+                                or not isinstance(locator, Mapping)
+                                or provenance.get("source_id") != evidence_id
+                                or provenance.get("project_id") != self.project_id):
+                            raise ValueError
+                        summary["records"] += 1
+                        current = (
+                            provenance.get("freshness") == "fresh"
+                            and provenance.get("repository_revision") == revision
+                        )
+                        if provenance.get("kind") in {"crg_node", "crg_flow"}:
+                            current = (
+                                current
+                                and health.get("status") == "healthy"
+                                and locator.get("graph_updated_at") == timestamp
+                            )
+                            if current:
+                                self._validate_symbols(locator.get("symbols", []), Path(database))
+                        if current:
+                            summary["current"] += 1
+                        else:
+                            summary["stale"] += 1
+                    except CrgEvidenceError:
+                        summary["stale"] += 1
+                    except (
+                        json.JSONDecodeError, UnicodeError, SchemaValidationError,
+                        TypeError, ValueError,
+                    ):
+                        summary["malformed"] += 1
+                    except OSError:
+                        summary["stale"] += 1
+                after = os.fstat(descriptor)
+                if (
+                    after.st_dev, after.st_ino, after.st_size, after.st_mtime_ns
+                ) != (
+                    opened.st_dev, opened.st_ino, opened.st_size, opened.st_mtime_ns
+                ):
+                    summary.update(
+                        status="degraded", malformed=summary["malformed"] + 1,
+                        warnings=["ledger_changed"],
+                    )
+                    return summary
+        except OSError:
+            summary.update(status="degraded", malformed=summary["malformed"] + 1, warnings=["ledger_unreadable"])
+            return summary
+        finally:
+            assert descriptor is not None
+            os.close(descriptor)
+        summary["status"] = (
+            "healthy"
+            if not graph_stale and not summary["stale"] and not summary["malformed"]
+            else "degraded"
+        )
+        return summary
 
     def request(
         self, *, operation: str, query: str = "", target: str = "",
