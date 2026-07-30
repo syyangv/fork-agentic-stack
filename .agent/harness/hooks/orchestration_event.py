@@ -83,7 +83,7 @@ class AlreadyActiveRun(HookEventError):
     pass
 
 
-@dataclass(frozen=True, slots=True)
+@dataclass(frozen=True)
 class Correlation:
     run_id: str
     session_id: str
@@ -92,7 +92,7 @@ class Correlation:
     finalizing: bool = False
 
 
-@dataclass(frozen=True, slots=True)
+@dataclass(frozen=True)
 class CaptureStatus:
     status: str
     reason: str

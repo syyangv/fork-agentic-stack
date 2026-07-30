@@ -14,7 +14,7 @@ from typing import Any
 from ._core import SchemaValidationError, validate_schema
 
 
-@dataclass(frozen=True, slots=True)
+@dataclass(frozen=True)
 class AssistQualityGate:
     metrics: Mapping[str, Any]
     warnings: tuple[str, ...]

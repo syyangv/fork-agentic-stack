@@ -5,6 +5,8 @@ mission-control (beta), brain, transfer, upgrade, sync-manifest.
 Anything else in first position → treated as an adapter name (existing
 `./install.sh <adapter>` UX preserved).
 """
+from __future__ import annotations
+
 import argparse
 import datetime as dt
 import os

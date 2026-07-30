@@ -125,7 +125,7 @@ class JournalConflict(ValueError):
     """A stable delivery key was reused with different content."""
 
 
-@dataclass(frozen=True, slots=True)
+@dataclass(frozen=True)
 class Delivery:
     sequence: int
     delivery_id: str

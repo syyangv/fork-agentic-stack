@@ -14,7 +14,7 @@ _WINDOWS_ABSOLUTE = re.compile(r"^[A-Za-z]:[\\/]")
 _SCP_REMOTE = re.compile(r"^(?:[^@/]+@)?([^:/]+):(.+)$")
 
 
-@dataclass(frozen=True, slots=True)
+@dataclass(frozen=True)
 class ProjectIdentity:
     project_id: str
     canonical_source: str

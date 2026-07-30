@@ -34,7 +34,7 @@ def _external(data: Mapping[str, Any], schema: str) -> dict[str, Any]:
     return plain
 
 
-@dataclass(frozen=True, slots=True)
+@dataclass(frozen=True)
 class EventEnvelope:
     schema: str
     event_id: str
@@ -125,7 +125,7 @@ class EventEnvelope:
 _EVENT_FIELDS = tuple(EventEnvelope.__dataclass_fields__)
 
 
-@dataclass(frozen=True, slots=True)
+@dataclass(frozen=True)
 class ProvenanceRef:
     kind: str
     provider: str
@@ -154,7 +154,7 @@ class ProvenanceRef:
         return {name: thaw(getattr(self, name)) for name in self.__dataclass_fields__}
 
 
-@dataclass(frozen=True, slots=True)
+@dataclass(frozen=True)
 class RetrievalItem:
     item_id: str
     lane: str
@@ -187,7 +187,7 @@ class RetrievalItem:
         return {name: thaw(getattr(self, name)) for name in self.__dataclass_fields__}
 
 
-@dataclass(frozen=True, slots=True)
+@dataclass(frozen=True)
 class ContextPacket:
     schema: str
     intent: str

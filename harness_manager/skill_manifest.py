@@ -15,6 +15,16 @@ def sync_manifest(target_root: Path | str, log: Callable[[str], None] | None = N
     """Upsert every skills/*/SKILL.md frontmatter block into _manifest.jsonl."""
     if log is None:
         log = print
+    payload, count = render_manifest(target_root)
+    manifest_path = Path(target_root) / ".agent" / "skills" / "_manifest.jsonl"
+    manifest_path.parent.mkdir(parents=True, exist_ok=True)
+    manifest_path.write_bytes(payload)
+    log(f"synced {count} skill manifest entr{'y' if count == 1 else 'ies'}")
+    return count
+
+
+def render_manifest(target_root: Path | str) -> tuple[bytes, int]:
+    """Render manifest bytes without publishing them."""
     target_root = Path(target_root)
     skills_dir = target_root / ".agent" / "skills"
     if not skills_dir.is_dir():
@@ -44,12 +54,11 @@ def sync_manifest(target_root: Path | str, log: Callable[[str], None] | None = N
         if name not in ordered_names:
             ordered_names.append(name)
 
-    manifest_path.parent.mkdir(parents=True, exist_ok=True)
-    with manifest_path.open("w", encoding="utf-8") as f:
-        for name in ordered_names:
-            f.write(json.dumps(by_name[name], separators=(",", ":")) + "\n")
-    log(f"synced {len(seen)} skill manifest entr{'y' if len(seen) == 1 else 'ies'}")
-    return len(seen)
+    payload = "".join(
+        json.dumps(by_name[name], separators=(",", ":")) + "\n"
+        for name in ordered_names
+    ).encode("utf-8")
+    return payload, len(seen)
 
 
 def parse_skill_frontmatter(skill_md: Path | str) -> dict:

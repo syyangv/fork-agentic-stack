@@ -46,7 +46,7 @@ _PILOT_KEYS = {
 _DAILY_CAP_KEYS = {"policy", "world_model", "skill", "other"}
 
 
-@dataclass(frozen=True, slots=True)
+@dataclass(frozen=True)
 class EvolutionPilotConfig:
     """Validated, project-bound opt-in for host-assisted evolution."""
 
@@ -60,7 +60,7 @@ class EvolutionPilotConfig:
     source: Path
 
 
-@dataclass(frozen=True, slots=True)
+@dataclass(frozen=True)
 class MemosRuntimePaths:
     plugin_dir: Path
     project_root: Path

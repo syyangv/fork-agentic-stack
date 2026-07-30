@@ -11,8 +11,10 @@ from __future__ import annotations
 import json
 import os
 import tempfile
+import stat
+from contextlib import contextmanager
 from pathlib import Path
-from typing import Any
+from typing import Any, Iterator
 
 try:
     import fcntl  # POSIX
@@ -262,19 +264,59 @@ def upsert_adapter_with_profile(
 
 def set_orchestration_profile(target_root: Path | str, record: dict[str, object]) -> None:
     """Persist fresh-install profile state without rewriting governance data."""
-    _validate_profile_record(record)
-    profile = record["profile"]
     p = install_state_path(target_root)
     with _lock(p):
         doc = _load_no_lock(p)
         if doc is None:
             raise FileNotFoundError("install.json must exist before recording a profile")
-        existing = doc.get("orchestration")
-        _validate_existing_profile(existing, profile)
-        next_record = dict(existing) if isinstance(existing, dict) else {}
-        next_record.update(record)
-        doc["orchestration"] = next_record
-        _save_locked(p, doc)
+        _save_locked(p, with_orchestration_profile(doc, record))
+
+
+def with_orchestration_profile(
+    document: object, record: dict[str, object],
+) -> dict[str, Any]:
+    """Return validated install state with a profile record, without writing."""
+    _validate_profile_record(record)
+    if not isinstance(document, dict):
+        raise ValueError("install.json must contain an object")
+    profile = record["profile"]
+    existing = document.get("orchestration")
+    _validate_existing_profile(existing, profile)
+    next_record = dict(existing) if isinstance(existing, dict) else {}
+    next_record.update(record)
+    result = dict(document)
+    result["orchestration"] = next_record
+    return result
+
+
+@contextmanager
+def install_state_lock_at(agent_root_fd: int) -> Iterator[None]:
+    """Hold the install.json sidecar lock beneath a pinned ``.agent`` root."""
+    descriptor = os.open(
+        "install.json.lock",
+        os.O_RDWR | os.O_CREAT | getattr(os, "O_NOFOLLOW", 0),
+        0o600,
+        dir_fd=agent_root_fd,
+    )
+    try:
+        if not stat.S_ISREG(os.fstat(descriptor).st_mode):
+            raise ValueError("install-state lock must be a regular file")
+        if _HAVE_FLOCK:
+            fcntl.flock(descriptor, fcntl.LOCK_EX)
+        elif _HAVE_MSVCRT:
+            os.lseek(descriptor, 0, os.SEEK_SET)
+            msvcrt.locking(descriptor, msvcrt.LK_LOCK, 1)
+        yield
+    finally:
+        if _HAVE_FLOCK:
+            fcntl.flock(descriptor, fcntl.LOCK_UN)
+        elif _HAVE_MSVCRT:
+            try:
+                os.lseek(descriptor, 0, os.SEEK_SET)
+                msvcrt.locking(descriptor, msvcrt.LK_UNLCK, 1)
+            except OSError:
+                pass
+        os.close(descriptor)
 
 
 def _validate_profile_record(record: dict[str, object]) -> None:

@@ -4,6 +4,7 @@ import contextlib
 import hashlib
 import json
 import os
+import re
 import sqlite3
 import sys
 import tempfile
@@ -165,11 +166,20 @@ class DashboardObservabilityTest(unittest.TestCase):
             f"deferred={lag['deferred']} ambiguous={lag['ambiguous']} dead={lag['dead']}",
             rendered,
         )
-        self.assertIn(
-            f"projects={lag['projects']} oldest_age_seconds={lag['oldest_age_seconds']} "
-            f"reason={lag['reason']} truncated={lag['truncated']}",
+        rendered_lag = re.search(
+            r"projects=(\d+) oldest_age_seconds=(\d+) "
+            r"reason=([a-z_]+) truncated=(True|False)",
             rendered,
         )
+        self.assertIsNotNone(rendered_lag)
+        assert rendered_lag is not None
+        self.assertEqual(int(rendered_lag.group(1)), lag["projects"])
+        self.assertLessEqual(
+            abs(int(rendered_lag.group(2)) - lag["oldest_age_seconds"]),
+            1,
+        )
+        self.assertEqual(rendered_lag.group(3), lag["reason"])
+        self.assertEqual(rendered_lag.group(4), str(lag["truncated"]))
         latency = observability["retrieval_latency"]
         self.assertIn(
             f"samples={latency['samples']} p50_ms=unavailable p95_ms=unavailable "
