@@ -5,6 +5,17 @@ All notable changes to this project.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+- **Zed adapter.** Adds `adapters/zed/`, installing a project-root `.rules`
+  file read by Zed's Assistant panel. Installed with the `merge_or_alert`
+  policy so a pre-existing project `.rules` is never overwritten. Registered
+  in doctor detection signals as `weak` — `.rules` is a generic root filename
+  and does not on its own prove a Zed install. Declared in the harness
+  capability matrix as hookless (all signals `False`), matching the Cursor
+  and Windsurf shims. Documented in `docs/per-harness/zed.md`.
+
 ## [0.18.0] — 2026-05-10
 
 Minor release. Adds first-class integration with the external Brain CLI/MCP
