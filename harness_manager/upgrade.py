@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import fnmatch
+import base64
 import json
 import os
 import stat
@@ -20,6 +21,10 @@ from .local_schedule_config import (
     load_local_schedule_config,
     validate_local_schedule_config_for_upgrade,
 )
+
+
+_ROLLBACK_JOURNAL = Path(".upgrade-transaction.json")
+_MAX_ROLLBACK_BYTES = 64 * 1024 * 1024
 
 
 def upgrade(
@@ -46,6 +51,17 @@ def upgrade(
             portable_root_identity = _portable_root_identity(dst_agent)
     except ValueError:
         print(f"error: {dst_agent} not found; install agentic-stack first", file=sys.stderr)
+        return 2
+    try:
+        with _upgrade_lock(root_fd, target_root):
+            _UpgradeRollback.recover_if_present(
+                root_fd=root_fd,
+                dst_agent=dst_agent,
+                portable_root_identity=portable_root_identity,
+            )
+    except (OSError, ValueError) as exc:
+        _close_root_fd(root_fd)
+        print(f"error: cannot recover interrupted upgrade: {exc}", file=sys.stderr)
         return 2
     try:
         profile, record_migration = profiles.resolve_upgrade_profile(
@@ -114,11 +130,7 @@ def upgrade(
     }
     if record_migration:
         transaction_relatives.add(Path("install.json"))
-    lock: AbstractContextManager[object] = (
-        state.install_state_lock_at(root_fd)
-        if root_fd is not None
-        else state.install_state_lock(target_root)
-    )
+    lock = _upgrade_lock(root_fd, target_root)
     try:
         with lock:
             rollback = _UpgradeRollback.capture(
@@ -127,6 +139,7 @@ def upgrade(
                 portable_root_identity=portable_root_identity,
                 relatives=sorted(transaction_relatives),
             )
+            rollback.persist()
             try:
                 for src, dst in actions:
                     _copy_upgrade_action(
@@ -173,8 +186,14 @@ def upgrade(
                         portable_root_identity=portable_root_identity,
                         mode=existing_state[1],
                     )
-            except Exception:
-                rollback.restore()
+                rollback.commit()
+            except BaseException:
+                try:
+                    rollback.restore()
+                    rollback.commit()
+                except BaseException:
+                    # Keep the durable journal for the next invocation.
+                    pass
                 raise
         return 0
     except (OSError, ValueError) as exc:
@@ -350,6 +369,16 @@ def _descriptor_relative_supported() -> bool:
 def _close_root_fd(root_fd: int | None) -> None:
     if root_fd is not None:
         os.close(root_fd)
+
+
+def _upgrade_lock(
+    root_fd: int | None, target_root: Path,
+) -> AbstractContextManager[object]:
+    return (
+        state.install_state_lock_at(root_fd)
+        if root_fd is not None
+        else state.install_state_lock(target_root)
+    )
 
 
 def _safe_lexical_absolute(path: str | Path) -> Path:
@@ -697,6 +726,158 @@ class _UpgradeRollback:
             snapshots=snapshots,
             existing_directories=existing_directories,
         )
+
+    @classmethod
+    def recover_if_present(
+        cls,
+        *,
+        root_fd: int | None,
+        dst_agent: Path,
+        portable_root_identity: tuple[int, int] | None,
+    ) -> bool:
+        encoded = _read_upgrade_file(
+            root_fd, dst_agent, _ROLLBACK_JOURNAL,
+            max_bytes=(_MAX_ROLLBACK_BYTES * 2),
+        )
+        if encoded is None:
+            return False
+        journal_info = _relative_file_stat(root_fd, dst_agent, _ROLLBACK_JOURNAL)
+        if (
+            journal_info is None
+            or stat.S_IMODE(journal_info.st_mode) & 0o077
+            or (
+                hasattr(os, "geteuid")
+                and journal_info.st_uid != os.geteuid()
+            )
+        ):
+            raise ValueError("upgrade recovery journal is not owner-safe")
+        try:
+            document = json.loads(encoded[0].decode("utf-8"))
+        except (UnicodeError, json.JSONDecodeError) as exc:
+            raise ValueError("upgrade recovery journal is malformed") from exc
+        if (
+            not isinstance(document, dict)
+            or set(document) != {"schema_version", "snapshots", "existing_directories"}
+            or document.get("schema_version") != 1
+            or not isinstance(document.get("snapshots"), list)
+            or not isinstance(document.get("existing_directories"), list)
+        ):
+            raise ValueError("upgrade recovery journal is malformed")
+        snapshots: dict[Path, tuple[bytes, int, int, int] | None] = {}
+        total = 0
+        for item in document["snapshots"]:
+            if not isinstance(item, dict) or set(item) != {
+                "path", "exists", "data", "mode", "atime_ns", "mtime_ns",
+            }:
+                raise ValueError("upgrade recovery journal is malformed")
+            relative = Path(item.get("path") or "")
+            if (
+                relative == _ROLLBACK_JOURNAL
+                or relative.is_absolute()
+                or not relative.parts
+                or ".." in relative.parts
+                or relative.as_posix() != item.get("path")
+                or relative in snapshots
+            ):
+                raise ValueError("upgrade recovery journal path is invalid")
+            if item.get("exists") is False:
+                if any(item.get(key) is not None for key in ("data", "mode", "atime_ns", "mtime_ns")):
+                    raise ValueError("upgrade recovery journal is malformed")
+                snapshots[relative] = None
+                continue
+            if item.get("exists") is not True or not isinstance(item.get("data"), str):
+                raise ValueError("upgrade recovery journal is malformed")
+            if any(
+                not isinstance(item.get(key), int) or isinstance(item.get(key), bool)
+                for key in ("mode", "atime_ns", "mtime_ns")
+            ):
+                raise ValueError("upgrade recovery journal is malformed")
+            if not 0 <= item["mode"] <= 0o7777:
+                raise ValueError("upgrade recovery journal is malformed")
+            try:
+                raw = base64.b64decode(item["data"], validate=True)
+            except (ValueError, TypeError) as exc:
+                raise ValueError("upgrade recovery journal is malformed") from exc
+            total += len(raw)
+            if total > _MAX_ROLLBACK_BYTES:
+                raise ValueError("upgrade recovery journal exceeds size bound")
+            snapshots[relative] = (
+                raw, item["mode"], item["atime_ns"], item["mtime_ns"],
+            )
+        existing_directories: set[Path] = {Path(".")}
+        for value in document["existing_directories"]:
+            if not isinstance(value, str):
+                raise ValueError("upgrade recovery journal is malformed")
+            relative = Path(value)
+            if (
+                relative == Path(".")
+                or relative.is_absolute()
+                or not relative.parts
+                or ".." in relative.parts
+                or relative.as_posix() != value
+            ):
+                raise ValueError("upgrade recovery journal path is invalid")
+            existing_directories.add(relative)
+        rollback = cls(
+            root_fd=root_fd,
+            dst_agent=dst_agent,
+            portable_root_identity=portable_root_identity,
+            snapshots=snapshots,
+            existing_directories=existing_directories,
+        )
+        rollback.restore()
+        rollback.commit()
+        return True
+
+    def persist(self) -> None:
+        total = sum(
+            len(snapshot[0])
+            for snapshot in self.snapshots.values()
+            if snapshot is not None
+        )
+        if total > _MAX_ROLLBACK_BYTES:
+            raise ValueError("upgrade rollback data exceeds size bound")
+        items: list[dict[str, object]] = []
+        for relative, snapshot in self.snapshots.items():
+            if snapshot is None:
+                items.append({
+                    "path": relative.as_posix(),
+                    "exists": False,
+                    "data": None,
+                    "mode": None,
+                    "atime_ns": None,
+                    "mtime_ns": None,
+                })
+                continue
+            raw, mode, atime_ns, mtime_ns = snapshot
+            items.append({
+                "path": relative.as_posix(),
+                "exists": True,
+                "data": base64.b64encode(raw).decode("ascii"),
+                "mode": mode,
+                "atime_ns": atime_ns,
+                "mtime_ns": mtime_ns,
+            })
+        document = {
+            "schema_version": 1,
+            "snapshots": items,
+            "existing_directories": sorted(
+                item.as_posix()
+                for item in self.existing_directories
+                if item != Path(".")
+            ),
+        }
+        _publish_upgrade_bytes(
+            (json.dumps(document, separators=(",", ":")) + "\n").encode("utf-8"),
+            _ROLLBACK_JOURNAL,
+            root_fd=self.root_fd,
+            dst_agent=self.dst_agent,
+            portable_root_identity=self.portable_root_identity,
+            mode=0o600,
+        )
+
+    def commit(self) -> None:
+        self._remove_file(_ROLLBACK_JOURNAL)
 
     def restore(self) -> None:
         for relative in reversed(list(self.snapshots)):

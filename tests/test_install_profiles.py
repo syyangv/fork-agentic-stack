@@ -685,6 +685,87 @@ print(json.dumps(json.loads(spool.health_file.read_text(encoding='utf-8'))))
                 self.assertEqual(info.st_mode, mode, relative)
                 self.assertEqual(info.st_mtime_ns, mtime_ns, relative)
 
+    def test_phase2_migration_rolls_back_keyboard_interrupt(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            target = Path(tmp)
+            self.make_phase2_governance_fixture(target)
+            before = self.agent_files(target)
+            real_copy = upgrade_mod._copy_upgrade_action
+            publications = 0
+
+            def interrupt_after_two(*args, **kwargs):
+                nonlocal publications
+                publications += 1
+                if publications == 3:
+                    raise KeyboardInterrupt()
+                return real_copy(*args, **kwargs)
+
+            with mock.patch.object(
+                upgrade_mod, "_copy_upgrade_action",
+                side_effect=interrupt_after_two,
+            ):
+                with self.assertRaises(KeyboardInterrupt):
+                    self.upgrade(target)
+
+            self.assertEqual(self.agent_files(target), before)
+            self.assertFalse(
+                (target / ".agent/.upgrade-transaction.json").exists(),
+            )
+
+    def test_interrupted_rollback_recovers_from_durable_journal(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            target = Path(tmp)
+            self.make_phase2_governance_fixture(target)
+            before = self.agent_files(target)
+            real_copy = upgrade_mod._copy_upgrade_action
+            real_publish = upgrade_mod._publish_upgrade_bytes
+            publications = 0
+            forward_failed = False
+            rollback_failed = False
+
+            def fail_forward(*args, **kwargs):
+                nonlocal publications, forward_failed
+                publications += 1
+                if publications == 3:
+                    forward_failed = True
+                    raise OSError("injected forward failure")
+                return real_copy(*args, **kwargs)
+
+            def fail_first_rollback(raw, relative, **kwargs):
+                nonlocal rollback_failed
+                if (
+                    forward_failed
+                    and relative != Path(".upgrade-transaction.json")
+                    and not rollback_failed
+                ):
+                    rollback_failed = True
+                    raise OSError("injected rollback failure")
+                return real_publish(raw, relative, **kwargs)
+
+            with (
+                mock.patch.object(
+                    upgrade_mod, "_copy_upgrade_action", side_effect=fail_forward,
+                ),
+                mock.patch.object(
+                    upgrade_mod, "_publish_upgrade_bytes",
+                    side_effect=fail_first_rollback,
+                ),
+            ):
+                self.assertEqual(self.upgrade(target), 2)
+
+            journal = target / ".agent/.upgrade-transaction.json"
+            self.assertTrue(rollback_failed)
+            self.assertTrue(journal.is_file())
+
+            with mock.patch.object(
+                upgrade_mod.profiles, "resolve_upgrade_profile",
+                side_effect=ValueError("stop after recovery"),
+            ):
+                self.assertEqual(self.upgrade(target), 2)
+
+            self.assertFalse(journal.exists())
+            self.assertEqual(self.agent_files(target), before)
+
     def test_upgrade_portable_backend_avoids_posix_dir_fd_apis(self):
         with tempfile.TemporaryDirectory() as tmp:
             target = Path(tmp)

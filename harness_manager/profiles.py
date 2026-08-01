@@ -357,6 +357,33 @@ _FILE_FLAGS = os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0)
 _MAX_MIGRATION_JSON_BYTES = 64 * 1024
 
 
+def _descriptor_relative_supported() -> bool:
+    return bool(
+        os.open in os.supports_dir_fd
+        and os.stat in os.supports_dir_fd
+        and hasattr(os, "O_DIRECTORY")
+    )
+
+
+def _portable_agent_path(agent_root: Path, relative: Path) -> Path:
+    """Resolve a migration path without following existing symlinks."""
+    if relative.is_absolute() or not relative.parts or ".." in relative.parts:
+        raise ValueError("migration path is invalid")
+    root = _safe_lexical_absolute(agent_root)
+    current = Path(root.anchor)
+    for component in root.parts[1:]:
+        current /= component
+        info = current.lstat()
+        if stat.S_ISLNK(info.st_mode) or not stat.S_ISDIR(info.st_mode):
+            raise ValueError("migration path must not traverse symbolic links")
+    for component in relative.parts[:-1]:
+        current /= component
+        info = current.lstat()
+        if stat.S_ISLNK(info.st_mode) or not stat.S_ISDIR(info.st_mode):
+            raise ValueError("migration path must not traverse symbolic links")
+    return current / relative.parts[-1]
+
+
 def _open_agent_parent(agent_root: Path, relative: Path) -> tuple[int, str]:
     if relative.is_absolute() or not relative.parts or ".." in relative.parts:
         raise ValueError("migration path is invalid")
@@ -387,6 +414,12 @@ def _safe_lexical_absolute(path: str | Path) -> Path:
 
 
 def _is_regular_agent_file(agent_root: Path, relative: Path) -> bool:
+    if not _descriptor_relative_supported():
+        try:
+            info = _portable_agent_path(agent_root, relative).lstat()
+            return stat.S_ISREG(info.st_mode) and not stat.S_ISLNK(info.st_mode)
+        except (OSError, ValueError):
+            return False
     descriptor = file_fd = -1
     try:
         descriptor, name = _open_agent_parent(agent_root, relative)
@@ -402,6 +435,14 @@ def _is_regular_agent_file(agent_root: Path, relative: Path) -> bool:
 
 
 def _agent_entry_is_absent(agent_root: Path, relative: Path) -> bool:
+    if not _descriptor_relative_supported():
+        try:
+            _portable_agent_path(agent_root, relative).lstat()
+        except FileNotFoundError:
+            return True
+        except (OSError, ValueError):
+            return False
+        return False
     descriptor = -1
     try:
         descriptor, name = _open_agent_parent(agent_root, relative)
@@ -417,6 +458,15 @@ def _agent_entry_is_absent(agent_root: Path, relative: Path) -> bool:
 
 
 def _load_agent_json_no_follow(agent_root: Path, relative: Path) -> object:
+    if not _descriptor_relative_supported():
+        path = _portable_agent_path(agent_root, relative)
+        info = path.lstat()
+        if stat.S_ISLNK(info.st_mode) or not stat.S_ISREG(info.st_mode):
+            raise ValueError("migration JSON path is not a regular file")
+        encoded = path.read_bytes()
+        if len(encoded) > _MAX_MIGRATION_JSON_BYTES:
+            raise ValueError("migration JSON exceeds size bound")
+        return json.loads(encoded.decode("utf-8"))
     descriptor = file_fd = -1
     try:
         descriptor, name = _open_agent_parent(agent_root, relative)
