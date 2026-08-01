@@ -157,7 +157,7 @@ class ScheduledRuntimeTest(unittest.TestCase):
         call = run.call_args
         self.assertEqual(call.args[0][:2], [str(runtime), "-I"])
         self.assertNotIn(str(ROOT / ".agent"), call.args[0])
-        self.assertEqual(call.kwargs["cwd"], "/")
+        self.assertEqual(call.kwargs["cwd"], str(runtime.anchor))
         self.assertEqual(
             call.kwargs["env"],
             {

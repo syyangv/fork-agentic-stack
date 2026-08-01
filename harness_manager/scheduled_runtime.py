@@ -123,7 +123,7 @@ def _python_version(path: Path) -> tuple[int, int, int]:
     """Query only the interpreter's own version in an isolated process."""
     try:
         result = subprocess.run(
-            [str(path), "-I", "-c", _VERSION_QUERY], cwd="/",
+            [str(path), "-I", "-c", _VERSION_QUERY], cwd=str(path.anchor),
             env={
                 "PATH": os.defpath,
                 "PYTHONNOUSERSITE": "1",
