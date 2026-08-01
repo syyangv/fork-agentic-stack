@@ -1,8 +1,10 @@
 import json
 import os
+import copy
 import subprocess
 import sys
 import tempfile
+import threading
 import time
 import unittest
 from unittest import mock
@@ -10,6 +12,7 @@ from pathlib import Path
 
 from harness_manager import install as install_mod
 from harness_manager import cli
+from harness_manager import profiles
 from harness_manager import remove as remove_mod
 from harness_manager import schema
 from harness_manager import state as state_mod
@@ -18,6 +21,38 @@ from harness_manager import upgrade as upgrade_mod
 
 
 ROOT = Path(__file__).resolve().parents[1]
+PHASE2_INVENTORY = {
+    "schema_version": 1,
+    "stack_version": "0.18.0",
+    "orchestration_phase": 2,
+    "features": [
+        "latest_state_recall",
+        "serialized_candidate_lifecycle",
+        "staging_only_scheduled_review",
+        "structured_dream_health",
+        "crg_registration_health",
+        "memory_contracts_v1",
+        "memory_redaction",
+        "stable_project_identity",
+        "deterministic_memory_routing",
+        "bounded_lane_budgets",
+        "strict_orchestration_config",
+        "governance_provider",
+        "governance_orchestrator_cli",
+        "legacy_recall_comparison",
+    ],
+}
+PHASE2_CONFIG = {
+    "schema": "agentic.memory.config.v1",
+    "mode": "off",
+    "total_token_budget": 12000,
+    "lane_reserves": {
+        "governance": 4800,
+        "behavioral": 4200,
+        "evidence": 3000,
+    },
+    "project_aliases": {},
+}
 
 
 class InstallationProfileTest(unittest.TestCase):
@@ -63,6 +98,24 @@ class InstallationProfileTest(unittest.TestCase):
         return subprocess.run(
             [sys.executable, "-m", "harness_manager.cli", *args],
             cwd=cwd, text=True, capture_output=True, env=environment, check=False,
+        )
+
+    def make_phase2_governance_fixture(self, target: Path) -> None:
+        self.install(target, profile="standard")
+        document = self.state(target)
+        document.pop("orchestration")
+        (target / ".agent/install.json").write_text(
+            json.dumps(document), encoding="utf-8",
+        )
+        for relative in profiles.minimal_omitted_paths():
+            path = target / ".agent" / relative
+            if path.exists():
+                path.unlink()
+        (target / ".agent/infrastructure.json").write_text(
+            json.dumps(PHASE2_INVENTORY), encoding="utf-8",
+        )
+        (target / ".agent/memory/orchestration/config.json").write_text(
+            json.dumps(PHASE2_CONFIG), encoding="utf-8",
         )
 
     def test_standard_profile_keeps_memos_capability_but_records_phase8_block(self):
@@ -271,6 +324,572 @@ print(json.dumps(json.loads(spool.health_file.read_text(encoding='utf-8'))))
             orchestration = self.state(target)["orchestration"]
             self.assertEqual(orchestration["profile"], "standard")
             self.assertEqual(orchestration["memos_mode"], "off")
+
+    def test_upgrade_migrates_deployed_phase2_governance_only_brain_to_standard(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            target = Path(tmp)
+            self.make_phase2_governance_fixture(target)
+
+            self.assertEqual(self.upgrade(target), 0)
+
+            orchestration = self.state(target)["orchestration"]
+            self.assertEqual(orchestration["profile"], "standard")
+            self.assertEqual(orchestration["phase8_quality_gate"], "blocked")
+            self.assertEqual(orchestration["memos_mode"], "off")
+            self.assertFalse(orchestration["evolution_enabled"])
+            self.assertFalse(orchestration["r7_skill_promoted"])
+            self.assertTrue(
+                (target / ".agent/memory/orchestration/memos_factory.py").is_file()
+            )
+
+    def test_phase2_migration_rejects_every_partial_capability_layout_before_mutation(self):
+        for relative in sorted(profiles.minimal_omitted_paths()):
+            with self.subTest(relative=relative), tempfile.TemporaryDirectory() as tmp:
+                target = Path(tmp)
+                self.make_phase2_governance_fixture(target)
+                capability = target / ".agent" / relative
+                capability.parent.mkdir(parents=True, exist_ok=True)
+                capability.write_text("partial capability\n", encoding="utf-8")
+                before = self.agent_files(target)
+
+                self.assertEqual(self.upgrade(target), 2)
+                self.assertEqual(self.agent_files(target), before)
+
+    def test_phase2_migration_rejects_broken_capability_symlink(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            target = Path(tmp)
+            self.make_phase2_governance_fixture(target)
+            relative = "memory/orchestration/memos_factory.py"
+            capability = target / ".agent" / relative
+            capability.symlink_to(target / "missing-provider.py")
+
+            self.assertEqual(self.upgrade(target), 2)
+            self.assertTrue(capability.is_symlink())
+            self.assertEqual(os.readlink(capability), str(target / "missing-provider.py"))
+
+    def test_phase2_migration_rejects_symlinked_json_and_parent_without_outside_write(self):
+        for relative in (
+            Path("infrastructure.json"),
+            Path("memory/orchestration/config.json"),
+        ):
+            with self.subTest(relative=relative), tempfile.TemporaryDirectory() as tmp:
+                target = Path(tmp)
+                self.make_phase2_governance_fixture(target)
+                deployed = target / ".agent" / relative
+                outside = target / ("outside-" + relative.name)
+                outside.write_bytes(deployed.read_bytes())
+                deployed.unlink()
+                deployed.symlink_to(outside)
+                outside_before = outside.read_bytes()
+
+                self.assertEqual(self.upgrade(target), 2)
+                self.assertEqual(outside.read_bytes(), outside_before)
+                self.assertTrue(deployed.is_symlink())
+                self.assertEqual(os.readlink(deployed), str(outside))
+
+        with tempfile.TemporaryDirectory() as tmp:
+            target = Path(tmp)
+            self.make_phase2_governance_fixture(target)
+            orchestration = target / ".agent/memory/orchestration"
+            outside = target / "outside-orchestration"
+            orchestration.rename(outside)
+            orchestration.symlink_to(outside, target_is_directory=True)
+            config_before = (outside / "config.json").read_bytes()
+
+            self.assertEqual(self.upgrade(target), 2)
+            self.assertEqual((outside / "config.json").read_bytes(), config_before)
+            self.assertTrue(orchestration.is_symlink())
+
+    def test_profiled_upgrade_rejects_symlinked_destination_without_outside_write(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            target = Path(tmp)
+            self.install(target, profile="standard")
+            deployed = target / ".agent/infrastructure.json"
+            outside = target / "outside-infrastructure.json"
+            outside.write_bytes(deployed.read_bytes())
+            deployed.unlink()
+            deployed.symlink_to(outside)
+            outside_before = outside.read_bytes()
+
+            self.assertEqual(self.upgrade(target), 2)
+            self.assertEqual(outside.read_bytes(), outside_before)
+            self.assertTrue(deployed.is_symlink())
+
+    def test_upgrade_rejects_symlinked_target_ancestor_without_outside_write(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            real_target = root / "real-target"
+            real_target.mkdir()
+            self.install(real_target, profile="standard")
+            before = self.agent_files(real_target)
+            alias = root / "target-alias"
+            alias.symlink_to(real_target, target_is_directory=True)
+
+            self.assertEqual(
+                upgrade_mod.upgrade(alias, ROOT, yes=True, log=lambda _message: None),
+                2,
+            )
+            self.assertEqual(self.agent_files(real_target), before)
+            self.assertTrue(alias.is_symlink())
+
+    def test_upgrade_detects_target_ancestor_swap_before_publication(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            parent = root / "parent"
+            target = parent / "project"
+            target.mkdir(parents=True)
+            self.install(target, profile="standard")
+            deployed = target / ".agent/infrastructure.json"
+            deployed.write_text("stale\n", encoding="utf-8")
+
+            outside_parent = root / "outside-parent"
+            outside_agent = outside_parent / "project/.agent"
+            outside_agent.mkdir(parents=True)
+            outside_inventory = outside_agent / "infrastructure.json"
+            outside_inventory.write_text("outside sentinel\n", encoding="utf-8")
+            outside_before = outside_inventory.read_bytes()
+            original_parent = root / "original-parent"
+            real_assert = upgrade_mod._assert_lexical_root_identity
+            swapped = False
+
+            def swap_then_assert(dst_agent: Path, pinned_fd: int) -> None:
+                nonlocal swapped
+                if not swapped:
+                    parent.rename(original_parent)
+                    parent.symlink_to(outside_parent, target_is_directory=True)
+                    swapped = True
+                real_assert(dst_agent, pinned_fd)
+
+            with mock.patch.object(
+                upgrade_mod, "_assert_lexical_root_identity",
+                side_effect=swap_then_assert,
+            ):
+                self.assertEqual(self.upgrade(target), 2)
+
+            self.assertTrue(swapped)
+            self.assertEqual(outside_inventory.read_bytes(), outside_before)
+            self.assertEqual(
+                (original_parent / "project/.agent/infrastructure.json").read_text(
+                    encoding="utf-8",
+                ),
+                "stale\n",
+            )
+
+    def test_upgrade_post_steps_publish_only_under_pinned_root(self):
+        for stage in ("gitignore", "manifest"):
+            with self.subTest(stage=stage), tempfile.TemporaryDirectory() as tmp:
+                root = Path(tmp)
+                parent = root / "parent"
+                target = parent / "project"
+                target.mkdir(parents=True)
+                self.install(target, profile="standard")
+                if stage == "gitignore":
+                    (target / ".agent/.gitignore").write_text(
+                        "# custom only\n", encoding="utf-8",
+                    )
+
+                outside_parent = root / "outside-parent"
+                outside_agent = outside_parent / "project/.agent"
+                (outside_agent / "skills").mkdir(parents=True)
+                outside_sentinel = (
+                    outside_agent / ".gitignore"
+                    if stage == "gitignore"
+                    else outside_agent / "skills/_manifest.jsonl"
+                )
+                outside_sentinel.write_text("outside sentinel\n", encoding="utf-8")
+                outside_before = outside_sentinel.read_bytes()
+                original_parent = root / "original-parent"
+                swapped = False
+
+                def swap_parent() -> None:
+                    nonlocal swapped
+                    if not swapped:
+                        parent.rename(original_parent)
+                        parent.symlink_to(outside_parent, target_is_directory=True)
+                        swapped = True
+
+                if stage == "gitignore":
+                    real_writer = upgrade_mod._merge_agent_gitignore_pinned
+
+                    def wrapped_writer(*args, **kwargs):
+                        swap_parent()
+                        return real_writer(*args, **kwargs)
+
+                    patcher = mock.patch.object(
+                        upgrade_mod, "_merge_agent_gitignore_pinned",
+                        side_effect=wrapped_writer,
+                    )
+                else:
+                    real_renderer = upgrade_mod.skill_manifest.render_manifest
+
+                    def wrapped_renderer(*args, **kwargs):
+                        swap_parent()
+                        return real_renderer(*args, **kwargs)
+
+                    patcher = mock.patch.object(
+                        upgrade_mod.skill_manifest, "render_manifest",
+                        side_effect=wrapped_renderer,
+                    )
+
+                with patcher:
+                    self.assertEqual(self.upgrade(target), 2)
+
+                self.assertTrue(swapped)
+                self.assertEqual(outside_sentinel.read_bytes(), outside_before)
+
+    def test_phase2_profile_state_publication_uses_pinned_root_after_swap(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            parent = root / "parent"
+            target = parent / "project"
+            target.mkdir(parents=True)
+            self.make_phase2_governance_fixture(target)
+
+            outside_parent = root / "outside-parent"
+            outside_agent = outside_parent / "project/.agent"
+            outside_agent.mkdir(parents=True)
+            outside_state = outside_agent / "install.json"
+            outside_state.write_text('{"outside": true}\n', encoding="utf-8")
+            outside_before = outside_state.read_bytes()
+            original_parent = root / "original-parent"
+            real_builder = upgrade_mod.state.with_orchestration_profile
+            swapped = False
+
+            def swap_then_build(*args, **kwargs):
+                nonlocal swapped
+                if not swapped:
+                    parent.rename(original_parent)
+                    parent.symlink_to(outside_parent, target_is_directory=True)
+                    swapped = True
+                return real_builder(*args, **kwargs)
+
+            with mock.patch.object(
+                upgrade_mod.state, "with_orchestration_profile",
+                side_effect=swap_then_build,
+            ):
+                self.assertEqual(self.upgrade(target), 2)
+
+            self.assertTrue(swapped)
+            self.assertEqual(outside_state.read_bytes(), outside_before)
+            original_state = json.loads(
+                (original_parent / "project/.agent/install.json").read_text(
+                    encoding="utf-8",
+                )
+            )
+            self.assertNotIn("orchestration", original_state)
+
+    def test_phase2_migration_lock_preserves_concurrent_adapter_update(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            target = Path(tmp)
+            self.make_phase2_governance_fixture(target)
+            real_builder = upgrade_mod.state.with_orchestration_profile
+            workers: list[threading.Thread] = []
+
+            def add_adapter() -> None:
+                state_mod.upsert_adapter(
+                    target,
+                    "concurrent-adapter",
+                    {"status": "installed-concurrently"},
+                    "0.18.0",
+                )
+
+            def start_concurrent_update(*args, **kwargs):
+                worker = threading.Thread(target=add_adapter, daemon=True)
+                workers.append(worker)
+                worker.start()
+                time.sleep(0.05)
+                self.assertTrue(
+                    worker.is_alive(),
+                    "concurrent state writer did not wait for migration lock",
+                )
+                return real_builder(*args, **kwargs)
+
+            with mock.patch.object(
+                upgrade_mod.state, "with_orchestration_profile",
+                side_effect=start_concurrent_update,
+            ):
+                self.assertEqual(self.upgrade(target), 0)
+
+            self.assertEqual(len(workers), 1)
+            workers[0].join(timeout=2)
+            self.assertFalse(workers[0].is_alive())
+            document = self.state(target)
+            self.assertEqual(
+                document["adapters"]["concurrent-adapter"],
+                {"status": "installed-concurrently"},
+            )
+            self.assertEqual(document["orchestration"]["profile"], "standard")
+            self.assertEqual(
+                document["orchestration"]["phase8_quality_gate"], "blocked",
+            )
+
+    def test_phase2_migration_rolls_back_after_partial_file_publication(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            target = Path(tmp)
+            self.make_phase2_governance_fixture(target)
+            before = self.agent_files(target)
+            real_copy = upgrade_mod._copy_upgrade_action
+            publications = 0
+            failed = False
+
+            def fail_after_two_publications(*args, **kwargs):
+                nonlocal publications, failed
+                publications += 1
+                if publications == 3 and not failed:
+                    failed = True
+                    raise OSError("injected publication failure")
+                return real_copy(*args, **kwargs)
+
+            with mock.patch.object(
+                upgrade_mod, "_copy_upgrade_action",
+                side_effect=fail_after_two_publications,
+            ):
+                self.assertEqual(self.upgrade(target), 2)
+
+            self.assertTrue(failed)
+            self.assertEqual(self.agent_files(target), before)
+            self.assertNotIn("orchestration", self.state(target))
+
+    def test_phase2_migration_rolls_back_post_action_failure(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            target = Path(tmp)
+            self.make_phase2_governance_fixture(target)
+            before = self.agent_files(target)
+            before_stats = {
+                relative: (
+                    (target / ".agent" / relative).stat().st_mode,
+                    (target / ".agent" / relative).stat().st_mtime_ns,
+                )
+                for relative in before
+            }
+            real_publish = upgrade_mod._publish_upgrade_bytes
+            failed = False
+
+            def fail_manifest_once(raw, relative, **kwargs):
+                nonlocal failed
+                if relative == Path("skills/_manifest.jsonl") and not failed:
+                    failed = True
+                    raise OSError("injected manifest failure")
+                return real_publish(raw, relative, **kwargs)
+
+            with mock.patch.object(
+                upgrade_mod, "_publish_upgrade_bytes",
+                side_effect=fail_manifest_once,
+            ):
+                self.assertEqual(self.upgrade(target), 2)
+
+            self.assertTrue(failed)
+            self.assertEqual(self.agent_files(target), before)
+            for relative, (mode, mtime_ns) in before_stats.items():
+                info = (target / ".agent" / relative).stat()
+                self.assertEqual(info.st_mode, mode, relative)
+                self.assertEqual(info.st_mtime_ns, mtime_ns, relative)
+
+    def test_phase2_migration_rolls_back_keyboard_interrupt(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            target = Path(tmp)
+            self.make_phase2_governance_fixture(target)
+            before = self.agent_files(target)
+            real_copy = upgrade_mod._copy_upgrade_action
+            publications = 0
+
+            def interrupt_after_two(*args, **kwargs):
+                nonlocal publications
+                publications += 1
+                if publications == 3:
+                    raise KeyboardInterrupt()
+                return real_copy(*args, **kwargs)
+
+            with mock.patch.object(
+                upgrade_mod, "_copy_upgrade_action",
+                side_effect=interrupt_after_two,
+            ):
+                with self.assertRaises(KeyboardInterrupt):
+                    self.upgrade(target)
+
+            self.assertEqual(self.agent_files(target), before)
+            self.assertFalse(
+                (target / ".agent/.upgrade-transaction.json").exists(),
+            )
+
+    def test_interrupted_rollback_recovers_from_durable_journal(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            target = Path(tmp)
+            self.make_phase2_governance_fixture(target)
+            before = self.agent_files(target)
+            real_copy = upgrade_mod._copy_upgrade_action
+            real_publish = upgrade_mod._publish_upgrade_bytes
+            publications = 0
+            forward_failed = False
+            rollback_failed = False
+
+            def fail_forward(*args, **kwargs):
+                nonlocal publications, forward_failed
+                publications += 1
+                if publications == 3:
+                    forward_failed = True
+                    raise OSError("injected forward failure")
+                return real_copy(*args, **kwargs)
+
+            def fail_first_rollback(raw, relative, **kwargs):
+                nonlocal rollback_failed
+                if (
+                    forward_failed
+                    and relative != Path(".upgrade-transaction.json")
+                    and not rollback_failed
+                ):
+                    rollback_failed = True
+                    raise OSError("injected rollback failure")
+                return real_publish(raw, relative, **kwargs)
+
+            with (
+                mock.patch.object(
+                    upgrade_mod, "_copy_upgrade_action", side_effect=fail_forward,
+                ),
+                mock.patch.object(
+                    upgrade_mod, "_publish_upgrade_bytes",
+                    side_effect=fail_first_rollback,
+                ),
+            ):
+                self.assertEqual(self.upgrade(target), 2)
+
+            journal = target / ".agent/.upgrade-transaction.json"
+            self.assertTrue(rollback_failed)
+            self.assertTrue(journal.is_file())
+
+            pending_before = self.agent_files(target)
+            journal_before = journal.read_bytes()
+            messages: list[str] = []
+            self.assertEqual(
+                upgrade_mod.upgrade(
+                    target, ROOT, dry_run=True, log=messages.append,
+                ),
+                0,
+            )
+            self.assertEqual(self.agent_files(target), pending_before)
+            self.assertEqual(journal.read_bytes(), journal_before)
+            self.assertIn(
+                "would recover interrupted upgrade transaction", messages,
+            )
+            self.assertIn("dry run; no files changed", messages)
+
+            with mock.patch.object(
+                upgrade_mod.profiles, "resolve_upgrade_profile",
+                side_effect=ValueError("stop after recovery"),
+            ):
+                self.assertEqual(self.upgrade(target), 2)
+
+            self.assertFalse(journal.exists())
+            self.assertEqual(self.agent_files(target), before)
+
+    def test_upgrade_portable_backend_avoids_posix_dir_fd_apis(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            target = Path(tmp)
+            self.install(target, profile="standard")
+            deployed = target / ".agent/infrastructure.json"
+            deployed.write_text("stale\n", encoding="utf-8")
+
+            with (
+                mock.patch.object(
+                    upgrade_mod, "_descriptor_relative_supported",
+                    return_value=False,
+                ),
+                mock.patch.object(
+                    upgrade_mod, "_open_safe_absolute_directory",
+                    side_effect=AssertionError("POSIX descriptor backend used"),
+                ),
+            ):
+                self.assertEqual(self.upgrade(target), 0)
+
+            self.assertNotEqual(deployed.read_text(encoding="utf-8"), "stale\n")
+            self.assertEqual(
+                self.state(target)["orchestration"]["profile"], "standard",
+            )
+
+    def test_legacy_standard_migration_requires_every_capability_discriminator(self):
+        for relative in sorted(profiles.minimal_omitted_paths()):
+            with self.subTest(relative=relative), tempfile.TemporaryDirectory() as tmp:
+                target = Path(tmp)
+                self.install(target, profile="standard")
+                document = self.state(target)
+                document.pop("orchestration")
+                (target / ".agent/install.json").write_text(
+                    json.dumps(document), encoding="utf-8",
+                )
+                (target / ".agent" / relative).unlink()
+                before = self.agent_files(target)
+
+                self.assertEqual(self.upgrade(target), 2)
+                self.assertEqual(self.agent_files(target), before)
+
+    def test_phase2_migration_rejects_inventory_drift_before_mutation(self):
+        invalid_inventories = []
+        for field in PHASE2_INVENTORY:
+            value = copy.deepcopy(PHASE2_INVENTORY)
+            value.pop(field)
+            invalid_inventories.append(("missing_" + field, value))
+        extra = copy.deepcopy(PHASE2_INVENTORY)
+        extra["unknown"] = "value"
+        invalid_inventories.extend((
+            ("extra_field", extra),
+            ("wrong_schema", {**PHASE2_INVENTORY, "schema_version": True}),
+            ("wrong_stack", {**PHASE2_INVENTORY, "stack_version": "0.18.1"}),
+            ("wrong_phase", {**PHASE2_INVENTORY, "orchestration_phase": 3}),
+            ("wrong_features", {**PHASE2_INVENTORY, "features": PHASE2_INVENTORY["features"][:-1]}),
+            ("extra_feature", {
+                **PHASE2_INVENTORY,
+                "features": [*PHASE2_INVENTORY["features"], "unknown"],
+            }),
+        ))
+        for name, inventory in invalid_inventories:
+            with self.subTest(name=name), tempfile.TemporaryDirectory() as tmp:
+                target = Path(tmp)
+                self.make_phase2_governance_fixture(target)
+                (target / ".agent/infrastructure.json").write_text(
+                    json.dumps(inventory), encoding="utf-8",
+                )
+                before = self.agent_files(target)
+
+                self.assertEqual(self.upgrade(target), 2)
+                self.assertEqual(self.agent_files(target), before)
+
+    def test_phase2_migration_rejects_config_drift_before_mutation(self):
+        invalid_configs: list[tuple[str, object]] = [
+            ("not_object", []),
+            ("wrong_mode", {**PHASE2_CONFIG, "mode": "shadow"}),
+            ("bool_budget", {**PHASE2_CONFIG, "total_token_budget": True}),
+            ("wrong_budget", {**PHASE2_CONFIG, "total_token_budget": 11999}),
+            ("aliases", {**PHASE2_CONFIG, "project_aliases": {"x": "y"}}),
+        ]
+        for field in PHASE2_CONFIG:
+            value = copy.deepcopy(PHASE2_CONFIG)
+            value.pop(field)
+            invalid_configs.append(("missing_" + field, value))
+        extra = copy.deepcopy(PHASE2_CONFIG)
+        extra["evolution_enabled"] = False
+        invalid_configs.append(("extra_field", extra))
+        for lane in PHASE2_CONFIG["lane_reserves"]:
+            missing_lane = copy.deepcopy(PHASE2_CONFIG)
+            missing_lane["lane_reserves"].pop(lane)
+            invalid_configs.append(("missing_" + lane, missing_lane))
+            bool_lane = copy.deepcopy(PHASE2_CONFIG)
+            bool_lane["lane_reserves"][lane] = True
+            invalid_configs.append(("bool_" + lane, bool_lane))
+        invalid_configs.append(("malformed_json", None))
+
+        for name, config in invalid_configs:
+            with self.subTest(name=name), tempfile.TemporaryDirectory() as tmp:
+                target = Path(tmp)
+                self.make_phase2_governance_fixture(target)
+                config_path = target / ".agent/memory/orchestration/config.json"
+                if name == "malformed_json":
+                    config_path.write_text("{", encoding="utf-8")
+                else:
+                    config_path.write_text(json.dumps(config), encoding="utf-8")
+                before = self.agent_files(target)
+
+                self.assertEqual(self.upgrade(target), 2)
+                self.assertEqual(self.agent_files(target), before)
 
     def test_upgrade_fails_before_mutation_for_malformed_profile_or_unsafe_legacy(self):
         with tempfile.TemporaryDirectory() as tmp:

@@ -14,7 +14,7 @@ class ConfigError(ValueError):
     pass
 
 
-@dataclass(frozen=True, slots=True)
+@dataclass(frozen=True)
 class MemoryOrchestrationConfig:
     schema: str = "agentic.memory.config.v1"
     mode: str = "off"

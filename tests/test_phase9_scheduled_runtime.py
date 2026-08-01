@@ -3,7 +3,9 @@ from __future__ import annotations
 
 import json
 import os
+import plistlib
 import stat
+import subprocess
 import sys
 import tempfile
 import unittest
@@ -155,7 +157,7 @@ class ScheduledRuntimeTest(unittest.TestCase):
         call = run.call_args
         self.assertEqual(call.args[0][:2], [str(runtime), "-I"])
         self.assertNotIn(str(ROOT / ".agent"), call.args[0])
-        self.assertEqual(call.kwargs["cwd"], "/")
+        self.assertEqual(call.kwargs["cwd"], str(runtime.anchor))
         self.assertEqual(
             call.kwargs["env"],
             {
@@ -163,6 +165,37 @@ class ScheduledRuntimeTest(unittest.TestCase):
                 "PYTHONNOUSERSITE": "1",
                 "TMPDIR": tempfile.gettempdir(),
             },
+        )
+
+    def test_windows_version_query_environment_keeps_only_required_system_root(self) -> None:
+        with (
+            mock.patch.object(scheduled_runtime.os, "name", "nt"),
+            mock.patch.object(
+                scheduled_runtime, "_native_windows_directory",
+                return_value=r"C:\Windows",
+            ),
+            mock.patch.dict(
+                scheduled_runtime.os.environ,
+                {"SystemRoot": r"\\attacker\share", "SECRET_SENTINEL": "do-not-copy"},
+                clear=True,
+            ),
+        ):
+            environment = scheduled_runtime._version_query_environment()
+
+        self.assertEqual(environment["SystemRoot"], r"C:\Windows")
+        self.assertNotIn("SECRET_SENTINEL", environment)
+
+    def test_windows_system_root_requires_fully_qualified_local_drive(self) -> None:
+        for invalid in (
+            "", "\x00", r"\Windows", "/Windows", r"C:Windows",
+            r"\\server\share\Windows",
+        ):
+            with self.subTest(invalid=invalid), self.assertRaises(ValueError):
+                scheduled_runtime._validated_windows_system_root(invalid)
+
+        self.assertEqual(
+            scheduled_runtime._validated_windows_system_root("C:\\Windows\\"),
+            r"C:\Windows",
         )
 
     def test_project_local_runtime_is_rejected_without_execution(self) -> None:
@@ -223,6 +256,96 @@ class ScheduledRuntimeTest(unittest.TestCase):
         script = (ROOT / "install.ps1").read_text(encoding="utf-8")
         self.assertIn("[string]$Python", script)
         self.assertIn("@('--python', $Python)", script)
+
+    def test_macos_python39_can_import_the_real_cli_entrypoint(self) -> None:
+        system_python = Path("/usr/bin/python3")
+        if not system_python.is_file():
+            self.skipTest("macOS system Python is unavailable")
+        version = subprocess.run(
+            [str(system_python), "-I", "-c", "import sys; print(sys.version_info[:2])"],
+            check=False, capture_output=True, text=True,
+        )
+        if version.returncode != 0 or "(3, 9)" not in version.stdout:
+            self.skipTest("test requires macOS Python 3.9")
+        result = subprocess.run(
+            [
+                str(system_python), "-I", "-c",
+                "import sys; sys.path.insert(0, sys.argv[1]); import harness_manager.cli",
+                str(ROOT),
+            ],
+            check=False, capture_output=True, text=True,
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+
+    def test_macos_python39_executes_both_generated_scheduled_commands_end_to_end(self) -> None:
+        system_python = Path("/usr/bin/python3")
+        if not system_python.is_file():
+            self.skipTest("macOS system Python is unavailable")
+        version = subprocess.run(
+            [str(system_python), "-I", "-c", "import sys; print(sys.version_info[:2])"],
+            check=False, capture_output=True, text=True,
+        )
+        if version.returncode != 0 or "(3, 9)" not in version.stdout:
+            self.skipTest("test requires macOS Python 3.9")
+
+        with tempfile.TemporaryDirectory(dir=ROOT) as tmp:
+            target = Path(tmp)
+            self.install(target, runtime=str(system_python))
+            agent_root = target / ".agent"
+            install_before = (agent_root / "install.json").read_bytes()
+            config_before = (
+                agent_root / "memory/orchestration/config.json"
+            ).read_bytes()
+            lessons = agent_root / "memory/semantic/LESSONS.md"
+            lessons_before = lessons.read_bytes()
+            jobs = scheduled_launchers.build_launch_agents_from_state(
+                self.state(target), agent_root,
+            )
+            environment = {
+                **os.environ,
+                "HOME": str(target),
+                "AGENTIC_PROJECT_ROOT": str(target),
+            }
+
+            results = {}
+            for label, raw in jobs.items():
+                definition = plistlib.loads(raw)
+                completed = subprocess.run(
+                    definition["ProgramArguments"],
+                    cwd=target,
+                    env={**environment, **definition["EnvironmentVariables"]},
+                    check=False,
+                    capture_output=True,
+                    text=True,
+                    timeout=320,
+                )
+                self.assertEqual(
+                    completed.returncode, 0,
+                    f"{label}\nstdout={completed.stdout}\nstderr={completed.stderr}",
+                )
+                results[label] = json.loads(completed.stdout)
+
+            self.assertEqual(
+                results[scheduled_launchers.AUTO_DREAM_LABEL]["authority"],
+                "no_auto_accept",
+            )
+            self.assertEqual(
+                results[scheduled_launchers.REVIEW_NOTIFY_LABEL]["authority"],
+                "no_auto_accept",
+            )
+            self.assertIn(
+                results[scheduled_launchers.REVIEW_NOTIFY_LABEL]["status"],
+                {"review_ready", "no_review_queue", "maintenance_stale_or_failed"},
+            )
+            self.assertEqual((agent_root / "install.json").read_bytes(), install_before)
+            self.assertEqual(
+                (agent_root / "memory/orchestration/config.json").read_bytes(),
+                config_before,
+            )
+            self.assertEqual(
+                json.loads(config_before.decode("utf-8"))["mode"], "off",
+            )
+            self.assertEqual(lessons.read_bytes(), lessons_before)
 
 
 if __name__ == "__main__":

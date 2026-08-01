@@ -30,7 +30,7 @@ _SAFE_ENV_KEYS = (
 )
 
 
-@dataclass(frozen=True, slots=True)
+@dataclass(frozen=True)
 class VerifiedArtifact:
     path: Path
     integrity: str
@@ -38,7 +38,7 @@ class VerifiedArtifact:
     size: int
 
 
-@dataclass(frozen=True, slots=True)
+@dataclass(frozen=True)
 class MemosInstallResult:
     plugin_dir: Path
     package_dir: Path

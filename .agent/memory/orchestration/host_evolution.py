@@ -133,7 +133,7 @@ class HostEvolutionError(RuntimeError):
     """A sanitized, stable boundary error safe to expose to JSON-RPC."""
 
 
-@dataclass(frozen=True, slots=True)
+@dataclass(frozen=True)
 class CommandResult:
     argv: tuple[str, ...]
     returncode: int
@@ -142,7 +142,7 @@ class CommandResult:
     duration_ms: int
 
 
-@dataclass(frozen=True, slots=True)
+@dataclass(frozen=True)
 class NativeCompletion:
     text: str
     model: str

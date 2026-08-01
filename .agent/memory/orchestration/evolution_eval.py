@@ -15,7 +15,7 @@ _EVIDENCE_ID = re.compile(r"evi_[0-9a-f]{64}\Z")
 _COST_METRICS = frozenset({"completion_seconds", "failure_recovery_steps"})
 
 
-@dataclass(frozen=True, slots=True)
+@dataclass(frozen=True)
 class EvolutionEvalResult:
     eligible: bool
     task_count: int

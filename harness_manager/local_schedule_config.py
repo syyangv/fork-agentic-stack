@@ -8,6 +8,7 @@ from __future__ import annotations
 import json
 import os
 import stat
+import sys
 import uuid
 from dataclasses import dataclass
 from pathlib import Path
@@ -138,8 +139,11 @@ def validate_local_schedule_config_for_upgrade(agent_root: str | Path) -> None:
     ancestor = destination.parent
     while True:
         try:
-            parent_fd = _open_directory_nofollow(ancestor)
-            os.close(parent_fd)
+            if _descriptor_relative_supported():
+                parent_fd = _open_directory_nofollow(ancestor)
+                os.close(parent_fd)
+            else:
+                _portable_directory_identity(ancestor)
             break
         except FileNotFoundError:
             if ancestor == root:
@@ -172,7 +176,9 @@ def seed_local_schedule_config(template: str | Path, destination: str | Path) ->
         LocalScheduleConfig.from_external(json.loads(raw.decode("utf-8")))
     except (UnicodeError, json.JSONDecodeError, ValueError) as exc:
         raise ValueError("scheduled local config template is invalid") from exc
-    target.parent.mkdir(parents=True, exist_ok=True)
+    _ensure_directory_nofollow(target.parent)
+    if not _descriptor_relative_supported():
+        return _seed_local_schedule_config_portable(raw, target)
     parent_fd = _open_directory_nofollow(target.parent)
     temporary = f".scheduled-local-{uuid.uuid4().hex}.tmp"
     fd = os.open(
@@ -235,6 +241,175 @@ def _write_all(descriptor: int, raw: bytes) -> None:
         view = view[written:]
 
 
+def _descriptor_relative_supported() -> bool:
+    return bool(
+        os.open in os.supports_dir_fd
+        and os.stat in os.supports_dir_fd
+        and os.link in os.supports_dir_fd
+        and hasattr(os, "O_DIRECTORY")
+    )
+
+
+def _is_reparse_point(info: os.stat_result) -> bool:
+    marker = getattr(stat, "FILE_ATTRIBUTE_REPARSE_POINT", 0)
+    return bool(marker and getattr(info, "st_file_attributes", 0) & marker)
+
+
+def _safe_lexical_absolute(path: str | Path) -> Path:
+    absolute = Path(os.path.abspath(os.fspath(path)))
+    if sys.platform == "darwin" and (
+        absolute == Path("/var") or Path("/var") in absolute.parents
+    ):
+        absolute = Path("/private/var").joinpath(*absolute.parts[2:])
+    return absolute
+
+
+def _portable_directory_identity(path: Path) -> tuple[int, int]:
+    """Validate a directory path without trusting Windows reparse points."""
+    absolute = _safe_lexical_absolute(path)
+    current = Path(absolute.anchor)
+    for component in absolute.parts[1:]:
+        current /= component
+        info = current.lstat()
+        if (
+            stat.S_ISLNK(info.st_mode)
+            or _is_reparse_point(info)
+            or not stat.S_ISDIR(info.st_mode)
+        ):
+            raise ValueError("scheduled local config path must not traverse links")
+    info = absolute.stat()
+    return info.st_dev, info.st_ino
+
+
+def _ensure_directory_nofollow(path: Path) -> None:
+    """Create missing parents one component at a time without link traversal."""
+    if not _descriptor_relative_supported():
+        _ensure_directory_portable(path)
+        return
+    absolute = _safe_lexical_absolute(path)
+    missing: list[str] = []
+    ancestor = absolute
+    while True:
+        try:
+            descriptor = _open_directory_nofollow(ancestor)
+            break
+        except FileNotFoundError:
+            if ancestor == Path(ancestor.anchor):
+                raise
+            missing.append(ancestor.name)
+            ancestor = ancestor.parent
+    try:
+        for component in reversed(missing):
+            try:
+                os.mkdir(component, 0o700, dir_fd=descriptor)
+            except FileExistsError:
+                pass
+            next_fd = os.open(component, _DIR_FLAGS, dir_fd=descriptor)
+            os.close(descriptor)
+            descriptor = next_fd
+    finally:
+        os.close(descriptor)
+
+
+def _ensure_directory_portable(path: Path) -> None:
+    """Windows fallback with per-component parent and reparse validation."""
+    absolute = _safe_lexical_absolute(path)
+    current = Path(absolute.anchor)
+    _portable_directory_identity(current)
+    for component in absolute.parts[1:]:
+        parent_identity = _portable_directory_identity(current)
+        child = current / component
+        try:
+            child.lstat()
+        except FileNotFoundError:
+            try:
+                os.mkdir(child, 0o700)
+            except FileExistsError:
+                pass
+        if _portable_directory_identity(current) != parent_identity:
+            raise ValueError("scheduled local config parent changed during creation")
+        info = child.lstat()
+        if (
+            stat.S_ISLNK(info.st_mode)
+            or _is_reparse_point(info)
+            or not stat.S_ISDIR(info.st_mode)
+        ):
+            raise ValueError("scheduled local config path must not traverse links")
+        current = child
+
+
+def _portable_open_file_nofollow(path: Path) -> int:
+    absolute = _safe_lexical_absolute(path)
+    parent_identity = _portable_directory_identity(absolute.parent)
+    before = absolute.lstat()
+    if (
+        stat.S_ISLNK(before.st_mode)
+        or _is_reparse_point(before)
+        or not stat.S_ISREG(before.st_mode)
+    ):
+        raise ValueError("scheduled local config path is not a regular file")
+    descriptor = os.open(
+        absolute,
+        os.O_RDONLY
+        | getattr(os, "O_NOFOLLOW", 0)
+        | getattr(os, "O_BINARY", 0),
+    )
+    try:
+        opened = os.fstat(descriptor)
+        if (opened.st_dev, opened.st_ino) != (before.st_dev, before.st_ino):
+            raise ValueError("scheduled local config changed while opening")
+        if _portable_directory_identity(absolute.parent) != parent_identity:
+            raise ValueError("scheduled local config parent changed while opening")
+        return descriptor
+    except BaseException:
+        os.close(descriptor)
+        raise
+
+
+def _seed_local_schedule_config_portable(raw: bytes, target: Path) -> Path:
+    """Windows/path-based atomic no-clobber publication with identity checks."""
+    target = _safe_lexical_absolute(target)
+    parent_identity = _portable_directory_identity(target.parent)
+    temporary = target.parent / f".scheduled-local-{uuid.uuid4().hex}.tmp"
+    descriptor = os.open(
+        temporary,
+        os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_BINARY", 0),
+        0o600,
+    )
+    temp_identity: tuple[int, int] | None = None
+    try:
+        info = os.fstat(descriptor)
+        temp_identity = (info.st_dev, info.st_ino)
+        if hasattr(os, "fchmod"):
+            os.fchmod(descriptor, 0o600)
+        _write_all(descriptor, raw)
+        os.fsync(descriptor)
+        os.close(descriptor)
+        descriptor = -1
+        if _portable_directory_identity(target.parent) != parent_identity:
+            raise ValueError("scheduled local config parent changed before publication")
+        try:
+            os.link(temporary, target)
+        except FileExistsError:
+            load_local_schedule_config(target)
+    finally:
+        if descriptor >= 0:
+            os.close(descriptor)
+        try:
+            current = temporary.lstat()
+            if (
+                temp_identity is not None
+                and (current.st_dev, current.st_ino) == temp_identity
+                and not stat.S_ISLNK(current.st_mode)
+                and not _is_reparse_point(current)
+                and _portable_directory_identity(target.parent) == parent_identity
+            ):
+                temporary.unlink()
+        except (FileNotFoundError, ValueError):
+            pass
+    return target
+
+
 def _open_directory_nofollow(path: Path) -> int:
     absolute = Path(os.path.abspath(os.fspath(path)))
     descriptor = os.open(absolute.anchor, _DIR_FLAGS)
@@ -281,6 +456,8 @@ def _open_directory_nofollow(path: Path) -> int:
 
 
 def _open_file_nofollow(path: Path) -> int:
+    if not _descriptor_relative_supported():
+        return _portable_open_file_nofollow(path)
     absolute = Path(os.path.abspath(os.fspath(path)))
     parent_fd = _open_directory_nofollow(absolute.parent)
     try:

@@ -252,6 +252,10 @@ def _domain_panels(payloads: dict[str, dict[str, Any]]) -> str:
         summary = payload.get("domain_summary", payload.get("summary", ""))
         panel_id = ' id="ops-console"' if domain == "Ops Console" else ""
         hidden = "" if domain == "Command Center" else " hidden"
+        ops_log = (
+            '<div id="ops-log" class="ops-log" data-ops-log></div>'
+            if domain == "Ops Console" else ""
+        )
         panels.append(
             f'<section{panel_id} class="mission-panel domain-panel" data-panel="{_esc(domain)}" '
             f'role="tabpanel"{hidden}>'
@@ -262,7 +266,7 @@ def _domain_panels(payloads: dict[str, dict[str, Any]]) -> str:
             '<div class="section-body">'
             f'<p class="domain-summary">{_esc(summary)}</p>'
             f"{_domain_object_table(payload.get('objects', []))}"
-            f"{'<div id=\"ops-log\" class=\"ops-log\" data-ops-log></div>' if domain == 'Ops Console' else ''}"
+            f"{ops_log}"
             "</div>"
             "</section>"
         )

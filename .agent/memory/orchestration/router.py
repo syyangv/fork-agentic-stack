@@ -12,7 +12,7 @@ class LaneRequirement(Enum):
     OFF = "off"
 
 
-@dataclass(frozen=True, slots=True)
+@dataclass(frozen=True)
 class RoutingDecision:
     governance: LaneRequirement
     behavioral: LaneRequirement

@@ -26,7 +26,7 @@ from .providers.memos_local import MemosLocalProvider
 from .revalidation import RevalidationIndex
 
 
-@dataclass(slots=True)
+@dataclass
 class MemosProviderSession:
     provider: MemosLocalProvider
     client: MemOSBridgeClient | None
