@@ -129,22 +129,23 @@ def upgrade(
     except ValueError:
         print(f"error: {dst_agent} not found; install agentic-stack first", file=sys.stderr)
         return 2
+    try:
+        pending_recovery = _read_upgrade_file(
+            root_fd, dst_agent, _ROLLBACK_JOURNAL,
+            max_bytes=(_MAX_ROLLBACK_BYTES * 2),
+        )
+    except (OSError, ValueError) as exc:
+        _close_root_fd(root_fd)
+        print(f"error: cannot inspect interrupted upgrade: {exc}", file=sys.stderr)
+        return 2
+
     if dry_run:
-        try:
-            pending_recovery = _read_upgrade_file(
-                root_fd, dst_agent, _ROLLBACK_JOURNAL,
-                max_bytes=(_MAX_ROLLBACK_BYTES * 2),
-            )
-        except (OSError, ValueError) as exc:
-            _close_root_fd(root_fd)
-            print(f"error: cannot inspect interrupted upgrade: {exc}", file=sys.stderr)
-            return 2
         if pending_recovery is not None:
             _close_root_fd(root_fd)
             log("would recover interrupted upgrade transaction")
             log("dry run; no files changed")
             return 0
-    else:
+    elif pending_recovery is not None:
         try:
             with _upgrade_lock(root_fd, target_root):
                 _UpgradeRollback.recover_if_present(
@@ -157,37 +158,13 @@ def upgrade(
             print(f"error: cannot recover interrupted upgrade: {exc}", file=sys.stderr)
             return 2
     try:
-        profile, record_migration = profiles.resolve_upgrade_profile(
-            state.load(target_root), dst_agent,
-        )
-        profiles.validate_blocked_configuration(dst_agent)
-        validate_local_schedule_config_for_upgrade(dst_agent)
-        migration_record = (
-            profiles.profile_record(
-                profile, forbidden_roots=(target_root, stack_root),
+        profile, record_migration, migration_record, actions = (
+            _validated_upgrade_plan(
+                target_root=target_root,
+                stack_root=stack_root,
+                src_agent=src_agent,
+                dst_agent=dst_agent,
             )
-            if record_migration else None
-        )
-        planned_relatives = [
-            *_infrastructure_files(src_agent, profile),
-            Path(DEFAULT_LOCAL_CONFIG),
-            Path("memory/orchestration/config.json"),
-            Path("skills/_index.md"),
-            Path("skills/_manifest.jsonl"),
-            Path(".gitignore"),
-            Path("install.json"),
-            Path("install.json.lock"),
-        ]
-        _validate_upgrade_destinations(dst_agent, planned_relatives)
-    except ValueError as exc:
-        _close_root_fd(root_fd)
-        print(f"error: {exc}", file=sys.stderr)
-        return 2
-
-    actions = _plan(src_agent, dst_agent, profile)
-    try:
-        _validate_upgrade_destinations(
-            dst_agent, [dst.relative_to(dst_agent) for _src, dst in actions],
         )
     except ValueError as exc:
         _close_root_fd(root_fd)
@@ -216,16 +193,32 @@ def upgrade(
         print("error: upgrade needs confirmation; re-run with --yes or --dry-run", file=sys.stderr)
         return 2
 
-    transaction_relatives = {
-        *(dst.relative_to(dst_agent) for _src, dst in actions),
-        Path(".gitignore"),
-        Path("skills/_manifest.jsonl"),
-    }
-    if record_migration:
-        transaction_relatives.add(Path("install.json"))
     lock = _upgrade_lock(root_fd, target_root)
     try:
         with lock:
+            # A concurrent upgrader may have left a durable journal after the
+            # read-only plan above.  Recover and rebuild the complete plan
+            # while holding the same lock used for capture and publication.
+            _UpgradeRollback.recover_if_present(
+                root_fd=root_fd,
+                dst_agent=dst_agent,
+                portable_root_identity=portable_root_identity,
+            )
+            profile, record_migration, migration_record, actions = (
+                _validated_upgrade_plan(
+                    target_root=target_root,
+                    stack_root=stack_root,
+                    src_agent=src_agent,
+                    dst_agent=dst_agent,
+                )
+            )
+            transaction_relatives = {
+                *(dst.relative_to(dst_agent) for _src, dst in actions),
+                Path(".gitignore"),
+                Path("skills/_manifest.jsonl"),
+            }
+            if record_migration:
+                transaction_relatives.add(Path("install.json"))
             rollback = _UpgradeRollback.capture(
                 root_fd=root_fd,
                 dst_agent=dst_agent,
@@ -294,6 +287,43 @@ def upgrade(
         return 2
     finally:
         _close_root_fd(root_fd)
+
+
+def _validated_upgrade_plan(
+    *,
+    target_root: Path,
+    stack_root: Path,
+    src_agent: Path,
+    dst_agent: Path,
+) -> tuple[str, bool, dict[str, object] | None, list[tuple[Path, Path]]]:
+    """Return a complete read-only plan after validating all gate inputs."""
+    profile, record_migration = profiles.resolve_upgrade_profile(
+        state.load(target_root), dst_agent,
+    )
+    profiles.validate_blocked_configuration(dst_agent)
+    validate_local_schedule_config_for_upgrade(dst_agent)
+    migration_record = (
+        profiles.profile_record(
+            profile, forbidden_roots=(target_root, stack_root),
+        )
+        if record_migration else None
+    )
+    planned_relatives = [
+        *_infrastructure_files(src_agent, profile),
+        Path(DEFAULT_LOCAL_CONFIG),
+        Path("memory/orchestration/config.json"),
+        Path("skills/_index.md"),
+        Path("skills/_manifest.jsonl"),
+        Path(".gitignore"),
+        Path("install.json"),
+        Path("install.json.lock"),
+    ]
+    _validate_upgrade_destinations(dst_agent, planned_relatives)
+    actions = _plan(src_agent, dst_agent, profile)
+    _validate_upgrade_destinations(
+        dst_agent, [dst.relative_to(dst_agent) for _src, dst in actions],
+    )
+    return profile, record_migration, migration_record, actions
 
 
 def _merge_agent_gitignore_pinned(

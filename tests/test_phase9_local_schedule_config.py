@@ -8,7 +8,9 @@ import shutil
 import tempfile
 import time
 import unittest
+from contextlib import contextmanager
 from pathlib import Path
+from unittest import mock
 
 from harness_manager import profiles, upgrade
 
@@ -103,6 +105,7 @@ class LocalScheduleConfigTest(unittest.TestCase):
                     path.relative_to(agent).as_posix(): path.lstat().st_mtime_ns
                     for path in agent.rglob("*")
                 }
+                self.assertFalse((agent / "install.json.lock").exists())
                 self.assertEqual(
                     upgrade.upgrade(target, ROOT, yes=True, log=lambda _line: None),
                     2,
@@ -112,6 +115,136 @@ class LocalScheduleConfigTest(unittest.TestCase):
                     for path in agent.rglob("*")
                 }
                 self.assertEqual(after, before)
+                self.assertFalse((agent / "install.json.lock").exists())
+
+    def test_invalid_profile_state_without_lock_is_rejected_without_mutation(self) -> None:
+        from harness_manager.scheduled_runtime import select_runtime
+
+        for invalid in ("profile", "gate"):
+            with self.subTest(invalid=invalid), tempfile.TemporaryDirectory(dir=ROOT) as tmp:
+                target = Path(tmp)
+                agent = target / ".agent"
+                profiles.copy_brain(ROOT / ".agent", agent, profile=profiles.STANDARD)
+                orchestration = {
+                    "profile": "standard",
+                    "phase8_quality_gate": "blocked",
+                    "scheduled_runtime": select_runtime().record(),
+                }
+                orchestration["profile" if invalid == "profile" else "phase8_quality_gate"] = (
+                    "unknown" if invalid == "profile" else "allowed"
+                )
+                state = {
+                    "schema_version": 1,
+                    "agentic_stack_version": "test",
+                    "abs_target": str(target.resolve()),
+                    "installed_at": "2026-07-29T00:00:00Z",
+                    "adapters": {},
+                    "orchestration": orchestration,
+                }
+                (agent / "install.json").write_text(json.dumps(state), encoding="utf-8")
+                before = {
+                    path.relative_to(agent).as_posix(): path.lstat().st_mtime_ns
+                    for path in agent.rglob("*")
+                }
+
+                self.assertEqual(
+                    upgrade.upgrade(target, ROOT, yes=True, log=lambda _line: None),
+                    2,
+                )
+                after = {
+                    path.relative_to(agent).as_posix(): path.lstat().st_mtime_ns
+                    for path in agent.rglob("*")
+                }
+                self.assertEqual(after, before)
+                self.assertFalse((agent / "install.json.lock").exists())
+
+    def test_final_lock_recovers_journal_created_after_preflight(self) -> None:
+        from harness_manager import install as install_mod, schema
+
+        with tempfile.TemporaryDirectory(dir=ROOT) as tmp:
+            target = Path(tmp)
+            manifest = schema.validate(ROOT / "adapters/claude-code/adapter.json")
+            install_mod.install(
+                manifest=manifest,
+                target_root=target,
+                adapter_dir=ROOT / "adapters/claude-code",
+                stack_root=ROOT,
+                profile="standard",
+                log=lambda _line: None,
+            )
+            agent = target / ".agent"
+            deployed = agent / "infrastructure.json"
+            before = deployed.read_bytes()
+            real_lock = upgrade._upgrade_lock
+            injected = False
+
+            @contextmanager
+            def inject_interrupted_transaction(root_fd, target_root):
+                nonlocal injected
+                if not injected:
+                    injected = True
+                    rollback = upgrade._UpgradeRollback.capture(
+                        root_fd=root_fd,
+                        dst_agent=agent,
+                        portable_root_identity=None,
+                        relatives=[Path("infrastructure.json")],
+                    )
+                    rollback.persist()
+                    deployed.write_bytes(b"interrupted concurrent upgrade\n")
+                with real_lock(root_fd, target_root):
+                    yield
+
+            with mock.patch.object(upgrade, "_upgrade_lock", inject_interrupted_transaction):
+                self.assertEqual(
+                    upgrade.upgrade(target, ROOT, yes=True, log=lambda _line: None),
+                    0,
+                )
+
+            self.assertTrue(injected)
+            self.assertEqual(deployed.read_bytes(), before)
+            self.assertFalse((agent / ".upgrade-transaction.json").exists())
+
+    def test_plan_is_revalidated_after_final_lock_acquisition(self) -> None:
+        from harness_manager import install as install_mod, schema
+        from harness_manager.local_schedule_config import DEFAULT_LOCAL_CONFIG
+
+        with tempfile.TemporaryDirectory(dir=ROOT) as tmp:
+            target = Path(tmp)
+            manifest = schema.validate(ROOT / "adapters/claude-code/adapter.json")
+            install_mod.install(
+                manifest=manifest,
+                target_root=target,
+                adapter_dir=ROOT / "adapters/claude-code",
+                stack_root=ROOT,
+                profile="standard",
+                log=lambda _line: None,
+            )
+            agent = target / ".agent"
+            deployed = agent / "infrastructure.json"
+            deployed.write_text("stale\n", encoding="utf-8")
+            real_lock = upgrade._upgrade_lock
+            mutated = False
+
+            @contextmanager
+            def mutate_before_lock(root_fd, target_root):
+                nonlocal mutated
+                if not mutated:
+                    mutated = True
+                    (agent / DEFAULT_LOCAL_CONFIG).write_text(
+                        '{"invalid": true}', encoding="utf-8",
+                    )
+                with real_lock(root_fd, target_root):
+                    yield
+
+            with mock.patch.object(upgrade, "_upgrade_lock", mutate_before_lock):
+                self.assertEqual(
+                    upgrade.upgrade(target, ROOT, yes=True, log=lambda _line: None),
+                    2,
+                )
+
+            self.assertTrue(mutated)
+            self.assertEqual(deployed.read_text(encoding="utf-8"), "stale\n")
+            self.assertFalse((agent / ".upgrade-transaction.json").exists())
 
     def test_fresh_profiles_get_defaults_and_user_overrides_survive_upgrade_byte_for_byte(self) -> None:
         from harness_manager.local_schedule_config import DEFAULT_LOCAL_CONFIG
