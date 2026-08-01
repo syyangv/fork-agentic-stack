@@ -27,6 +27,83 @@ _ROLLBACK_JOURNAL = Path(".upgrade-transaction.json")
 _MAX_ROLLBACK_BYTES = 64 * 1024 * 1024
 
 
+def _is_reparse_point(info: os.stat_result) -> bool:
+    marker = getattr(stat, "FILE_ATTRIBUTE_REPARSE_POINT", 0)
+    return bool(marker and getattr(info, "st_file_attributes", 0) & marker)
+
+
+def _windows_path_owned_by_current_user(path: Path) -> bool:
+    """Compare the NTFS owner SID with the current process user SID."""
+    if os.name != "nt":
+        return False
+    try:
+        import ctypes
+        from ctypes import wintypes
+
+        class TOKEN_OWNER(ctypes.Structure):
+            _fields_ = [("Owner", ctypes.c_void_p)]
+
+        kernel32 = ctypes.windll.kernel32
+        advapi32 = ctypes.windll.advapi32
+        kernel32.GetCurrentProcess.restype = wintypes.HANDLE
+        advapi32.OpenProcessToken.argtypes = (
+            wintypes.HANDLE, wintypes.DWORD, ctypes.POINTER(wintypes.HANDLE),
+        )
+        advapi32.OpenProcessToken.restype = wintypes.BOOL
+        advapi32.GetTokenInformation.argtypes = (
+            wintypes.HANDLE, ctypes.c_int, ctypes.c_void_p, wintypes.DWORD,
+            ctypes.POINTER(wintypes.DWORD),
+        )
+        advapi32.GetTokenInformation.restype = wintypes.BOOL
+        advapi32.GetNamedSecurityInfoW.argtypes = (
+            wintypes.LPWSTR, ctypes.c_int, wintypes.DWORD,
+            ctypes.POINTER(ctypes.c_void_p), ctypes.c_void_p, ctypes.c_void_p,
+            ctypes.c_void_p, ctypes.POINTER(ctypes.c_void_p),
+        )
+        advapi32.GetNamedSecurityInfoW.restype = wintypes.DWORD
+        advapi32.EqualSid.argtypes = (ctypes.c_void_p, ctypes.c_void_p)
+        advapi32.EqualSid.restype = wintypes.BOOL
+        kernel32.LocalFree.argtypes = (ctypes.c_void_p,)
+        kernel32.LocalFree.restype = ctypes.c_void_p
+        kernel32.CloseHandle.argtypes = (wintypes.HANDLE,)
+        kernel32.CloseHandle.restype = wintypes.BOOL
+        token = wintypes.HANDLE()
+        if not advapi32.OpenProcessToken(
+            kernel32.GetCurrentProcess(), 0x0008, ctypes.byref(token),
+        ):
+            return False
+        security_descriptor = ctypes.c_void_p()
+        try:
+            required = wintypes.DWORD()
+            advapi32.GetTokenInformation(
+                token, 4, None, 0, ctypes.byref(required),
+            )
+            buffer = ctypes.create_string_buffer(required.value)
+            if not advapi32.GetTokenInformation(
+                token, 4, buffer, required, ctypes.byref(required),
+            ):
+                return False
+            token_owner = ctypes.cast(buffer, ctypes.POINTER(TOKEN_OWNER)).contents
+            owner_sid = ctypes.c_void_p()
+            result = advapi32.GetNamedSecurityInfoW(
+                str(path), 1, 0x00000001, ctypes.byref(owner_sid),
+                None, None, None, ctypes.byref(security_descriptor),
+            )
+            if result != 0 or not owner_sid:
+                return False
+            return bool(
+                advapi32.EqualSid(
+                    owner_sid, token_owner.Owner,
+                )
+            )
+        finally:
+            if security_descriptor:
+                kernel32.LocalFree(security_descriptor)
+            kernel32.CloseHandle(token)
+    except (AttributeError, OSError, ValueError):
+        return False
+
+
 def upgrade(
     target_root: Path | str,
     stack_root: Path | str,
@@ -52,17 +129,33 @@ def upgrade(
     except ValueError:
         print(f"error: {dst_agent} not found; install agentic-stack first", file=sys.stderr)
         return 2
-    try:
-        with _upgrade_lock(root_fd, target_root):
-            _UpgradeRollback.recover_if_present(
-                root_fd=root_fd,
-                dst_agent=dst_agent,
-                portable_root_identity=portable_root_identity,
+    if dry_run:
+        try:
+            pending_recovery = _read_upgrade_file(
+                root_fd, dst_agent, _ROLLBACK_JOURNAL,
+                max_bytes=(_MAX_ROLLBACK_BYTES * 2),
             )
-    except (OSError, ValueError) as exc:
-        _close_root_fd(root_fd)
-        print(f"error: cannot recover interrupted upgrade: {exc}", file=sys.stderr)
-        return 2
+        except (OSError, ValueError) as exc:
+            _close_root_fd(root_fd)
+            print(f"error: cannot inspect interrupted upgrade: {exc}", file=sys.stderr)
+            return 2
+        if pending_recovery is not None:
+            _close_root_fd(root_fd)
+            log("would recover interrupted upgrade transaction")
+            log("dry run; no files changed")
+            return 0
+    else:
+        try:
+            with _upgrade_lock(root_fd, target_root):
+                _UpgradeRollback.recover_if_present(
+                    root_fd=root_fd,
+                    dst_agent=dst_agent,
+                    portable_root_identity=portable_root_identity,
+                )
+        except (OSError, ValueError) as exc:
+            _close_root_fd(root_fd)
+            print(f"error: cannot recover interrupted upgrade: {exc}", file=sys.stderr)
+            return 2
     try:
         profile, record_migration = profiles.resolve_upgrade_profile(
             state.load(target_root), dst_agent,
@@ -401,7 +494,7 @@ def _portable_root_identity(path: Path) -> tuple[int, int]:
             info = current.lstat()
         except OSError as exc:
             raise ValueError("upgrade target is unavailable") from exc
-        if stat.S_ISLNK(info.st_mode):
+        if stat.S_ISLNK(info.st_mode) or _is_reparse_point(info):
             raise ValueError("upgrade target must not traverse symbolic links")
         if not stat.S_ISDIR(info.st_mode):
             raise ValueError("upgrade target must be a directory")
@@ -465,7 +558,7 @@ def _validate_upgrade_destinations(dst_agent: Path, relatives: list[Path]) -> No
             except OSError as exc:
                 raise ValueError("upgrade destination is unavailable") from exc
             final = index == len(relative.parts) - 1
-            if stat.S_ISLNK(info.st_mode):
+            if stat.S_ISLNK(info.st_mode) or _is_reparse_point(info):
                 raise ValueError("upgrade destination must not traverse symbolic links")
             if not final and not stat.S_ISDIR(info.st_mode):
                 raise ValueError("upgrade destination parent must be a directory")
@@ -546,7 +639,11 @@ def _portable_relative_path(
             info = current.lstat()
         except OSError as exc:
             raise ValueError("upgrade destination is unavailable") from exc
-        if stat.S_ISLNK(info.st_mode) or not stat.S_ISDIR(info.st_mode):
+        if (
+            stat.S_ISLNK(info.st_mode)
+            or _is_reparse_point(info)
+            or not stat.S_ISDIR(info.st_mode)
+        ):
             raise ValueError("upgrade destination parent must be a real directory")
     return current / relative.parts[-1]
 
@@ -561,7 +658,11 @@ def _read_path_file(
         return None
     except OSError as exc:
         raise ValueError("upgrade source state is unavailable") from exc
-    if stat.S_ISLNK(info.st_mode) or not stat.S_ISREG(info.st_mode):
+    if (
+        stat.S_ISLNK(info.st_mode)
+        or _is_reparse_point(info)
+        or not stat.S_ISREG(info.st_mode)
+    ):
         raise ValueError("upgrade source state must be a regular file")
     try:
         raw = path.read_bytes()
@@ -595,7 +696,11 @@ def _publish_bytes_path(
     except FileNotFoundError:
         pass
     else:
-        if stat.S_ISLNK(current.st_mode) or not stat.S_ISREG(current.st_mode):
+        if (
+            stat.S_ISLNK(current.st_mode)
+            or _is_reparse_point(current)
+            or not stat.S_ISREG(current.st_mode)
+        ):
             raise ValueError("upgrade destination must be a regular file")
     temporary = path.parent / f".upgrade-{uuid.uuid4().hex}.tmp"
     descriptor = -1
@@ -651,7 +756,11 @@ def _relative_file_stat(
             info = path.lstat()
         except FileNotFoundError:
             return None
-        if stat.S_ISLNK(info.st_mode) or not stat.S_ISREG(info.st_mode):
+        if (
+            stat.S_ISLNK(info.st_mode)
+            or _is_reparse_point(info)
+            or not stat.S_ISREG(info.st_mode)
+        ):
             raise ValueError("upgrade destination must be a regular file")
         return info
     parent_fd = -1
@@ -707,7 +816,11 @@ class _UpgradeRollback:
                     info = candidate.lstat()
                 except FileNotFoundError:
                     continue
-                if stat.S_ISLNK(info.st_mode) or not stat.S_ISDIR(info.st_mode):
+                if (
+                    stat.S_ISLNK(info.st_mode)
+                    or _is_reparse_point(info)
+                    or not stat.S_ISDIR(info.st_mode)
+                ):
                     raise ValueError("upgrade destination parent must be a directory")
                 existing_directories.add(current)
             existing = _read_upgrade_file(root_fd, dst_agent, relative)
@@ -742,14 +855,23 @@ class _UpgradeRollback:
         if encoded is None:
             return False
         journal_info = _relative_file_stat(root_fd, dst_agent, _ROLLBACK_JOURNAL)
-        if (
-            journal_info is None
-            or stat.S_IMODE(journal_info.st_mode) & 0o077
-            or (
-                hasattr(os, "geteuid")
-                and journal_info.st_uid != os.geteuid()
+        journal_path = dst_agent / _ROLLBACK_JOURNAL
+        windows_owner_safe = bool(
+            os.name == "nt"
+            and journal_info is not None
+            and not _is_reparse_point(journal_info)
+            and _windows_path_owned_by_current_user(journal_path)
+        )
+        posix_owner_safe = bool(
+            os.name != "nt"
+            and journal_info is not None
+            and not stat.S_IMODE(journal_info.st_mode) & 0o077
+            and (
+                not hasattr(os, "geteuid")
+                or journal_info.st_uid == os.geteuid()
             )
-        ):
+        )
+        if not (windows_owner_safe or posix_owner_safe):
             raise ValueError("upgrade recovery journal is not owner-safe")
         try:
             document = json.loads(encoded[0].decode("utf-8"))
@@ -909,7 +1031,11 @@ class _UpgradeRollback:
                 info = path.lstat()
             except FileNotFoundError:
                 return
-            if stat.S_ISLNK(info.st_mode) or not stat.S_ISREG(info.st_mode):
+            if (
+                stat.S_ISLNK(info.st_mode)
+                or _is_reparse_point(info)
+                or not stat.S_ISREG(info.st_mode)
+            ):
                 raise ValueError("rollback destination changed type")
             _assert_portable_root_identity(
                 self.dst_agent, self.portable_root_identity,
@@ -966,7 +1092,11 @@ class _UpgradeRollback:
                 info = path.lstat()
             except FileNotFoundError:
                 return
-            if stat.S_ISLNK(info.st_mode) or not stat.S_ISDIR(info.st_mode):
+            if (
+                stat.S_ISLNK(info.st_mode)
+                or _is_reparse_point(info)
+                or not stat.S_ISDIR(info.st_mode)
+            ):
                 raise ValueError("rollback destination changed type")
             try:
                 path.rmdir()

@@ -357,6 +357,11 @@ _FILE_FLAGS = os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0)
 _MAX_MIGRATION_JSON_BYTES = 64 * 1024
 
 
+def _is_reparse_point(info: os.stat_result) -> bool:
+    marker = getattr(stat, "FILE_ATTRIBUTE_REPARSE_POINT", 0)
+    return bool(marker and getattr(info, "st_file_attributes", 0) & marker)
+
+
 def _descriptor_relative_supported() -> bool:
     return bool(
         os.open in os.supports_dir_fd
@@ -374,12 +379,20 @@ def _portable_agent_path(agent_root: Path, relative: Path) -> Path:
     for component in root.parts[1:]:
         current /= component
         info = current.lstat()
-        if stat.S_ISLNK(info.st_mode) or not stat.S_ISDIR(info.st_mode):
+        if (
+            stat.S_ISLNK(info.st_mode)
+            or _is_reparse_point(info)
+            or not stat.S_ISDIR(info.st_mode)
+        ):
             raise ValueError("migration path must not traverse symbolic links")
     for component in relative.parts[:-1]:
         current /= component
         info = current.lstat()
-        if stat.S_ISLNK(info.st_mode) or not stat.S_ISDIR(info.st_mode):
+        if (
+            stat.S_ISLNK(info.st_mode)
+            or _is_reparse_point(info)
+            or not stat.S_ISDIR(info.st_mode)
+        ):
             raise ValueError("migration path must not traverse symbolic links")
     return current / relative.parts[-1]
 
@@ -417,7 +430,11 @@ def _is_regular_agent_file(agent_root: Path, relative: Path) -> bool:
     if not _descriptor_relative_supported():
         try:
             info = _portable_agent_path(agent_root, relative).lstat()
-            return stat.S_ISREG(info.st_mode) and not stat.S_ISLNK(info.st_mode)
+            return bool(
+                stat.S_ISREG(info.st_mode)
+                and not stat.S_ISLNK(info.st_mode)
+                and not _is_reparse_point(info)
+            )
         except (OSError, ValueError):
             return False
     descriptor = file_fd = -1
@@ -461,7 +478,11 @@ def _load_agent_json_no_follow(agent_root: Path, relative: Path) -> object:
     if not _descriptor_relative_supported():
         path = _portable_agent_path(agent_root, relative)
         info = path.lstat()
-        if stat.S_ISLNK(info.st_mode) or not stat.S_ISREG(info.st_mode):
+        if (
+            stat.S_ISLNK(info.st_mode)
+            or _is_reparse_point(info)
+            or not stat.S_ISREG(info.st_mode)
+        ):
             raise ValueError("migration JSON path is not a regular file")
         encoded = path.read_bytes()
         if len(encoded) > _MAX_MIGRATION_JSON_BYTES:

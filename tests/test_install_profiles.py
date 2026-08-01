@@ -757,6 +757,22 @@ print(json.dumps(json.loads(spool.health_file.read_text(encoding='utf-8'))))
             self.assertTrue(rollback_failed)
             self.assertTrue(journal.is_file())
 
+            pending_before = self.agent_files(target)
+            journal_before = journal.read_bytes()
+            messages: list[str] = []
+            self.assertEqual(
+                upgrade_mod.upgrade(
+                    target, ROOT, dry_run=True, log=messages.append,
+                ),
+                0,
+            )
+            self.assertEqual(self.agent_files(target), pending_before)
+            self.assertEqual(journal.read_bytes(), journal_before)
+            self.assertIn(
+                "would recover interrupted upgrade transaction", messages,
+            )
+            self.assertIn("dry run; no files changed", messages)
+
             with mock.patch.object(
                 upgrade_mod.profiles, "resolve_upgrade_profile",
                 side_effect=ValueError("stop after recovery"),

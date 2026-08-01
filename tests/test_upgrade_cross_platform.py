@@ -1,5 +1,7 @@
 import json
 import os
+import shutil
+import subprocess
 import tempfile
 import unittest
 from contextlib import nullcontext
@@ -95,6 +97,62 @@ class CrossPlatformUpgradeTest(unittest.TestCase):
             self.assertEqual(result, 0)
             migrated = json.loads(install_state.read_text(encoding="utf-8"))
             self.assertEqual(migrated["orchestration"]["profile"], "standard")
+
+    def test_portable_recovery_journal_restores_before_image(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            target = Path(tmp)
+            self.install_standard(target)
+            agent = upgrade_mod._safe_lexical_absolute(target) / ".agent"
+            relative = Path("infrastructure.json")
+            deployed = agent / relative
+            before = deployed.read_bytes()
+            identity = upgrade_mod._portable_root_identity(agent)
+            rollback = upgrade_mod._UpgradeRollback.capture(
+                root_fd=None,
+                dst_agent=agent,
+                portable_root_identity=identity,
+                relatives=[relative],
+            )
+            rollback.persist()
+            deployed.write_bytes(b"interrupted\n")
+
+            self.assertTrue(
+                upgrade_mod._UpgradeRollback.recover_if_present(
+                    root_fd=None,
+                    dst_agent=agent,
+                    portable_root_identity=identity,
+                )
+            )
+            self.assertEqual(deployed.read_bytes(), before)
+            self.assertFalse((agent / ".upgrade-transaction.json").exists())
+
+    @unittest.skipUnless(os.name == "nt", "requires native Windows junctions")
+    def test_windows_junction_destination_is_rejected(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            target = root / "target"
+            target.mkdir()
+            self.install_standard(target)
+            junction = target / ".agent/memory/orchestration"
+            shutil.rmtree(junction)
+            outside = root / "outside"
+            outside.mkdir()
+            sentinel = outside / "sentinel.txt"
+            sentinel.write_text("outside\n", encoding="utf-8")
+            created = subprocess.run(
+                ["cmd", "/c", "mklink", "/J", str(junction), str(outside)],
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+            self.assertEqual(created.returncode, 0, created.stderr or created.stdout)
+
+            result = upgrade_mod.upgrade(
+                target, ROOT, yes=True, log=lambda _message: None,
+            )
+
+            self.assertEqual(result, 2)
+            self.assertEqual(sentinel.read_text(encoding="utf-8"), "outside\n")
 
 
 if __name__ == "__main__":
