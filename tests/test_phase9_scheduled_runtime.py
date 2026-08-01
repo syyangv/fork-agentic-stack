@@ -167,6 +167,37 @@ class ScheduledRuntimeTest(unittest.TestCase):
             },
         )
 
+    def test_windows_version_query_environment_keeps_only_required_system_root(self) -> None:
+        with (
+            mock.patch.object(scheduled_runtime.os, "name", "nt"),
+            mock.patch.object(
+                scheduled_runtime, "_native_windows_directory",
+                return_value=r"C:\Windows",
+            ),
+            mock.patch.dict(
+                scheduled_runtime.os.environ,
+                {"SystemRoot": r"\\attacker\share", "SECRET_SENTINEL": "do-not-copy"},
+                clear=True,
+            ),
+        ):
+            environment = scheduled_runtime._version_query_environment()
+
+        self.assertEqual(environment["SystemRoot"], r"C:\Windows")
+        self.assertNotIn("SECRET_SENTINEL", environment)
+
+    def test_windows_system_root_requires_fully_qualified_local_drive(self) -> None:
+        for invalid in (
+            "", "\x00", r"\Windows", "/Windows", r"C:Windows",
+            r"\\server\share\Windows",
+        ):
+            with self.subTest(invalid=invalid), self.assertRaises(ValueError):
+                scheduled_runtime._validated_windows_system_root(invalid)
+
+        self.assertEqual(
+            scheduled_runtime._validated_windows_system_root("C:\\Windows\\"),
+            r"C:\Windows",
+        )
+
     def test_project_local_runtime_is_rejected_without_execution(self) -> None:
         with tempfile.TemporaryDirectory(dir=ROOT) as tmp:
             target = Path(tmp)

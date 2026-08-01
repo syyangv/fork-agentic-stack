@@ -7,6 +7,7 @@ project's deployed ``.agent`` code.
 from __future__ import annotations
 
 import os
+import ntpath
 import re
 import stat
 import subprocess
@@ -124,11 +125,7 @@ def _python_version(path: Path) -> tuple[int, int, int]:
     try:
         result = subprocess.run(
             [str(path), "-I", "-c", _VERSION_QUERY], cwd=str(path.anchor),
-            env={
-                "PATH": os.defpath,
-                "PYTHONNOUSERSITE": "1",
-                "TMPDIR": tempfile.gettempdir(),
-            },
+            env=_version_query_environment(),
             check=False, capture_output=True, text=True, timeout=5,
         )
     except (OSError, subprocess.TimeoutExpired) as exc:
@@ -139,6 +136,49 @@ def _python_version(path: Path) -> tuple[int, int, int]:
     if parsed is None:
         raise ValueError("scheduled Python runtime version could not be read")
     return parsed
+
+
+def _version_query_environment() -> dict[str, str]:
+    """Return the minimal environment required by an isolated interpreter."""
+    environment = {
+        "PATH": os.defpath,
+        "PYTHONNOUSERSITE": "1",
+        "TMPDIR": tempfile.gettempdir(),
+    }
+    if os.name == "nt":
+        # CreateProcess requires SystemRoot when callers provide a replacement
+        # environment, notably for side-by-side assemblies on CPython 3.9.
+        environment["SystemRoot"] = _validated_windows_system_root(
+            _native_windows_directory(),
+        )
+    return environment
+
+
+def _native_windows_directory() -> str:
+    """Read the local OS directory from Windows rather than inherited env."""
+    try:
+        import ctypes
+
+        buffer = ctypes.create_unicode_buffer(32768)
+        length = ctypes.windll.kernel32.GetWindowsDirectoryW(buffer, len(buffer))
+        if length <= 0 or length >= len(buffer):
+            raise ValueError
+        return buffer.value
+    except (AttributeError, OSError, ValueError) as exc:
+        raise ValueError("scheduled Python runtime environment is unavailable") from exc
+
+
+def _validated_windows_system_root(value: object) -> str:
+    if not isinstance(value, str) or not value or "\x00" in value:
+        raise ValueError("scheduled Python runtime environment is unavailable")
+    normalized = ntpath.normpath(value)
+    drive, tail = ntpath.splitdrive(normalized)
+    if (
+        re.fullmatch(r"[A-Za-z]:", drive) is None
+        or not tail.startswith(("\\", "/"))
+    ):
+        raise ValueError("scheduled Python runtime environment is unavailable")
+    return normalized
 
 
 def _parse_supported_version(value: str, *, permit_unsupported: bool = False) -> tuple[int, int, int] | None:
