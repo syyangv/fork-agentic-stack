@@ -212,6 +212,18 @@ class _lock:
             self.lock_f.close()
 
 
+@contextmanager
+def install_state_lock(target_root: Path | str) -> Iterator[None]:
+    """Hold the portable install-state lock for a project.
+
+    Unlike :func:`install_state_lock_at`, this path-based variant works on
+    native Windows where Python does not implement ``dir_fd`` operations.
+    Callers must validate the target path before acquiring it.
+    """
+    with _lock(install_state_path(target_root)):
+        yield
+
+
 def _load_no_lock(p: Path) -> dict | None:
     """Read install.json. Caller holds the lock OR is fine with eventual consistency."""
     if not p.is_file():

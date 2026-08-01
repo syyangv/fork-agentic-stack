@@ -7,6 +7,7 @@ import os
 import stat
 import sys
 import uuid
+from contextlib import AbstractContextManager
 from pathlib import Path
 from typing import Callable
 
@@ -36,8 +37,13 @@ def upgrade(
     stack_root = Path(stack_root)
     src_agent = stack_root / ".agent"
     dst_agent = target_root / ".agent"
+    root_fd: int | None = None
+    portable_root_identity: tuple[int, int] | None = None
     try:
-        root_fd = _open_safe_absolute_directory(dst_agent)
+        if _descriptor_relative_supported():
+            root_fd = _open_safe_absolute_directory(dst_agent)
+        else:
+            portable_root_identity = _portable_root_identity(dst_agent)
     except ValueError:
         print(f"error: {dst_agent} not found; install agentic-stack first", file=sys.stderr)
         return 2
@@ -65,7 +71,7 @@ def upgrade(
         ]
         _validate_upgrade_destinations(dst_agent, planned_relatives)
     except ValueError as exc:
-        os.close(root_fd)
+        _close_root_fd(root_fd)
         print(f"error: {exc}", file=sys.stderr)
         return 2
 
@@ -75,7 +81,7 @@ def upgrade(
             dst_agent, [dst.relative_to(dst_agent) for _src, dst in actions],
         )
     except ValueError as exc:
-        os.close(root_fd)
+        _close_root_fd(root_fd)
         print(f"error: {exc}", file=sys.stderr)
         return 2
     if not actions:
@@ -86,76 +92,105 @@ def upgrade(
             log(f"  {'~' if dst.exists() else '+'} {dst.relative_to(target_root)}")
 
     if dry_run:
-        os.close(root_fd)
+        _close_root_fd(root_fd)
         log("dry run; no files changed")
         return 0
 
     if not yes and sys.stdin.isatty():
         answer = input("apply upgrade? [y/N]: ").strip().lower()
         if answer not in ("y", "yes"):
-            os.close(root_fd)
+            _close_root_fd(root_fd)
             log("aborted; no files changed")
             return 0
     if not yes and not sys.stdin.isatty():
-        os.close(root_fd)
+        _close_root_fd(root_fd)
         print("error: upgrade needs confirmation; re-run with --yes or --dry-run", file=sys.stderr)
         return 2
 
+    transaction_relatives = {
+        *(dst.relative_to(dst_agent) for _src, dst in actions),
+        Path(".gitignore"),
+        Path("skills/_manifest.jsonl"),
+    }
+    if record_migration:
+        transaction_relatives.add(Path("install.json"))
+    lock: AbstractContextManager[object] = (
+        state.install_state_lock_at(root_fd)
+        if root_fd is not None
+        else state.install_state_lock(target_root)
+    )
     try:
-        for src, dst in actions:
-            _copy_action_descriptor_relative(
-                src, dst.relative_to(dst_agent), root_fd=root_fd,
-                dst_agent=dst_agent, src_agent=src_agent, profile=profile,
+        with lock:
+            rollback = _UpgradeRollback.capture(
+                root_fd=root_fd,
+                dst_agent=dst_agent,
+                portable_root_identity=portable_root_identity,
+                relatives=sorted(transaction_relatives),
             )
+            try:
+                for src, dst in actions:
+                    _copy_upgrade_action(
+                        src, dst.relative_to(dst_agent), root_fd=root_fd,
+                        dst_agent=dst_agent, src_agent=src_agent, profile=profile,
+                        portable_root_identity=portable_root_identity,
+                    )
 
-        _merge_agent_gitignore_pinned(
-            src_agent, root_fd=root_fd, dst_agent=dst_agent, log=log,
-        )
-        manifest, skill_count = skill_manifest.render_manifest(target_root)
-        existing_manifest = _read_relative_file(
-            root_fd, Path("skills/_manifest.jsonl"),
-        )
-        _publish_bytes_descriptor_relative(
-            manifest, Path("skills/_manifest.jsonl"),
-            root_fd=root_fd, dst_agent=dst_agent,
-            mode=existing_manifest[1] if existing_manifest else 0o644,
-        )
-        log(
-            f"synced {skill_count} skill manifest "
-            f"entr{'y' if skill_count == 1 else 'ies'}"
-        )
-        if record_migration:
-            assert migration_record is not None
-            with state.install_state_lock_at(root_fd):
-                existing_state = _read_relative_file(root_fd, Path("install.json"))
-                if existing_state is None:
-                    raise ValueError("install.json disappeared during migration")
-                try:
-                    document = json.loads(existing_state[0].decode("utf-8"))
-                except (UnicodeError, json.JSONDecodeError) as exc:
-                    raise ValueError("install.json changed during migration") from exc
-                next_state = state.with_orchestration_profile(
-                    document, migration_record,
+                _merge_agent_gitignore_pinned(
+                    src_agent, root_fd=root_fd, dst_agent=dst_agent, log=log,
+                    portable_root_identity=portable_root_identity,
                 )
-                _publish_bytes_descriptor_relative(
-                    (json.dumps(next_state, indent=2) + "\n").encode("utf-8"),
-                    Path("install.json"), root_fd=root_fd, dst_agent=dst_agent,
-                    mode=existing_state[1],
+                manifest, skill_count = skill_manifest.render_manifest(target_root)
+                existing_manifest = _read_upgrade_file(
+                    root_fd, dst_agent, Path("skills/_manifest.jsonl"),
                 )
+                _publish_upgrade_bytes(
+                    manifest, Path("skills/_manifest.jsonl"),
+                    root_fd=root_fd, dst_agent=dst_agent,
+                    portable_root_identity=portable_root_identity,
+                    mode=existing_manifest[1] if existing_manifest else 0o644,
+                )
+                log(
+                    f"synced {skill_count} skill manifest "
+                    f"entr{'y' if skill_count == 1 else 'ies'}"
+                )
+                if record_migration:
+                    assert migration_record is not None
+                    existing_state = _read_upgrade_file(
+                        root_fd, dst_agent, Path("install.json"),
+                    )
+                    if existing_state is None:
+                        raise ValueError("install.json disappeared during migration")
+                    try:
+                        document = json.loads(existing_state[0].decode("utf-8"))
+                    except (UnicodeError, json.JSONDecodeError) as exc:
+                        raise ValueError("install.json changed during migration") from exc
+                    next_state = state.with_orchestration_profile(
+                        document, migration_record,
+                    )
+                    _publish_upgrade_bytes(
+                        (json.dumps(next_state, indent=2) + "\n").encode("utf-8"),
+                        Path("install.json"), root_fd=root_fd, dst_agent=dst_agent,
+                        portable_root_identity=portable_root_identity,
+                        mode=existing_state[1],
+                    )
+            except Exception:
+                rollback.restore()
+                raise
         return 0
-    except ValueError as exc:
+    except (OSError, ValueError) as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 2
     finally:
-        os.close(root_fd)
+        _close_root_fd(root_fd)
 
 
 def _merge_agent_gitignore_pinned(
     src_agent: Path,
     *,
-    root_fd: int,
+    root_fd: int | None,
     dst_agent: Path,
     log: Callable[[str], None],
+    portable_root_identity: tuple[int, int] | None = None,
 ) -> bool:
     """Upsert runtime ignores beneath the pinned target descriptor."""
     src = src_agent / ".gitignore"
@@ -167,7 +202,7 @@ def _merge_agent_gitignore_pinned(
         for line in source_text.splitlines()
         if line.strip() and not line.lstrip().startswith("#")
     ]
-    existing_file = _read_relative_file(root_fd, Path(".gitignore"))
+    existing_file = _read_upgrade_file(root_fd, dst_agent, Path(".gitignore"))
     try:
         existing = existing_file[0].decode("utf-8") if existing_file else ""
     except UnicodeError as exc:
@@ -187,9 +222,10 @@ def _merge_agent_gitignore_pinned(
         merged = existing + addition
     else:
         merged = source_text
-    _publish_bytes_descriptor_relative(
+    _publish_upgrade_bytes(
         merged.encode("utf-8"), Path(".gitignore"),
         root_fd=root_fd, dst_agent=dst_agent,
+        portable_root_identity=portable_root_identity,
         mode=existing_file[1] if existing_file else stat.S_IMODE(src.stat().st_mode),
     )
     log("  ~ .agent/.gitignore (merged runtime ignores)")
@@ -299,6 +335,23 @@ def needs_profile_copy(src: Path, dst: Path, *, profile: str, relative: Path) ->
 _DIR_FLAGS = os.O_RDONLY | getattr(os, "O_DIRECTORY", 0) | getattr(os, "O_NOFOLLOW", 0)
 
 
+def _descriptor_relative_supported() -> bool:
+    """Whether this Python/OS supports the secure POSIX descriptor backend."""
+    return bool(
+        os.open in os.supports_dir_fd
+        and os.mkdir in os.supports_dir_fd
+        and os.stat in os.supports_dir_fd
+        and os.rename in os.supports_dir_fd
+        and os.unlink in os.supports_dir_fd
+        and hasattr(os, "O_DIRECTORY")
+    )
+
+
+def _close_root_fd(root_fd: int | None) -> None:
+    if root_fd is not None:
+        os.close(root_fd)
+
+
 def _safe_lexical_absolute(path: str | Path) -> Path:
     absolute = Path(os.path.abspath(os.fspath(path)))
     if sys.platform == "darwin" and (
@@ -306,6 +359,32 @@ def _safe_lexical_absolute(path: str | Path) -> Path:
     ):
         absolute = Path("/private/var").joinpath(*absolute.parts[2:])
     return absolute
+
+
+def _portable_root_identity(path: Path) -> tuple[int, int]:
+    """Validate an absolute non-symlink directory path for Windows fallback."""
+    if not path.is_absolute():
+        raise ValueError("upgrade target must be absolute")
+    current = Path(path.anchor)
+    for component in path.parts[1:]:
+        current /= component
+        try:
+            info = current.lstat()
+        except OSError as exc:
+            raise ValueError("upgrade target is unavailable") from exc
+        if stat.S_ISLNK(info.st_mode):
+            raise ValueError("upgrade target must not traverse symbolic links")
+        if not stat.S_ISDIR(info.st_mode):
+            raise ValueError("upgrade target must be a directory")
+    info = path.stat()
+    return info.st_dev, info.st_ino
+
+
+def _assert_portable_root_identity(
+    dst_agent: Path, expected: tuple[int, int] | None,
+) -> None:
+    if expected is None or _portable_root_identity(dst_agent) != expected:
+        raise ValueError("upgrade target identity changed during operation")
 
 
 def _open_safe_absolute_directory(path: Path) -> int:
@@ -339,8 +418,11 @@ def _assert_lexical_root_identity(dst_agent: Path, pinned_fd: int) -> None:
 
 def _validate_upgrade_destinations(dst_agent: Path, relatives: list[Path]) -> None:
     """Reject pre-existing symlink/non-directory components before any write."""
-    root_fd = _open_safe_absolute_directory(dst_agent)
-    os.close(root_fd)
+    if _descriptor_relative_supported():
+        root_fd = _open_safe_absolute_directory(dst_agent)
+        os.close(root_fd)
+    else:
+        _portable_root_identity(dst_agent)
     for relative in relatives:
         if relative.is_absolute() or not relative.parts or ".." in relative.parts:
             raise ValueError("upgrade destination is invalid")
@@ -418,6 +500,313 @@ def _read_relative_file(
             os.close(parent_fd)
 
 
+def _portable_relative_path(
+    dst_agent: Path, relative: Path, *, create_parent: bool,
+) -> Path:
+    if relative.is_absolute() or not relative.parts or ".." in relative.parts:
+        raise ValueError("upgrade destination is invalid")
+    current = dst_agent
+    for component in relative.parts[:-1]:
+        current /= component
+        try:
+            info = current.lstat()
+        except FileNotFoundError:
+            if not create_parent:
+                raise
+            current.mkdir(mode=0o755)
+            info = current.lstat()
+        except OSError as exc:
+            raise ValueError("upgrade destination is unavailable") from exc
+        if stat.S_ISLNK(info.st_mode) or not stat.S_ISDIR(info.st_mode):
+            raise ValueError("upgrade destination parent must be a real directory")
+    return current / relative.parts[-1]
+
+
+def _read_path_file(
+    dst_agent: Path, relative: Path, *, max_bytes: int = 16 * 1024 * 1024,
+) -> tuple[bytes, int] | None:
+    try:
+        path = _portable_relative_path(dst_agent, relative, create_parent=False)
+        info = path.lstat()
+    except FileNotFoundError:
+        return None
+    except OSError as exc:
+        raise ValueError("upgrade source state is unavailable") from exc
+    if stat.S_ISLNK(info.st_mode) or not stat.S_ISREG(info.st_mode):
+        raise ValueError("upgrade source state must be a regular file")
+    try:
+        raw = path.read_bytes()
+    except OSError as exc:
+        raise ValueError("upgrade source state is unavailable") from exc
+    if len(raw) > max_bytes:
+        raise ValueError("upgrade source state exceeds size bound")
+    return raw, stat.S_IMODE(info.st_mode)
+
+
+def _read_upgrade_file(
+    root_fd: int | None, dst_agent: Path, relative: Path,
+    *, max_bytes: int = 16 * 1024 * 1024,
+) -> tuple[bytes, int] | None:
+    if root_fd is not None:
+        return _read_relative_file(root_fd, relative, max_bytes=max_bytes)
+    return _read_path_file(dst_agent, relative, max_bytes=max_bytes)
+
+
+def _publish_bytes_path(
+    raw: bytes,
+    relative: Path,
+    *,
+    dst_agent: Path,
+    portable_root_identity: tuple[int, int] | None,
+    mode: int,
+) -> None:
+    path = _portable_relative_path(dst_agent, relative, create_parent=True)
+    try:
+        current = path.lstat()
+    except FileNotFoundError:
+        pass
+    else:
+        if stat.S_ISLNK(current.st_mode) or not stat.S_ISREG(current.st_mode):
+            raise ValueError("upgrade destination must be a regular file")
+    temporary = path.parent / f".upgrade-{uuid.uuid4().hex}.tmp"
+    descriptor = -1
+    try:
+        descriptor = os.open(
+            temporary,
+            os.O_WRONLY | os.O_CREAT | os.O_EXCL,
+            mode,
+        )
+        if hasattr(os, "fchmod"):
+            os.fchmod(descriptor, mode)
+        _write_all(descriptor, raw)
+        os.fsync(descriptor)
+        os.close(descriptor)
+        descriptor = -1
+        _assert_portable_root_identity(dst_agent, portable_root_identity)
+        os.replace(temporary, path)
+    finally:
+        if descriptor >= 0:
+            os.close(descriptor)
+        try:
+            temporary.unlink()
+        except FileNotFoundError:
+            pass
+
+
+def _publish_upgrade_bytes(
+    raw: bytes,
+    relative: Path,
+    *,
+    root_fd: int | None,
+    dst_agent: Path,
+    portable_root_identity: tuple[int, int] | None,
+    mode: int,
+) -> None:
+    if root_fd is not None:
+        _publish_bytes_descriptor_relative(
+            raw, relative, root_fd=root_fd, dst_agent=dst_agent, mode=mode,
+        )
+        return
+    _publish_bytes_path(
+        raw, relative, dst_agent=dst_agent,
+        portable_root_identity=portable_root_identity, mode=mode,
+    )
+
+
+def _relative_file_stat(
+    root_fd: int | None, dst_agent: Path, relative: Path,
+) -> os.stat_result | None:
+    if root_fd is None:
+        try:
+            path = _portable_relative_path(dst_agent, relative, create_parent=False)
+            info = path.lstat()
+        except FileNotFoundError:
+            return None
+        if stat.S_ISLNK(info.st_mode) or not stat.S_ISREG(info.st_mode):
+            raise ValueError("upgrade destination must be a regular file")
+        return info
+    parent_fd = -1
+    try:
+        try:
+            parent_fd, name = _open_relative_parent(root_fd, relative, create=False)
+            info = os.stat(name, dir_fd=parent_fd, follow_symlinks=False)
+        except FileNotFoundError:
+            return None
+        if not stat.S_ISREG(info.st_mode):
+            raise ValueError("upgrade destination must be a regular file")
+        return info
+    finally:
+        if parent_fd >= 0:
+            os.close(parent_fd)
+
+
+class _UpgradeRollback:
+    """Bounded before-images for rollback of an interrupted publication pass."""
+
+    def __init__(
+        self,
+        *,
+        root_fd: int | None,
+        dst_agent: Path,
+        portable_root_identity: tuple[int, int] | None,
+        snapshots: dict[Path, tuple[bytes, int, int, int] | None],
+        existing_directories: set[Path],
+    ) -> None:
+        self.root_fd = root_fd
+        self.dst_agent = dst_agent
+        self.portable_root_identity = portable_root_identity
+        self.snapshots = snapshots
+        self.existing_directories = existing_directories
+
+    @classmethod
+    def capture(
+        cls,
+        *,
+        root_fd: int | None,
+        dst_agent: Path,
+        portable_root_identity: tuple[int, int] | None,
+        relatives: list[Path],
+    ) -> "_UpgradeRollback":
+        snapshots: dict[Path, tuple[bytes, int, int, int] | None] = {}
+        existing_directories: set[Path] = {Path(".")}
+        for relative in relatives:
+            current = Path()
+            for component in relative.parts[:-1]:
+                current /= component
+                candidate = dst_agent / current
+                try:
+                    info = candidate.lstat()
+                except FileNotFoundError:
+                    continue
+                if stat.S_ISLNK(info.st_mode) or not stat.S_ISDIR(info.st_mode):
+                    raise ValueError("upgrade destination parent must be a directory")
+                existing_directories.add(current)
+            existing = _read_upgrade_file(root_fd, dst_agent, relative)
+            if existing is None:
+                snapshots[relative] = None
+                continue
+            info = _relative_file_stat(root_fd, dst_agent, relative)
+            assert info is not None
+            snapshots[relative] = (
+                existing[0], existing[1], info.st_atime_ns, info.st_mtime_ns,
+            )
+        return cls(
+            root_fd=root_fd,
+            dst_agent=dst_agent,
+            portable_root_identity=portable_root_identity,
+            snapshots=snapshots,
+            existing_directories=existing_directories,
+        )
+
+    def restore(self) -> None:
+        for relative in reversed(list(self.snapshots)):
+            snapshot = self.snapshots[relative]
+            if snapshot is None:
+                self._remove_file(relative)
+                continue
+            raw, mode, atime_ns, mtime_ns = snapshot
+            _publish_upgrade_bytes(
+                raw, relative, root_fd=self.root_fd, dst_agent=self.dst_agent,
+                portable_root_identity=self.portable_root_identity, mode=mode,
+            )
+            self._restore_times(relative, atime_ns, mtime_ns)
+        created_directories = {
+            parent
+            for relative in self.snapshots
+            for parent in relative.parents
+            if parent != Path(".") and parent not in self.existing_directories
+        }
+        for relative in sorted(created_directories, key=lambda item: len(item.parts), reverse=True):
+            self._remove_directory_if_empty(relative)
+
+    def _remove_file(self, relative: Path) -> None:
+        if self.root_fd is None:
+            try:
+                path = _portable_relative_path(
+                    self.dst_agent, relative, create_parent=False,
+                )
+                info = path.lstat()
+            except FileNotFoundError:
+                return
+            if stat.S_ISLNK(info.st_mode) or not stat.S_ISREG(info.st_mode):
+                raise ValueError("rollback destination changed type")
+            _assert_portable_root_identity(
+                self.dst_agent, self.portable_root_identity,
+            )
+            path.unlink()
+            return
+        parent_fd = -1
+        try:
+            try:
+                parent_fd, name = _open_relative_parent(
+                    self.root_fd, relative, create=False,
+                )
+                info = os.stat(name, dir_fd=parent_fd, follow_symlinks=False)
+            except FileNotFoundError:
+                return
+            if not stat.S_ISREG(info.st_mode):
+                raise ValueError("rollback destination changed type")
+            os.unlink(name, dir_fd=parent_fd)
+            os.fsync(parent_fd)
+        finally:
+            if parent_fd >= 0:
+                os.close(parent_fd)
+
+    def _restore_times(self, relative: Path, atime_ns: int, mtime_ns: int) -> None:
+        if self.root_fd is None:
+            path = _portable_relative_path(
+                self.dst_agent, relative, create_parent=False,
+            )
+            try:
+                os.utime(path, ns=(atime_ns, mtime_ns), follow_symlinks=False)
+            except (NotImplementedError, TypeError):
+                # Native Windows may not expose the follow_symlinks variant;
+                # the immediately preceding lstat-validated path is safe here.
+                os.utime(path, ns=(atime_ns, mtime_ns))
+            return
+        try:
+            parent_fd, name = _open_relative_parent(
+                self.root_fd, relative, create=False,
+            )
+        except FileNotFoundError:
+            return
+        try:
+            os.utime(
+                name, ns=(atime_ns, mtime_ns), dir_fd=parent_fd,
+                follow_symlinks=False,
+            )
+        finally:
+            os.close(parent_fd)
+
+    def _remove_directory_if_empty(self, relative: Path) -> None:
+        if self.root_fd is None:
+            path = self.dst_agent / relative
+            try:
+                info = path.lstat()
+            except FileNotFoundError:
+                return
+            if stat.S_ISLNK(info.st_mode) or not stat.S_ISDIR(info.st_mode):
+                raise ValueError("rollback destination changed type")
+            try:
+                path.rmdir()
+            except OSError:
+                pass
+            return
+        try:
+            parent_fd, name = _open_relative_parent(
+                self.root_fd, relative, create=False,
+            )
+        except FileNotFoundError:
+            return
+        try:
+            try:
+                os.rmdir(name, dir_fd=parent_fd)
+            except OSError:
+                pass
+        finally:
+            os.close(parent_fd)
+
+
 def _publish_bytes_descriptor_relative(
     raw: bytes,
     relative: Path,
@@ -477,16 +866,9 @@ def _copy_action_descriptor_relative(
     """Publish one stack-owned file beneath the pinned target root."""
     if relative.is_absolute() or not relative.parts or ".." in relative.parts:
         raise ValueError("upgrade destination is invalid")
-    if src == src_agent / DEFAULT_LOCAL_TEMPLATE:
-        load_local_schedule_config(src)
-        raw = src.read_bytes()
-        mode = 0o600
-    elif src == src_agent / "infrastructure.json":
-        raw = profiles.infrastructure_bytes(src, profile)
-        mode = stat.S_IMODE(src.stat().st_mode)
-    else:
-        raw = src.read_bytes()
-        mode = stat.S_IMODE(src.stat().st_mode)
+    raw, mode = _action_bytes_mode(
+        src, src_agent=src_agent, profile=profile,
+    )
 
     parent_fd = os.dup(root_fd)
     temporary = ""
@@ -534,6 +916,45 @@ def _copy_action_descriptor_relative(
             except FileNotFoundError:
                 pass
         os.close(parent_fd)
+
+
+def _action_bytes_mode(
+    src: Path, *, src_agent: Path, profile: str,
+) -> tuple[bytes, int]:
+    if src == src_agent / DEFAULT_LOCAL_TEMPLATE:
+        load_local_schedule_config(src)
+        raw = src.read_bytes()
+        mode = 0o600
+    elif src == src_agent / "infrastructure.json":
+        raw = profiles.infrastructure_bytes(src, profile)
+        mode = stat.S_IMODE(src.stat().st_mode)
+    else:
+        raw = src.read_bytes()
+        mode = stat.S_IMODE(src.stat().st_mode)
+    return raw, mode
+
+
+def _copy_upgrade_action(
+    src: Path,
+    relative: Path,
+    *,
+    root_fd: int | None,
+    dst_agent: Path,
+    src_agent: Path,
+    profile: str,
+    portable_root_identity: tuple[int, int] | None,
+) -> None:
+    if root_fd is not None:
+        _copy_action_descriptor_relative(
+            src, relative, root_fd=root_fd, dst_agent=dst_agent,
+            src_agent=src_agent, profile=profile,
+        )
+        return
+    raw, mode = _action_bytes_mode(src, src_agent=src_agent, profile=profile)
+    _publish_bytes_path(
+        raw, relative, dst_agent=dst_agent,
+        portable_root_identity=portable_root_identity, mode=mode,
+    )
 
 
 def _write_all(descriptor: int, raw: bytes) -> None:

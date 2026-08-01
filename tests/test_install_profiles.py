@@ -623,6 +623,92 @@ print(json.dumps(json.loads(spool.health_file.read_text(encoding='utf-8'))))
                 document["orchestration"]["phase8_quality_gate"], "blocked",
             )
 
+    def test_phase2_migration_rolls_back_after_partial_file_publication(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            target = Path(tmp)
+            self.make_phase2_governance_fixture(target)
+            before = self.agent_files(target)
+            real_copy = upgrade_mod._copy_upgrade_action
+            publications = 0
+            failed = False
+
+            def fail_after_two_publications(*args, **kwargs):
+                nonlocal publications, failed
+                publications += 1
+                if publications == 3 and not failed:
+                    failed = True
+                    raise OSError("injected publication failure")
+                return real_copy(*args, **kwargs)
+
+            with mock.patch.object(
+                upgrade_mod, "_copy_upgrade_action",
+                side_effect=fail_after_two_publications,
+            ):
+                self.assertEqual(self.upgrade(target), 2)
+
+            self.assertTrue(failed)
+            self.assertEqual(self.agent_files(target), before)
+            self.assertNotIn("orchestration", self.state(target))
+
+    def test_phase2_migration_rolls_back_post_action_failure(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            target = Path(tmp)
+            self.make_phase2_governance_fixture(target)
+            before = self.agent_files(target)
+            before_stats = {
+                relative: (
+                    (target / ".agent" / relative).stat().st_mode,
+                    (target / ".agent" / relative).stat().st_mtime_ns,
+                )
+                for relative in before
+            }
+            real_publish = upgrade_mod._publish_upgrade_bytes
+            failed = False
+
+            def fail_manifest_once(raw, relative, **kwargs):
+                nonlocal failed
+                if relative == Path("skills/_manifest.jsonl") and not failed:
+                    failed = True
+                    raise OSError("injected manifest failure")
+                return real_publish(raw, relative, **kwargs)
+
+            with mock.patch.object(
+                upgrade_mod, "_publish_upgrade_bytes",
+                side_effect=fail_manifest_once,
+            ):
+                self.assertEqual(self.upgrade(target), 2)
+
+            self.assertTrue(failed)
+            self.assertEqual(self.agent_files(target), before)
+            for relative, (mode, mtime_ns) in before_stats.items():
+                info = (target / ".agent" / relative).stat()
+                self.assertEqual(info.st_mode, mode, relative)
+                self.assertEqual(info.st_mtime_ns, mtime_ns, relative)
+
+    def test_upgrade_portable_backend_avoids_posix_dir_fd_apis(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            target = Path(tmp)
+            self.install(target, profile="standard")
+            deployed = target / ".agent/infrastructure.json"
+            deployed.write_text("stale\n", encoding="utf-8")
+
+            with (
+                mock.patch.object(
+                    upgrade_mod, "_descriptor_relative_supported",
+                    return_value=False,
+                ),
+                mock.patch.object(
+                    upgrade_mod, "_open_safe_absolute_directory",
+                    side_effect=AssertionError("POSIX descriptor backend used"),
+                ),
+            ):
+                self.assertEqual(self.upgrade(target), 0)
+
+            self.assertNotEqual(deployed.read_text(encoding="utf-8"), "stale\n")
+            self.assertEqual(
+                self.state(target)["orchestration"]["profile"], "standard",
+            )
+
     def test_legacy_standard_migration_requires_every_capability_discriminator(self):
         for relative in sorted(profiles.minimal_omitted_paths()):
             with self.subTest(relative=relative), tempfile.TemporaryDirectory() as tmp:
