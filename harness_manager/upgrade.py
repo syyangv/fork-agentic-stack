@@ -737,7 +737,7 @@ def _publish_bytes_path(
     try:
         descriptor = os.open(
             temporary,
-            os.O_WRONLY | os.O_CREAT | os.O_EXCL,
+            os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_BINARY", 0),
             mode,
         )
         if hasattr(os, "fchmod"):

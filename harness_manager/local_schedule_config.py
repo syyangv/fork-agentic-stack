@@ -349,7 +349,10 @@ def _portable_open_file_nofollow(path: Path) -> int:
     ):
         raise ValueError("scheduled local config path is not a regular file")
     descriptor = os.open(
-        absolute, os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0),
+        absolute,
+        os.O_RDONLY
+        | getattr(os, "O_NOFOLLOW", 0)
+        | getattr(os, "O_BINARY", 0),
     )
     try:
         opened = os.fstat(descriptor)
@@ -368,7 +371,11 @@ def _seed_local_schedule_config_portable(raw: bytes, target: Path) -> Path:
     target = _safe_lexical_absolute(target)
     parent_identity = _portable_directory_identity(target.parent)
     temporary = target.parent / f".scheduled-local-{uuid.uuid4().hex}.tmp"
-    descriptor = os.open(temporary, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+    descriptor = os.open(
+        temporary,
+        os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_BINARY", 0),
+        0o600,
+    )
     temp_identity: tuple[int, int] | None = None
     try:
         info = os.fstat(descriptor)
