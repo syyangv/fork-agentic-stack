@@ -5,6 +5,7 @@ import json
 import os
 import plistlib
 import shutil
+import subprocess
 import tempfile
 import time
 import unittest
@@ -47,6 +48,70 @@ class LocalScheduleConfigTest(unittest.TestCase):
             LocalScheduleConfig.from_external({"notification": "email"})
         with self.assertRaises(ValueError):
             LocalScheduleConfig.from_external({"review_schedule": {"hour": 25, "minute": 0}})
+
+    def test_portable_backend_seeds_and_reads_without_dir_fd_support(self) -> None:
+        from harness_manager import local_schedule_config as config_mod
+
+        with tempfile.TemporaryDirectory(dir=ROOT) as tmp:
+            root = Path(tmp)
+            source = root / "scheduled-local.default.json"
+            source.write_bytes(
+                (ROOT / ".agent/memory/orchestration/scheduled-local.default.json").read_bytes()
+            )
+            destination = root / "nested/scheduled-local.json"
+            with mock.patch.object(
+                config_mod, "_descriptor_relative_supported", return_value=False,
+            ):
+                config_mod.seed_local_schedule_config(source, destination)
+                loaded = config_mod.load_local_schedule_config(destination)
+
+            self.assertEqual(loaded.schema, config_mod.SCHEMA)
+            self.assertEqual(destination.stat().st_mode & 0o777, 0o600)
+
+    def test_portable_backend_rejects_symlinked_parent(self) -> None:
+        from harness_manager import local_schedule_config as config_mod
+
+        with tempfile.TemporaryDirectory(dir=ROOT) as tmp:
+            root = Path(tmp)
+            outside = root / "outside"
+            outside.mkdir()
+            redirected = root / "redirected"
+            os.symlink(outside, redirected)
+            destination = redirected / "new/scheduled-local.json"
+            source = ROOT / ".agent/memory/orchestration/scheduled-local.default.json"
+            before = sorted(path.name for path in outside.iterdir())
+
+            with mock.patch.object(
+                config_mod, "_descriptor_relative_supported", return_value=False,
+            ), self.assertRaises((OSError, ValueError)):
+                config_mod.seed_local_schedule_config(source, destination)
+
+            self.assertEqual(sorted(path.name for path in outside.iterdir()), before)
+            self.assertFalse((outside / "new").exists())
+
+    @unittest.skipUnless(os.name == "nt", "requires native Windows junctions")
+    def test_portable_backend_rejects_junction_before_parent_creation(self) -> None:
+        from harness_manager import local_schedule_config as config_mod
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            outside = root / "outside"
+            outside.mkdir()
+            redirected = root / "redirected"
+            created = subprocess.run(
+                ["cmd", "/c", "mklink", "/J", str(redirected), str(outside)],
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+            self.assertEqual(created.returncode, 0, created.stderr or created.stdout)
+            destination = redirected / "new/scheduled-local.json"
+            source = ROOT / ".agent/memory/orchestration/scheduled-local.default.json"
+
+            with self.assertRaises((OSError, ValueError)):
+                config_mod.seed_local_schedule_config(source, destination)
+
+            self.assertFalse((outside / "new").exists())
 
     def test_config_reader_rejects_a_symlink_instead_of_following_it(self) -> None:
         from harness_manager.local_schedule_config import load_local_schedule_config
