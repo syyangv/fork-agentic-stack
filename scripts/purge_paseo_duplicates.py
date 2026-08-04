@@ -24,7 +24,7 @@ GUARD_DIRS = (
     HOME / ".claude" / "skills",
     HOME / ".codex" / "skills",
 )
-LOG_PATH = HOME / ".agent" / "paseo-guard.log"
+LOG_PATH = HOME / "Library" / "Logs" / "agentic-stack-paseo-guard" / "paseo-guard.log"
 
 
 def log(msg: str) -> None:

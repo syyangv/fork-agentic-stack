@@ -22,7 +22,7 @@ from pathlib import Path
 HOME_ROOT = Path(os.environ.get("SYNC_HOME", str(Path.home())))
 REPO_ROOT = Path(os.environ.get("SYNC_REPO", str(Path.home() / ".agentic-stack")))
 NAMES = ("AGENTS.md", "CLAUDE.md")
-LOG_PATH = HOME_ROOT / ".agent" / "context-sync.log"
+LOG_PATH = Path(os.environ.get("SYNC_LOG", str(Path.home() / "Library" / "Logs" / "agentic-stack-context-sync" / "context-sync.log")))
 
 
 def log(msg: str) -> None:
