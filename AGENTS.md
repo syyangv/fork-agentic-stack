@@ -36,7 +36,11 @@ duplicated to `~/.claude/skills/` or `~/.codex/skills/` (no symlinks, no
 copies). Read `.agent/skills/_index.md` and load a full `SKILL.md` only
 when its triggers match the task (progressive disclosure). If another
 harness needs the skills, point it at `~/.agent/skills` (e.g. pi's
-`settings.json` `"skills"` array) instead of copying them out.
+`settings.json` `"skills"` array) instead of copying them out. Note: the
+Paseo desktop app hardcodes `~/.agents`, `~/.claude`, `~/.codex` skill dirs
+and reinstalls its skills there on every launch —
+`scripts/purge_paseo_duplicates.py` (launchd
+`com.syang.agentic-stack.paseo-guard`, 60s) enforces the rule.
 
 ## While working
 
@@ -126,3 +130,6 @@ python3 .agent/tools/memory_reflect.py \
   silently deletes nothing.
 - Paseo skills live only in `~/.agent/skills/` — do not duplicate to
   `~/.claude/skills/` or `~/.codex/skills/`.
+
+## Session Learnings (Paseo)
+- **Paseo daemon PATH:** The launchd daemon (`com.syang.paseo.daemon`) has a restricted PATH: `~/.local/bin:~/projects/codex-hooks/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin`. It does NOT include `~/.npm-global/bin`. Any npm-global-installed provider binary (like `pi`) needs a wrapper script in `~/.local/bin/<name>` that execs `node@22` on the real entrypoint. A daemon restart (`paseo restart`) is required after adding the wrapper for provider re-discovery.
