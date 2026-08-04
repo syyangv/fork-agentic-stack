@@ -13,6 +13,15 @@
 
 ## Auto-promoted entries will be appended below
 
+### 2026-08
+
+- When a Git or GitHub operation is rejected before the command launches, diagnose the execution approval/control layer separately; repository hooks cannot cause or fix pre-launch policy-schema failures.  <!-- status=accepted confidence=0.6 evidence=1 id=lesson_da2658bd9c09 -->
+
+### 2026-07
+
+- For scoped Git transactions guarded by codex-control-plane-hooks, authorize each exact command in its own backtick code span after the words 'I authorize'; unquoted commands or a backtick around the whole sentence may not produce a usable grant.  <!-- status=accepted confidence=0.6 evidence=1 id=lesson_96f1fd2d737f -->
+- In repositories with background commit or sync automation, re-check HEAD, the cached diff, and upstream state immediately before committing or pushing, then verify the intended commit remains in remote history.  <!-- status=accepted confidence=0.6 evidence=1 id=lesson_89de9aaf50f4 -->
+
 ### 2026-05
 
 - When sharing skills between Claude, Codex, and agentic-stack, prefer secondary registry lookup at the original skill root over symlink or copy mirrors.  <!-- status=accepted confidence=0.6 evidence=1 id=lesson_2647c12dc81d -->

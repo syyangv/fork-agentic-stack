@@ -12,6 +12,8 @@
 ## Workflow
 - Prefer registry-based sharing for skills across Claude/Codex/agentic-stack; do not create symlink or copy mirrors unless explicitly requested.
 - When asked to test CLI-driven behavior, treat a command process exiting 0 as insufficient; verify the model/tool actually ran and inspect structured execution fields.
+- For pull-request delivery, use an independent senior engineer with a sol-medium review posture; fix actionable findings and re-review until the verdict is explicitly CLEAN before merging.
+- Commit each implementation phase only after its senior review is CLEAN and relevant tests pass; do not create empty commits when a clean review produces no changes.
 - _(e.g., always run tests before committing)_
 - _(e.g., draft PR early, mark ready when CI is green)_
 - _(e.g., prefer small PRs over large ones)_

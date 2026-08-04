@@ -32,3 +32,9 @@
 **Rationale:** Claude Code can return a successful process with zero usage/zero turns when quota or non-interactive execution short-circuits. Treating exit code 0 as success created a false pass for the registry teaching test.
 **Alternatives considered:** Manual spot-checking `claude -p` output (rejected: easy to miss zero-turn JSON); relying only on static instruction file inspection (rejected: does not prove the CLI loaded the guidance).
 **Status:** active
+
+## 2026-08-01: Phase 9 supportability merge does not grant runtime authority
+**Decision:** Treat merge commit `9684c529ff826280ec58e85d9cddd0ded648e6cb` from PR #13 as delivery of Phase 9 Gates 1–12 only. Keep MemOS quality activation, scheduler/provider activation, evolution, and R7 promotion disabled unless separately authorized and quality-gated.
+**Rationale:** The reviewed implementation deliberately separates source delivery and operational supportability from runtime authority. R7 completed validly but did not demonstrate the required assisted-quality or latency gain.
+**Alternatives considered:** Activate features because CI and senior review were clean (rejected: code quality is not activation evidence); treat the completed R7 run as promotion authority (rejected: its quality gate remained blocked).
+**Status:** active

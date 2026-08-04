@@ -1,0 +1,42 @@
+{
+  "id": "89de9aaf50f4",
+  "key": "manual_89de9a",
+  "name": "manual_89de9a",
+  "claim": "In repositories with background commit or sync automation, re-check HEAD, the cached diff, and upstream state immediately before committing or pushing, then verify the intended commit remains in remote history.",
+  "conditions": [
+    "automation",
+    "commit",
+    "concurrent",
+    "git",
+    "push"
+  ],
+  "evidence_ids": [
+    "2026-07-28T23:47:06.845980+00:00"
+  ],
+  "cluster_size": 1,
+  "canonical_salience": 8.0,
+  "staged_at": "2026-07-28T23:47:06.845980+00:00",
+  "status": "accepted",
+  "decisions": [
+    {
+      "ts": "2026-07-28T23:47:06.845980+00:00",
+      "action": "staged",
+      "reviewer": "learn"
+    },
+    {
+      "ts": "2026-07-28T23:47:07.470607+00:00",
+      "action": "graduated",
+      "reviewer": "learn.py",
+      "notes": "The Obsidian backup automation committed and pushed while this session was preparing an isolated commit, so previously observed index and branch state became stale.",
+      "provisional": false,
+      "evidence_snapshot": [
+        "2026-07-28T23:47:06.845980+00:00"
+      ],
+      "lessons_sha": "3646da62e379"
+    }
+  ],
+  "rejection_count": 0,
+  "accepted_at": "2026-07-28T23:47:07.470591+00:00",
+  "reviewer": "learn.py",
+  "rationale": "The Obsidian backup automation committed and pushed while this session was preparing an isolated commit, so previously observed index and branch state became stale."
+}

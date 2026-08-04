@@ -2,6 +2,7 @@
 name: skill-inventory
 version: 2026-05-17
 description: Audit skill availability across Claude Code, Codex, and .agent roots. Use when checking whether skills are Claude-only, Codex-only, missing after sync, duplicated by symlink aliases, or when maintaining cross-harness skill parity.
+tags: [metaskill, review, bookkeeping]
 triggers: ["skill inventory", "skill drift", "codex-only", "claude-only", "missing skills", "sync skills", "skill parity"]
 tools: [bash, python3]
 preconditions: []
@@ -33,6 +34,14 @@ python3 ~/.agentic-stack/.agent/tools/skill_inventory.py --format json
 ```
 
 Use JSON for automation, dashboards, or CI checks.
+
+The inventory JSON also includes a documentation component:
+- one-line skill descriptions from frontmatter
+- normalized tags from a curated allowlist
+- tag issues when a skill declares an unsupported tag
+- provenance tags (`#custom`, `#revised`) come from the explicit registry at
+  `~/.agentic-stack/.agent/skills/skill-inventory/references/provenance.json`,
+  not from guessing based on root location
 
 ## Drift gate
 
@@ -101,4 +110,3 @@ python3 ~/.agentic-stack/.agent/tools/verify_skill_registry_visibility.py
 Use `--skip-claude` or `--skip-codex` only when that CLI is intentionally unavailable.
 A Claude JSON result with `num_turns: 0`, empty `result`, or `duration_api_ms: 0`
 is not a pass; it means the CLI process launched but the model test did not execute.
-

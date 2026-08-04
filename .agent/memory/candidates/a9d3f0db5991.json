@@ -1,0 +1,74 @@
+{
+  "id": "a9d3f0db5991",
+  "key": "pattern_stripe_secret_key_payment-webhook_claude-code_a9d3f0",
+  "name": "pattern_stripe_secret_key_payment-webhook_claude-code_a9d3f0",
+  "claim": "FAILURE in claude-code: High-stakes op FAILED (deploy): supabase functions deploy payment-webhook. Error: Error: STRIPE_SECRET_KEY not found in production secrets",
+  "conditions": [
+    "bash",
+    "claude-code",
+    "deploy",
+    "error",
+    "failed",
+    "failure",
+    "found",
+    "functions",
+    "high-stakes",
+    "payment-webhook",
+    "production",
+    "secrets",
+    "stripe_secret_key",
+    "supabase"
+  ],
+  "evidence_ids": [
+    "2026-07-16T19:40:51.948975+00:00",
+    "2026-07-16T19:42:44.148131+00:00",
+    "2026-07-16T19:46:06.374993+00:00",
+    "2026-07-16T19:48:58.529858+00:00",
+    "2026-07-16T19:50:55.972323+00:00",
+    "2026-07-16T20:05:23.163857+00:00",
+    "2026-07-16T20:05:44.455891+00:00",
+    "2026-07-16T20:09:39.574481+00:00"
+  ],
+  "cluster_size": 8,
+  "canonical_salience": 27.0,
+  "staged_at": "2026-07-16T19:42:44.363152+00:00",
+  "status": "staged",
+  "decisions": [
+    {
+      "ts": "2026-07-16T19:42:44.363152+00:00",
+      "action": "staged",
+      "reviewer": "auto_dream"
+    },
+    {
+      "ts": "2026-07-16T19:46:06.843064+00:00",
+      "action": "staged",
+      "reviewer": "auto_dream"
+    },
+    {
+      "ts": "2026-07-16T19:48:58.725888+00:00",
+      "action": "staged",
+      "reviewer": "auto_dream"
+    },
+    {
+      "ts": "2026-07-16T19:50:56.167282+00:00",
+      "action": "staged",
+      "reviewer": "auto_dream"
+    },
+    {
+      "ts": "2026-07-16T20:05:23.360194+00:00",
+      "action": "staged",
+      "reviewer": "auto_dream"
+    },
+    {
+      "ts": "2026-07-16T20:05:44.656885+00:00",
+      "action": "staged",
+      "reviewer": "auto_dream"
+    },
+    {
+      "ts": "2026-07-16T20:09:39.786098+00:00",
+      "action": "staged",
+      "reviewer": "auto_dream"
+    }
+  ],
+  "rejection_count": 0
+}

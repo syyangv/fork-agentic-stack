@@ -1,0 +1,60 @@
+{
+  "id": "8b3e0b2e87dc",
+  "key": "pattern_test-outcome_test-action_explicit_8b3e0b",
+  "name": "pattern_test-outcome_test-action_explicit_8b3e0b",
+  "claim": "explicit pain score test",
+  "conditions": [
+    "explicit",
+    "pain",
+    "score",
+    "test",
+    "test-action",
+    "test-outcome"
+  ],
+  "evidence_ids": [
+    "2026-07-16T19:40:52.179803+00:00",
+    "2026-07-16T19:42:44.398075+00:00",
+    "2026-07-16T19:46:06.895740+00:00",
+    "2026-07-16T19:48:58.759868+00:00",
+    "2026-07-16T19:50:56.202113+00:00",
+    "2026-07-16T20:05:23.395723+00:00",
+    "2026-07-16T20:05:44.696256+00:00"
+  ],
+  "cluster_size": 7,
+  "canonical_salience": 13.5,
+  "staged_at": "2026-07-16T19:46:06.843457+00:00",
+  "status": "staged",
+  "decisions": [
+    {
+      "ts": "2026-07-16T19:46:06.843457+00:00",
+      "action": "staged",
+      "reviewer": "auto_dream"
+    },
+    {
+      "ts": "2026-07-16T19:48:58.726287+00:00",
+      "action": "staged",
+      "reviewer": "auto_dream"
+    },
+    {
+      "ts": "2026-07-16T19:50:56.167686+00:00",
+      "action": "staged",
+      "reviewer": "auto_dream"
+    },
+    {
+      "ts": "2026-07-16T20:05:23.360784+00:00",
+      "action": "staged",
+      "reviewer": "auto_dream"
+    },
+    {
+      "ts": "2026-07-16T20:05:44.657472+00:00",
+      "action": "staged",
+      "reviewer": "auto_dream"
+    },
+    {
+      "ts": "2026-07-16T20:09:39.786523+00:00",
+      "action": "staged",
+      "reviewer": "auto_dream"
+    }
+  ],
+  "rejection_count": 0
+}

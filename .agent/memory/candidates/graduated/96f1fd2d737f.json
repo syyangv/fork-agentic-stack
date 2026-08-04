@@ -1,0 +1,41 @@
+{
+  "id": "96f1fd2d737f",
+  "key": "manual_96f1fd",
+  "name": "manual_96f1fd",
+  "claim": "For scoped Git transactions guarded by codex-control-plane-hooks, authorize each exact command in its own backtick code span after the words 'I authorize'; unquoted commands or a backtick around the whole sentence may not produce a usable grant.",
+  "conditions": [
+    "authorization",
+    "codex-control-plane-hooks",
+    "git",
+    "push"
+  ],
+  "evidence_ids": [
+    "2026-07-28T23:46:44.041493+00:00"
+  ],
+  "cluster_size": 1,
+  "canonical_salience": 8.0,
+  "staged_at": "2026-07-28T23:46:44.041493+00:00",
+  "status": "accepted",
+  "decisions": [
+    {
+      "ts": "2026-07-28T23:46:44.041493+00:00",
+      "action": "staged",
+      "reviewer": "learn"
+    },
+    {
+      "ts": "2026-07-28T23:46:44.247769+00:00",
+      "action": "graduated",
+      "reviewer": "learn.py",
+      "notes": "The hook rejected multiple semantically explicit push confirmations in this session and accepted the transaction only when each full git -C push command had its own code span.",
+      "provisional": false,
+      "evidence_snapshot": [
+        "2026-07-28T23:46:44.041493+00:00"
+      ],
+      "lessons_sha": "65604386b0e1"
+    }
+  ],
+  "rejection_count": 0,
+  "accepted_at": "2026-07-28T23:46:44.247748+00:00",
+  "reviewer": "learn.py",
+  "rationale": "The hook rejected multiple semantically explicit push confirmations in this session and accepted the transaction only when each full git -C push command had its own code span."
+}
