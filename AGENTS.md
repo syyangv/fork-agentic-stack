@@ -30,16 +30,13 @@ Show the output in a `Consulted lessons before acting:` block. If a surfaced
 lesson would be violated by your intended action, stop and explain why.
 
 ## Skills
-Codex scans `.agents/skills/` for repository-scoped skills (per
-[OpenAI Codex docs](https://developers.openai.com/codex/skills)). Do
-not create symlinks for skills. If Codex needs a repository-scoped
-`.agents/skills` mirror, the installer must materialize it by copying
-or syncing from `.agent/skills`, never by symlinking. The portable brain
-in `.agent/skills` remains the one source of truth. Read
-`.agent/skills/_index.md` and load a full `SKILL.md` only when its triggers
-match the task (progressive disclosure). Edit skills in `.agent/skills/` —
-`.agents/skills` is a generated mirror and re-running the installer may sync
-it back.
+All skills live in the portable brain at `~/.agent/skills/` — the one
+source of truth. The `~/.agents/` mirror is retired and skills are not
+duplicated to `~/.claude/skills/` or `~/.codex/skills/` (no symlinks, no
+copies). Read `.agent/skills/_index.md` and load a full `SKILL.md` only
+when its triggers match the task (progressive disclosure). If another
+harness needs the skills, point it at `~/.agent/skills` (e.g. pi's
+`settings.json` `"skills"` array) instead of copying them out.
 
 ## While working
 
