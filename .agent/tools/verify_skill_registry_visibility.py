@@ -93,11 +93,13 @@ def main(argv: list[str] | None = None) -> int:
     if not args.skip_codex:
         if shutil.which("codex"):
             prompt = (
-                "Check your loaded instructions. Do they say Codex should consult "
-                "~/.claude/skills and ~/.agent/skills as secondary skill registries? "
-                "Answer exactly: FOUND claude agents, or MISSING."
+                "Quote verbatim the sentence in your loaded context (system prompt plus any "
+                "memory files such as ~/.codex/AGENTS.md) that says Codex should consult "
+                "~/.claude/skills and ~/.agent/skills as secondary skill registries. "
+                "If present, answer exactly: FOUND claude agents, then the quote. "
+                "If absent, answer exactly: MISSING."
             )
-            results.append(run_command("codex", ["codex", "exec", prompt], args.timeout))
+            results.append(run_command("codex", ["codex", "exec", "--skip-git-repo-check", prompt], args.timeout))
             failures.extend(assert_runtime_ok(results[-1], ["FOUND", "claude", "agent"]))
         else:
             failures.append("codex: command not found")
@@ -105,8 +107,10 @@ def main(argv: list[str] | None = None) -> int:
     if not args.skip_claude:
         if shutil.which("claude"):
             prompt = (
-                "Check your loaded instructions. Do they say to consult ~/.agent/skills "
-                "as a secondary read-only skill registry? Answer exactly: FOUND agents, or MISSING."
+                "Quote verbatim the sentence in your loaded context (system prompt plus any "
+                "memory files such as ~/.claude/CLAUDE.md) that says to consult ~/.agent/skills "
+                "as a secondary read-only skill registry. If present, answer exactly: FOUND agents, "
+                "then the quote. If absent, answer exactly: MISSING."
             )
             results.append(run_command("claude", ["claude", "-p", "--output-format", "json", prompt], args.timeout))
             failures.extend(assert_runtime_ok(results[-1], ["FOUND", "agent"]))
