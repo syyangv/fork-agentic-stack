@@ -240,7 +240,8 @@
     "paseo-advisor": "custom",
     "paseo-committee": "custom",
     "paseo-handoff": "custom",
-    "paseo-loop": "custom"
+    "paseo-loop": "custom",
+    "external-keyboard-remap": "custom"
   },
   "codex": {
     "ask-claude": "custom",
@@ -259,6 +260,7 @@
     "paseo-advisor": "custom",
     "paseo-committee": "custom",
     "paseo-handoff": "custom",
-    "paseo-loop": "custom"
+    "paseo-loop": "custom",
+    "keyboard-shortcuts": "revised"
   }
 }
