@@ -28,6 +28,14 @@ and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.
   rather than `.cursorrules`.
 
 ### Fixed
+- **The dream cycle no longer deletes `WORKSPACE.md`.**
+  `archive_stale_workspace()` moved a stale
+  `.agent/memory/working/WORKSPACE.md` into `episodic/snapshots/` with a bare
+  `shutil.move()`, leaving nothing behind. The path is tracked in git and every
+  adapter's instructions tell agents to update it as they work, so after two
+  idle days it silently vanished from the repo and from every installed
+  project. Archiving now writes a fresh template back, and a missing workspace
+  is re-seeded so already-affected projects self-heal on the next cycle.
 - **Install no longer overwrites user-authored config.** `install.py` defaulted
   a missing `merge_policy` to `overwrite`, so an adapter that omitted the key
   silently destroyed the destination file. Three shipped adapters hit this,
