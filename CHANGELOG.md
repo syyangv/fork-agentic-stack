@@ -5,6 +5,50 @@ All notable changes to this project.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed
+- **Install no longer overwrites user-authored config.** `install.py` defaulted
+  a missing `merge_policy` to `overwrite`, so an adapter that omitted the key
+  silently destroyed the destination file. Three shipped adapters hit this,
+  across four file entries: `claude-code` (`CLAUDE.md` and
+  `.claude/settings.json` — the user's own permissions and hooks config),
+  `opencode` (`opencode.json`) and `windsurf` (`.windsurfrules`). All four
+  entries now use `merge_or_alert`. Reproduced against a populated target
+  before and after the fix.
+- **Detection no longer claims installs that were never made.**
+  `doctor.DETECT_SIGNALS` marked user-authored and vendor-authored paths as
+  `strong`, meaning "this proves we installed here". `.claude/settings.json`,
+  `opencode.json` and `.windsurfrules` are now `weak`. `codex` was `strong` on
+  `.agent/skills`, which is the shared brain rather than anything codex
+  installs, so every brain-present project was reported as a legacy codex
+  install; it is now `weak`.
+- **`gemini` detection signals were half-discarded.** The adapter was declared
+  twice in `DETECT_SIGNALS` and the second dict literal silently dropped the
+  first, removing `.gemini/settings.json` from detection. Merged into one entry.
+
+### Changed
+- **`merge_policy` is now required** in `adapter.json`. Silence used to mean
+  "destroy the destination"; a missing key is now a validation error. Adapters
+  wanting the old behaviour must ask for `overwrite` explicitly.
+- **`overwrite` is rejected on shared filenames.** Manifests may not point
+  `overwrite` at paths users or other tools author (`CLAUDE.md`, `AGENTS.md`,
+  `opencode.json`, `.claude/settings.json`, `.rules`, `.windsurfrules`, and
+  similar). An adapter that needs a file it fully owns should pick a
+  distinctive name, the way `cursor` uses `.cursor/rules/agentic-stack.mdc`
+  rather than `.cursorrules`.
+
+### Notes
+- Adapters that install only shared filenames (`claude-code`, `codex`,
+  `opencode`) are now weak-only and no longer auto-detect during onboarding or
+  auto-gate pre-v0.9 legacy migration. This is unavoidable rather than a
+  regression in intent: nothing they write distinguishes "we installed this"
+  from "the user wrote their own `CLAUDE.md`". `agentic-stack doctor`, which
+  does consider weak signals, remains the documented path for legacy migration.
+- Installing over an existing shared file now alerts instead of replacing it,
+  so users upgrading a project with their own `CLAUDE.md` will be asked to
+  merge rather than having it silently rewritten.
+
 ## [0.18.0] — 2026-05-10
 
 Minor release. Adds first-class integration with the external Brain CLI/MCP

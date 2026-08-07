@@ -543,11 +543,16 @@ def _run_install_wizard(target: Path, wizard_flags: list[str], profile: str) -> 
 
     # Auto-detect what's already on disk in the target. Only STRONG
     # signals count for default-check — a weak signal like a generic
-    # CLAUDE.md, AGENTS.md, or run.py can belong to any project; pre-
-    # checking one and hitting Enter at the multiselect would silently
-    # overwrite the user's file (claude-code's CLAUDE.md is
-    # merge_policy: overwrite). Weak-only matches still surface to the
-    # user via the adapter list but stay unchecked until toggled.
+    # CLAUDE.md, AGENTS.md, or run.py can belong to any project, so
+    # pre-checking one and hitting Enter at the multiselect would act
+    # on a file we have no evidence we own. Weak-only matches still
+    # surface to the user via the adapter list but stay unchecked
+    # until toggled.
+    #
+    # Adapters that install only shared filenames (claude-code, codex,
+    # opencode) are weak-only by necessity and never pre-check here.
+    # That is the honest outcome: nothing on disk distinguishes "we
+    # installed it" from "the user wrote their own CLAUDE.md".
     detected = set()
     for name in available:
         signals = doctor_mod.DETECT_SIGNALS.get(name, [])
