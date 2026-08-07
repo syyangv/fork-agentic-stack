@@ -5,6 +5,27 @@ All notable changes to this project.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed
+- **Installed brains no longer ship this repo's own memory.** `copy_brain()`
+  promised "a fresh portable brain" but was a bare `shutil.copytree` of
+  agentic-stack's `.agent/`, excluding only `__pycache__`. Whatever the
+  maintainer's working tree held when a release was cut shipped verbatim: on
+  master that included a `WORKSPACE.md` describing this project's Phase 9
+  gating and internal file paths, plus an episodic log naming internal pilot
+  runs. `copy_brain()` now explicitly seeds fresh volatile state
+  (`working/WORKSPACE.md`, `working/REVIEW_QUEUE.md`,
+  `episodic/AGENT_LEARNINGS.jsonl`) and omits transient state at copy time
+  (`episodic/snapshots/`, `candidates/rejected/`, and staged candidate JSON
+  directly under `candidates/`). Curated seed knowledge is deliberately
+  preserved: `candidates/graduated/`, `semantic/lessons.jsonl`, and
+  `skills/_manifest.jsonl`.
+
+  Volatile files are *seeded*, not merely skipped — every adapter instructs
+  agents to update `WORKSPACE.md`, so the path must exist in a new install
+  even when the source tree lacks it.
+
 ## [0.18.0] — 2026-05-10
 
 Minor release. Adds first-class integration with the external Brain CLI/MCP

@@ -67,6 +67,63 @@ _MINIMAL_OMIT = frozenset({
     "memory/orchestration/providers/memos_local.py",
 })
 
+# Volatile runtime state. copy_brain() hands shutil.copytree this repo's own
+# .agent/, so whatever the working tree holds when a release is cut ships
+# verbatim to every user. That is not hypothetical: master currently carries a
+# WORKSPACE.md describing this project's Phase 9 gating and an episodic log
+# naming internal pilot runs, and a tree mid-task accretes far more. Users were
+# receiving one repo's task state installed as if it were their own.
+#
+# A brain is only "fresh", as the copy_brain docstring already claims, if these
+# are reset at copy time. Vetted knowledge is deliberately NOT volatile:
+# memory/candidates/graduated/ and memory/semantic/lessons.jsonl are curated
+# seed lessons and must survive the reset.
+#
+# NOTE: this template is duplicated in .agent/memory/archive.py, which reseeds
+# the same file after the dream cycle archives it. Unify once both land.
+_FRESH_WORKSPACE = """# Workspace (live task state)
+
+> Replace this template on your first real task. The dream cycle auto-archives
+> this file after 2 days of inactivity — don't keep long-lived notes here.
+
+## Current task
+-
+
+## Open files
+-
+
+## Active hypotheses
+-
+
+## Checkpoints
+-
+
+## Next step
+-
+"""
+
+_FRESH_REVIEW_QUEUE = """# Review Queue
+
+_No pending candidates._
+"""
+
+_VOLATILE_BRAIN_FILES: dict[str, str] = {
+    "memory/working/WORKSPACE.md": _FRESH_WORKSPACE,
+    "memory/working/REVIEW_QUEUE.md": _FRESH_REVIEW_QUEUE,
+    "memory/episodic/AGENT_LEARNINGS.jsonl": "",
+}
+
+# Transient by construction: dream-cycle snapshots of past workspaces, and
+# candidates that were rejected rather than graduated.
+_TRANSIENT_BRAIN_DIRS = frozenset({
+    "memory/episodic/snapshots",
+    "memory/candidates/rejected",
+})
+
+# Staged candidates awaiting review live as loose JSON directly under
+# candidates/; only the graduated/ subdirectory is curated seed knowledge.
+_STAGED_CANDIDATE_DIR = "memory/candidates"
+
 
 def validate_profile(profile: str) -> str:
     if profile not in VALID_PROFILES:
@@ -236,15 +293,36 @@ def copy_brain(source: Path, destination: Path, *, profile: str) -> None:
         raise FileExistsError(f"brain destination already exists: {destination}")
 
     shutil.copytree(source, destination, ignore=_ignore_for(source, profile))
+    _seed_fresh_state(destination)
     ensure_local_schedule_config(destination)
     if profile == MINIMAL:
         copy_infrastructure(source / "infrastructure.json", destination / "infrastructure.json", profile)
+
+
+def _seed_fresh_state(destination: Path) -> None:
+    """Reset volatile runtime state so an installed brain starts empty.
+
+    Seeded unconditionally rather than only where the source happened to
+    have a file: every adapter's instructions tell agents to update
+    WORKSPACE.md, so the path must exist even if the source lacked it.
+    """
+    for relative, contents in _VOLATILE_BRAIN_FILES.items():
+        target = destination / relative
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text(contents, encoding="utf-8")
 
 
 def _ignore_for(source: Path, profile: str) -> Callable[[str, list[str]], set[str]]:
     def ignore(directory: str, names: list[str]) -> set[str]:
         relative = Path(directory).relative_to(source)
         omitted = {name for name in names if name == "__pycache__"}
+        omitted.update(
+            name for name in names
+            if (relative / name).as_posix() in _TRANSIENT_BRAIN_DIRS
+        )
+        if relative.as_posix() == _STAGED_CANDIDATE_DIR:
+            # graduated/ is a directory and survives; loose JSON is unvetted.
+            omitted.update(name for name in names if name.endswith(".json"))
         if profile == MINIMAL:
             omitted.update(
                 name for name in names
