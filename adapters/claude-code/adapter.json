@@ -6,12 +6,12 @@
     {
       "src": "CLAUDE.md",
       "dst": "CLAUDE.md",
-      "merge_policy": "overwrite"
+      "merge_policy": "merge_or_alert"
     },
     {
       "src": "settings.json",
       "dst": ".claude/settings.json",
-      "merge_policy": "overwrite",
+      "merge_policy": "merge_or_alert",
       "substitute": true
     }
   ]

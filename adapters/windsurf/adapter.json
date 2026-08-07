@@ -10,7 +10,7 @@
     {
       "src": ".windsurfrules",
       "dst": ".windsurfrules",
-      "merge_policy": "overwrite"
+      "merge_policy": "merge_or_alert"
     }
   ]
 }
