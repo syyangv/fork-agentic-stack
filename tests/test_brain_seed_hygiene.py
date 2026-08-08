@@ -202,6 +202,89 @@ class BrainSeedHygieneTest(unittest.TestCase):
         loose = list((destination / "memory" / "candidates").glob("*.json"))
         self.assertEqual(loose, [])
 
+    # --- per-project runtime state ---------------------------------------
+
+    def test_runtime_state_is_not_copied(self):
+        """copytree does not read .gitignore, so these shipped from a clone."""
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        root = Path(tmp.name)
+        source = _source_brain(root / "src")
+        (source / ".upgrade-transaction.json").write_text(LEAKED, encoding="utf-8")
+        (source / "memory" / "dream-state.json").write_text(LEAKED, encoding="utf-8")
+        (source / "memory" / "candidates" / ".lifecycle.lock").write_text(
+            LEAKED, encoding="utf-8"
+        )
+        (source / "runtime").mkdir()
+        (source / "runtime" / "pid").write_text(LEAKED, encoding="utf-8")
+
+        destination = root / "installed" / ".agent"
+        destination.parent.mkdir(parents=True)
+        profiles.copy_brain(source, destination, profile=profiles.STANDARD)
+
+        for relative in (
+            ".upgrade-transaction.json",
+            "memory/dream-state.json",
+            "memory/candidates/.lifecycle.lock",
+            "runtime",
+        ):
+            self.assertFalse((destination / relative).exists(), relative)
+
+    def test_evidence_ledger_is_not_copied(self):
+        """An accumulating per-project ledger, empty today but not by design."""
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        root = Path(tmp.name)
+        source = _source_brain(root / "src")
+        evidence = source / "memory" / "evidence"
+        evidence.mkdir(parents=True)
+        (evidence / "README.md").write_text("# Evidence\n", encoding="utf-8")
+        (evidence / "revalidation.sqlite3").write_bytes(b"SQLite format 3\x00LEAK")
+
+        destination = root / "installed" / ".agent"
+        destination.parent.mkdir(parents=True)
+        profiles.copy_brain(source, destination, profile=profiles.STANDARD)
+
+        self.assertFalse((destination / "memory/evidence/revalidation.sqlite3").exists())
+        # The documented directory itself still ships.
+        self.assertTrue((destination / "memory/evidence/README.md").exists())
+
+    def test_runtime_omissions_match_agent_gitignore(self):
+        """Pins the two lists together so .gitignore cannot drift ahead."""
+        declared = set()
+        for line in (ROOT / ".agent" / ".gitignore").read_text().splitlines():
+            entry = line.strip()
+            if not entry or entry.startswith("#"):
+                continue
+            declared.add(entry.rstrip("/"))
+        missing = declared - profiles.runtime_state_paths()
+        self.assertEqual(
+            missing,
+            set(),
+            f".agent/.gitignore declares {sorted(missing)} as runtime state, "
+            f"but copy_brain would still ship them",
+        )
+
+    def test_backup_artifacts_are_not_copied(self):
+        """A tracked .bak-20260603 reaches users via the release tarball."""
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        root = Path(tmp.name)
+        source = _source_brain(root / "src")
+        refs = source / "skills" / "refs"
+        refs.mkdir(parents=True)
+        (refs / "drift.json").write_text("{}", encoding="utf-8")
+        (refs / "drift.json.bak-20260603").write_text(LEAKED, encoding="utf-8")
+        (refs / "notes.md~").write_text(LEAKED, encoding="utf-8")
+        (refs / "old.bak").write_text(LEAKED, encoding="utf-8")
+
+        destination = root / "installed" / ".agent"
+        destination.parent.mkdir(parents=True)
+        profiles.copy_brain(source, destination, profile=profiles.STANDARD)
+
+        kept = sorted(p.name for p in (destination / "skills" / "refs").iterdir())
+        self.assertEqual(kept, ["drift.json"])
+
     # --- profile filtering still works -----------------------------------
 
     def test_minimal_profile_still_omits_and_still_seeds(self):

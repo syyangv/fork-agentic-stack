@@ -26,6 +26,23 @@ and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.
   agents to update `WORKSPACE.md`, so the path must exist in a new install
   even when the source tree lacks it.
 
+- **Per-project runtime state and backup artifacts no longer ship.**
+  `.agent/.gitignore` already declared dream-cycle state, lifecycle locks,
+  `runtime/` and `.upgrade-transaction.json` as per-project runtime rather
+  than content, but `shutil.copytree` does not read `.gitignore`, so a brain
+  copied from a working clone carried them anyway. A stale
+  `.upgrade-transaction.json` is the worst of these: it lands in a fresh
+  install describing an upgrade that never happened there. The evidence
+  ledger `memory/evidence/revalidation.sqlite3` is omitted for the same
+  reason. `copy_brain()` also drops backup artifacts (`*.bak`, `*.bak-*`,
+  `*~`); the repo tracks `reviewed-drift.json.bak-20260603`, so that one
+  reached users through the release tarball rather than only a dirty clone.
+
+  The omission list is deliberately explicit rather than parsed from
+  `.gitignore` — the installer should not depend on a git file at runtime —
+  and a test pins the two together so `.agent/.gitignore` cannot drift ahead
+  of the installer.
+
 ## [0.18.0] — 2026-05-10
 
 Minor release. Adds first-class integration with the external Brain CLI/MCP

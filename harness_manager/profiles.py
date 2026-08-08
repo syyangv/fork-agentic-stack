@@ -120,6 +120,26 @@ _TRANSIENT_BRAIN_DIRS = frozenset({
     "memory/candidates/rejected",
 })
 
+# Per-project runtime coordination and health state. `.agent/.gitignore`
+# already declares exactly this set as "not content", but copytree does not
+# read .gitignore, so a brain copied from a working clone shipped one host's
+# dream-cycle run ids, lifecycle locks and half-finished upgrade transactions.
+# A stale .upgrade-transaction.json is the dangerous one: it lands in a fresh
+# install describing an upgrade that never happened here.
+#
+# Kept as an explicit list rather than parsed from .gitignore, because the
+# installer should not depend on a git file at runtime. The two are pinned
+# together by test_runtime_omissions_match_agent_gitignore, so adding a path
+# to .agent/.gitignore without adding it here fails the suite.
+_RUNTIME_STATE_PATHS = frozenset({
+    ".upgrade-transaction.json",
+    "memory/candidates/.lifecycle.lock",
+    "memory/dream-state.json",
+    "memory/evidence/revalidation.sqlite3",
+    "memory/orchestration/scheduled-local.json",
+    "runtime",
+})
+
 # Staged candidates awaiting review live as loose JSON directly under
 # candidates/; only the graduated/ subdirectory is curated seed knowledge.
 _STAGED_CANDIDATE_DIR = "memory/candidates"
@@ -142,6 +162,11 @@ def validate_blocked_profile_state(orchestration: dict[object, object]) -> None:
 def minimal_omitted_paths() -> frozenset[str]:
     """Return the provider files a minimal brain must not contain."""
     return _MINIMAL_OMIT
+
+
+def runtime_state_paths() -> frozenset[str]:
+    """Return the per-project runtime state a copied brain must not carry."""
+    return _RUNTIME_STATE_PATHS
 
 
 def profile_record(
@@ -299,6 +324,15 @@ def copy_brain(source: Path, destination: Path, *, profile: str) -> None:
         copy_infrastructure(source / "infrastructure.json", destination / "infrastructure.json", profile)
 
 
+def _is_backup_artifact(name: str) -> bool:
+    """Editor and script backups are one tree's history, not shipped content.
+
+    The repo currently tracks `reviewed-drift.json.bak-20260603`, so these
+    reach users through a release tarball rather than only a dirty clone.
+    """
+    return name.endswith(".bak") or ".bak-" in name or name.endswith("~")
+
+
 def _seed_fresh_state(destination: Path) -> None:
     """Reset volatile runtime state so an installed brain starts empty.
 
@@ -319,6 +353,8 @@ def _ignore_for(source: Path, profile: str) -> Callable[[str, list[str]], set[st
         omitted.update(
             name for name in names
             if (relative / name).as_posix() in _TRANSIENT_BRAIN_DIRS
+            or (relative / name).as_posix() in _RUNTIME_STATE_PATHS
+            or _is_backup_artifact(name)
         )
         if relative.as_posix() == _STAGED_CANDIDATE_DIR:
             # graduated/ is a directory and survives; loose JSON is unvetted.
