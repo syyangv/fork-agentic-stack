@@ -9,11 +9,14 @@ from both files lives here. `CLAUDE.md` remains for Claude Code.
 > only `python` is on PATH; use whichever resolves on your system.
 
 ## Session start — read in this order
-1. `.agent/AGENTS.md` — the map of the whole brain
-2. `.agent/memory/personal/PREFERENCES.md` — how the user works
-3. `.agent/memory/working/REVIEW_QUEUE.md` — pending lessons awaiting review
-4. `.agent/memory/semantic/LESSONS.md` — what we've already learned
-5. `.agent/protocols/permissions.md` — hard constraints, read before any tool call
+1. `.agent/protocols/permissions.md` — hard constraints; load before other tool-driven startup reads
+2. `.agent/AGENTS.md` — the map of the whole brain
+3. `.agent/memory/personal/PREFERENCES.md` — how the user works
+4. `.agent/memory/working/WORKSPACE.md` — current task state
+5. `.agent/memory/working/REVIEW_QUEUE.md` — pending lessons awaiting review
+6. `.agent/memory/semantic/DECISIONS.md` — past architectural choices
+7. `.agent/memory/semantic/LESSONS.md` — what we've already learned
+8. `.agent/memory/episodic/AGENT_LEARNINGS.jsonl` — raw experience log (top-k by salience)
 
 ## Before every non-trivial action — recall first
 
@@ -30,17 +33,20 @@ Show the output in a `Consulted lessons before acting:` block. If a surfaced
 lesson would be violated by your intended action, stop and explain why.
 
 ## Skills
-All skills live in the portable brain at `~/.agent/skills/` — the one
-source of truth. The `~/.agents/` mirror is retired and skills are not
-duplicated to `~/.claude/skills/` or `~/.codex/skills/` (no symlinks, no
-copies). Read `.agent/skills/_index.md` and load a full `SKILL.md` only
-when its triggers match the task (progressive disclosure). If another
-harness needs the skills, point it at `~/.agent/skills` (e.g. pi's
-`settings.json` `"skills"` array) instead of copying them out. Note: the
-Paseo desktop app hardcodes `~/.agents`, `~/.claude`, `~/.codex` skill dirs
-and reinstalls its skills there on every launch —
+Skills may live in any of the three cross-harness registries:
+`~/.agent/skills/`, `~/.claude/skills/`, and `~/.codex/skills/`. Check all
+three before declaring a skill unavailable, load a match from its original
+path, and do not create symlink or copy mirrors merely to make it visible to
+another harness. The canonical registry policy lives in `.agent/AGENTS.md`.
+
+Portable-brain and Paseo-owned skills remain canonical in `~/.agent/skills/`;
+host/plugin-owned skills may remain in their native Claude or Codex registry.
+The retired `~/.agents/` mirror must not be restored. Read
+`.agent/skills/_index.md` for portable-brain discovery and load a full
+`SKILL.md` only when its triggers match the task (progressive disclosure).
 `scripts/purge_paseo_duplicates.py` (launchd
-`com.syang.agentic-stack.paseo-guard`, 60s) enforces the rule.
+`com.syang.agentic-stack.paseo-guard`, 60s) removes duplicate Paseo copies
+that the desktop app may reinstall.
 
 ## While working
 

@@ -11,8 +11,9 @@
   reflections are mechanical. For significant events, call
   `python3 .agent/tools/memory_reflect.py` explicitly with a rich `--note`
   (guide + examples live in `AGENTS.md` → Manual memory logging).
-- Read order matches `AGENTS.md`: `.agent/AGENTS.md` → PREFERENCES →
-  REVIEW_QUEUE → LESSONS → permissions.
+- Read order matches `AGENTS.md`: permissions → `.agent/AGENTS.md` →
+  PREFERENCES → WORKSPACE → REVIEW_QUEUE → DECISIONS → LESSONS →
+  episodic learnings (top-k by salience).
 
 Everything else — recall-first, skills (`~/.agent/skills/`, paseo only
 there), workspace discipline, git remotes, and all override rules — is
