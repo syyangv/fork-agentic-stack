@@ -66,6 +66,7 @@ class CrossPlatformUpgradeTest(unittest.TestCase):
         unrelated.parent.mkdir(parents=True); unrelated.write_text(json.dumps(legacy))
         return active, rollback, unrelated
 
+    @unittest.skipUnless(os.name == "posix", "MemOS config migration is POSIX-only")
     def test_upgrade_transaction_migrates_only_owned_memos_configs(self):
         with tempfile.TemporaryDirectory() as tmp:
             target = Path(tmp)
@@ -79,6 +80,7 @@ class CrossPlatformUpgradeTest(unittest.TestCase):
             record = target / ".agent/runtime/memos/migrations/current.json"
             self.assertTrue(json.loads(record.read_text())["committed"])
 
+    @unittest.skipUnless(os.name == "posix", "MemOS config migration is POSIX-only")
     def test_upgrade_failure_after_migration_restores_configs_and_provenance(self):
         with tempfile.TemporaryDirectory() as tmp:
             target = Path(tmp)
