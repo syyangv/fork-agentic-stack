@@ -22,3 +22,11 @@ was unchanged and off; assist and evolution remained disabled.
 This packet does not authorize deployment, activation, assist, evolution, or
 R8. Final qualification still requires the canonical plan's process-level
 zero-egress observation and independent review.
+
+## Darwin ARM64-native qualification
+
+The independently attested ARM64 route passed native ABI, lexical benchmark,
+migration/rollback, and fail-closed process-trace checks. Sanitized metadata-only
+evidence is under `arm64-native-v1/`. The legacy 2.0.10 runtime was limited to
+schema, health/session lifecycle, and rollback health; no legacy retrieval or
+MiniLM behavior is accepted as qualification evidence.

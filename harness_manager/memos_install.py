@@ -470,7 +470,10 @@ def _make_tree_immutable(root: Path) -> None:
             if path.is_symlink():
                 _validate_internal_symlink(path, resolved_root)
             else:
-                os.chmod(path, 0o444)
+                # Preserve executability for native/CLI payloads while still
+                # removing every write bit from the immutable code tree.
+                executable = bool(path.stat().st_mode & 0o111)
+                os.chmod(path, 0o555 if executable else 0o444)
         for name in directories:
             path = Path(directory) / name
             if path.is_symlink():

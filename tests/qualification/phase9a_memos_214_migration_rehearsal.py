@@ -54,6 +54,17 @@ def open_client(plugin: Path, project: Path) -> MemOSBridgeClient:
     home.mkdir(parents=True, exist_ok=True)
     memos_home.mkdir(parents=True, exist_ok=True)
     config = memos_home / "config.yaml"
+    egress_log = memos_home / "qualification-egress-attempts.jsonl"
+    tripwire = memos_home / "qualification-tripwire.cjs"
+    if not egress_log.exists():
+        egress_log.write_text("", encoding="utf-8")
+    tripwire.write_text(
+        "const fs=require('fs'),log=process.env.MEMOS_EGRESS_EVIDENCE;"
+        "const deny=(api,args)=>{fs.appendFileSync(log,JSON.stringify({api,args:[...args].map(String)})+'\\n');throw new Error('network disabled by migration qualification: '+api)};"
+        "for(const mod of ['net','tls','dgram','http','https']){const m=require(mod);for(const fn of ['connect','createConnection','request','get'])if(typeof m[fn]==='function')m[fn]=function(...a){return deny(mod+'.'+fn,a)}};"
+        "if(typeof globalThis.fetch==='function')globalThis.fetch=function(...a){return Promise.reject(deny('fetch',a))};\n",
+        encoding="utf-8",
+    )
     version = json.loads(package_path(plugin).read_text())["version"]
     # Each runtime receives the exact profile it supports. The old profile is
     # used only to seed isolated rollback evidence; every 2.0.14-opened state
@@ -65,6 +76,8 @@ def open_client(plugin: Path, project: Path) -> MemOSBridgeClient:
     environment = {
         "HOME": str(home), "MEMOS_HOME": str(memos_home),
         "MEMOS_CONFIG_FILE": str(config), "MEMOS_TELEMETRY_ENABLED": "0",
+        "MEMOS_EGRESS_EVIDENCE": str(egress_log),
+        "NODE_OPTIONS": f"--require={tripwire}",
         "PATH": os.environ.get("PATH", "/usr/bin:/bin"),
     }
     command = (
@@ -181,7 +194,9 @@ def main() -> int:
     old = args.work_root / "old-source" / PROJECT_ID
     old_client = open_client(args.plugin_2010, old)
     old_health = old_client.call("core.health", timeout=20)
-    episodes = [add_episode(old_client, index) for index in range(2)]
+    # The immutable legacy runtime is an isolated schema/rollback seed only.
+    # Never invoke turn.start/search: its supported profile contains MiniLM.
+    episodes: list[str] = []
     old_client.close()
     pre_upgrade = db_evidence(old)
 
@@ -205,6 +220,7 @@ def main() -> int:
 
     upgraded_client = open_client(args.plugin_2014, upgrade)
     upgraded_health = upgraded_client.health()
+    episodes = [add_episode(upgraded_client, index) for index in range(2)]
     upgraded_client.call("memory.list_episodes", {
         "agent": "hermes", "namespace": {
             "agentKind": "hermes", "profileId": PROJECT_ID,
@@ -257,6 +273,10 @@ def main() -> int:
             "rollback": rollback_health.get("version"),
         },
         "seed_episode_ids": episodes,
+        "legacy_2010_scope": {
+            "schema_seed_and_health_only": True,
+            "retrieval_used_as_qualification_evidence": False,
+        },
         "databases": {name: db_evidence(path) for name, path in paths.items()},
         "config_migration_inventory": {
             name: marker_inventory(path) for name, path in paths.items()
@@ -283,7 +303,14 @@ def main() -> int:
             )
         },
         "pre_upgrade_snapshot": pre_upgrade,
+        "application_egress_attempts": {
+            path.relative_to(args.work_root).as_posix(): path.read_text().splitlines()
+            for path in args.work_root.rglob("qualification-egress-attempts.jsonl")
+            if path.read_text().strip()
+        },
     }
+    if evidence["application_egress_attempts"]:
+        raise RuntimeError("network attempt observed during migration rehearsal")
     evidence_path = args.output / "migration-evidence.json"
     evidence_path.write_text(json.dumps(evidence, indent=2, sort_keys=True) + "\n")
     checksum_inputs = {

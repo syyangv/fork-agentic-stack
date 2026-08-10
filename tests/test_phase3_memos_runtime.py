@@ -203,6 +203,10 @@ class MemosInstallTest(unittest.TestCase):
                 (package / "dist").mkdir(parents=True)
                 (package / "package.json").write_text(json.dumps({"version": MEMOS_PLUGIN_VERSION}))
                 (package / "dist" / "bridge.cjs").write_text("// built")
+                executable = prefix / "node_modules" / "esbuild" / "bin" / "esbuild"
+                executable.parent.mkdir(parents=True)
+                executable.write_bytes(b"native-binary")
+                executable.chmod(0o755)
                 return type("Result", (), {"returncode": 0, "stdout": "", "stderr": ""})()
 
             def fake_delta(package):
@@ -239,6 +243,10 @@ class MemosInstallTest(unittest.TestCase):
             self.assertNotIn("@memtensor/memos-local-plugin@2.0.10", command)
             self.assertEqual(result.version, MEMOS_PLUGIN_VERSION)
             self.assertEqual(stat.S_IMODE(result.plugin_dir.stat().st_mode), 0o555)
+            self.assertEqual(
+                stat.S_IMODE((result.plugin_dir / "node_modules/esbuild/bin/esbuild").stat().st_mode),
+                0o555,
+            )
             self.assertTrue((result.plugin_dir / ".agentic-stack-files.json").is_file())
 
             data = root / "state" / PROJECT_ID / "keep.db"
