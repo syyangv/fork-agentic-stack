@@ -5,18 +5,18 @@ from pathlib import Path
 
 import pytest
 
-from harness_manager.memos_config_migration import migrate_owned_legacy_configs
+from harness_manager.memos_config_migration import approved_config, migrate_owned_legacy_configs
 
 
 PROJECT = "0123456789abcdef"
 
 
 def legacy_config() -> dict:
-    from harness_manager.memos_config_migration import approved_config
     value = approved_config(PROJECT)
-    value["embedding"] = {
-        "provider": "local", "model": "Xenova/all-MiniLM-L6-v2",
-    }
+    value["embedding"] = {"provider": "local", "model": "Xenova/all-MiniLM-L6-v2",
+                          "cache": {"enabled": True, "maxItems": 20000}}
+    value["llm"] = {"provider": "host", "model": "opus",
+                    "fallbackToHost": False, "maxRetries": 0}
     return value
 
 
@@ -125,3 +125,12 @@ def test_provenance_contains_hashes_not_original_config_bytes(tmp_path):
     result = migrate_owned_legacy_configs(tmp_path, tmp_path / "provenance")
     record = json.loads(result.provenance.read_text())
     assert all("original_base64" not in row for row in record["configs"])
+
+
+def test_partial_lexical_config_with_unsafe_policy_fails_closed(tmp_path):
+    paths = owned_tree(tmp_path)
+    value = approved_config(PROJECT)
+    value["telemetry"]["enabled"] = True
+    paths[0].write_text(json.dumps(value)); paths[0].chmod(0o600)
+    with pytest.raises(ValueError, match="lexical config is not exact"):
+        migrate_owned_legacy_configs(tmp_path, tmp_path / "provenance")
