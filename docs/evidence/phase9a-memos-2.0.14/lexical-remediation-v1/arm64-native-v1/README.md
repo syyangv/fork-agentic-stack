@@ -6,7 +6,10 @@ path/type/size/digest manifests needed to reproduce the two-root attestation.
 Raw `.trace` bundles and syscall XML remain temporary because they contain
 unnecessary symbol, address, and host-path metadata. The final senior review
 checked those retained raw exports against the normalized observations before
-accepting the packet; repository tests reproduce the full manifest comparison.
+accepting the packet. `independent-trace-review.json` identifies that review
+and binds every owner-retained raw trace/XML/output digest to the normalized
+packet. Repository tests reproduce the full manifest comparison and validate
+the durable review binding.
 
 The qualification launcher closes inherited non-standard descriptors before
 starting `xctrace`, preventing a pre-connected operator socket from becoming

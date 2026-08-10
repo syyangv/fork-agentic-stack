@@ -15,6 +15,16 @@ def test_arm_manifest_attests_against_x86():
 def test_common_mutation_fails(tmp_path):
  data=json.loads(ARM.read_text()); key=next(k for k in data if k not in result_paths()); data[key]={**data[key],'size':int(data[key].get('size',0))+1}; path=tmp_path/'manifest.json'; path.write_text(json.dumps(data,separators=(',',':'),sort_keys=True)+'\n')
  with pytest.raises(RuntimeError): attest_manifest(path,'darwin-arm64',X86)
+
+def test_independent_trace_review_binds_durable_summary_and_verifier():
+ summary=json.loads((EVIDENCE/'zero-egress-summary.json').read_text())
+ review=json.loads((EVIDENCE/'independent-trace-review.json').read_text())
+ expected={row['label']:{key:row[key] for key in ('trace_tree_sha256','syscall_export_sha256','target_output_sha256')} for row in summary['runs']}
+ actual={row['label']:{key:row[key] for key in ('trace_tree_sha256','syscall_export_sha256','target_output_sha256')} for row in review['verification']['runs']}
+ assert actual==expected
+ assert review['verification']['all_raw_hashes_match'] is True
+ assert review['verification']['all_normalized_observations_match'] is True
+ assert review['verification']['verifier_sha256']==attestation.digest((ROOT/'scripts/qualify_memos_arm64_xctrace.py').read_bytes())
 def result_paths(): return {'node_modules/better-sqlite3/build/Release/better_sqlite3.node','node_modules/esbuild/bin/esbuild'}
 
 def test_portable_two_root_contract(monkeypatch,tmp_path):

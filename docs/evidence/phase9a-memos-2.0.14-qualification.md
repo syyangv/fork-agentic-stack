@@ -43,7 +43,7 @@ neither deployment nor R8.
 - Durable packet: [`phase9a-memos-2.0.14/lexical-remediation-v1/arm64-native-v1/`](phase9a-memos-2.0.14/lexical-remediation-v1/arm64-native-v1/README.md)
 - Complete committed x86_64 and ARM64 manifests reproduce the two-root contract: 2,846 common paths are byte-identical and only pinned `better_sqlite3.node` and `esbuild` leaves differ.
 - Xcode System Call Trace observed direct sandboxed candidate processes. Fresh 2.0.14, copied 2.0.10 state, and restored 2.0.10 state completed with no internet socket/connect/send attempt and no child creation; the launcher closes inherited non-standard descriptors.
-- Native ABI/FTS, synthetic benchmark, migration, backup/restore, and rollback checks passed. Final senior review checked the retained raw exports against the normalized packet and reproduced the artifact attestation.
+- Native ABI/FTS, synthetic benchmark, migration, backup/restore, and rollback checks passed. Final senior review checked the retained raw exports against the normalized packet, reproduced the artifact attestation, and recorded the identified digest binding in `independent-trace-review.json`.
 - Scope is Darwin ARM64 only. Production stays immutable 2.0.10 and off; R8 remains unauthorized.
 
 ## Historical pre-remediation qualification
