@@ -5,9 +5,17 @@ import pytest
 import harness_manager.memos_platform_attestation as attestation
 from harness_manager.memos_platform_attestation import attest_manifest
 ROOT=Path(__file__).resolve().parents[1]
+import sys
+sys.path.insert(0,str(ROOT/'.agent/memory'))
+from orchestration.memos_runtime import MEMOS_PINNED_FILE_SHA256
 EVIDENCE=ROOT/'docs/evidence/phase9a-memos-2.0.14/lexical-remediation-v1/arm64-native-v1'
 X86=EVIDENCE/'darwin-x86_64-files-manifest.json'
 ARM=EVIDENCE/'darwin-arm64-files-manifest.json'
+def test_runtime_required_files_match_reviewed_lexical_installer_output():
+ manifest=json.loads(ARM.read_text())
+ for relative,expected in MEMOS_PINNED_FILE_SHA256.items():
+  assert manifest[relative]['type']=='file'
+  assert expected==manifest[relative]['sha256']
 def test_arm_manifest_attests_against_x86():
  result=attest_manifest(ARM,'darwin-arm64',X86)
  durable=json.loads((EVIDENCE/'zero-egress-summary.json').read_text())['attestation']

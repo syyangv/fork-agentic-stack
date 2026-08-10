@@ -31,9 +31,9 @@ MEMOS_PINNED_FILE_SHA256 = {
     "node_modules/@memtensor/memos-local-plugin/dist/bridge.cjs":
         "c8171710ece2a1881ae391902f73b89008f29ec4bd9d69d138926cd714465807",
     "node_modules/@memtensor/memos-local-plugin/package.json":
-        "0aab9cf1fc6ec3f986fb3a4865ee68a82b3c30e602d59a208aaf6e1faa100c24",
+        "1b6349dcc3fac8cbc27962a00c35b5abbab73a6166c6d28d73db6de55f97a708",
     "package-lock.json":
-        "9e9b630a41009f3f1719570b929d5d996981823efcae8a7f88886020ee3af6ab",
+        "acb61ce0d0806fae9fb155cc1fa18cccb8275ffa5f27a0857567f3973f160f92",
 }
 _PLUGIN_MANIFEST = ".agentic-stack-files.json"
 _PLUGIN_MARKER = ".agentic-stack-install.json"
