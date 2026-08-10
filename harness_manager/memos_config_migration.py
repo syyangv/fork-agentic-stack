@@ -37,16 +37,26 @@ class MigrationResult:
 
 
 def approved_config(project_id: str) -> dict:
-    """Small fixture-compatible approved profile; production preserves other keys."""
+    """Exact model-free 2.0.14 profile emitted by the reviewed runtime."""
     if _PROJECT.fullmatch(project_id) is None:
         raise ValueError("invalid project ID")
     return {
         "version": 1,
+        "viewer": {"bindHost": "127.0.0.1", "openOnFirstTurn": False},
+        "bridge": {"mode": "stdio"},
         "embedding": {"enabled": False, "provider": "lexical", "engine": "sqlite_fts5"},
         "llm": {"provider": "local_only", "fallbackToHost": False, "maxRetries": 0},
-        "algorithm": {"capture": {"embedTraces": False}},
+        "algorithm": {"lightweightMemory": {"enabled": True},
+                      "capture": {"embedTraces": False}},
         "hub": {"enabled": False, "role": "client"},
         "telemetry": {"enabled": False},
+        "logging": {
+            "level": "info", "detailedView": False,
+            "console": {"enabled": False, "pretty": False, "channels": []},
+            "file": {"enabled": True, "format": "json", "retentionDays": 30},
+            "llmLog": {"enabled": False, "redactPrompts": True,
+                       "redactCompletions": True},
+        },
     }
 
 
@@ -145,13 +155,21 @@ def _replacement(snapshot: ConfigSnapshot) -> bytes | None:
     approved = {"enabled": False, "provider": "lexical", "engine": "sqlite_fts5"}
     if embedding == approved:
         return None
-    if embedding != {"provider": "local", "model": "Xenova/all-MiniLM-L6-v2"}:
+    if embedding not in (
+        {"provider": "local", "model": "Xenova/all-MiniLM-L6-v2"},
+        {"provider": "local", "model": "Xenova/all-MiniLM-L6-v2",
+         "cache": {"enabled": True, "maxItems": 20000}},
+    ):
         raise ValueError(f"managed MemOS config is outside legacy allowlist: {snapshot.path}")
     if (value.get("telemetry", {}).get("enabled") is not False
             or value.get("hub", {}).get("enabled") is not False
-            or value.get("algorithm", {}).get("capture", {}).get("embedTraces") is not False):
+            or value.get("llm") not in (
+                {"provider": "local_only", "fallbackToHost": False, "maxRetries": 0},
+                {"provider": "host", "model": "opus", "fallbackToHost": False,
+                 "maxRetries": 0},
+            )):
         raise ValueError(f"managed MemOS legacy config violates offline policy: {snapshot.path}")
-    value["embedding"] = approved
+    value = approved_config(snapshot.path.parts[-3])
     return (json.dumps(value, separators=(",", ":"), sort_keys=True) + "\n").encode("utf-8")
 
 
@@ -237,9 +255,10 @@ def migrate_owned_legacy_configs(data_root: str | Path, provenance_root: str | P
         raise ValueError("MemOS config migration is supported only on POSIX hosts")
     _real_owned_directory(raw_root)
     root = raw_root.resolve(strict=True)
-    provenance = Path(provenance_root).absolute()
-    if provenance.parent != root:
+    provenance_raw = Path(provenance_root).expanduser().absolute()
+    if provenance_raw.parent.resolve(strict=True) != root:
         raise ValueError("MemOS migration provenance must be directly under data root")
+    provenance = root / provenance_raw.name
     if provenance.exists() or provenance.is_symlink():
         _real_owned_directory(provenance)
     else:

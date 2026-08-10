@@ -14,9 +14,10 @@ PROJECT = "0123456789abcdef"
 def legacy_config() -> dict:
     from harness_manager.memos_config_migration import approved_config
     value = approved_config(PROJECT)
-    value["embedding"] = {
-        "provider": "local", "model": "Xenova/all-MiniLM-L6-v2",
-    }
+    value["embedding"] = {"provider": "local", "model": "Xenova/all-MiniLM-L6-v2",
+                          "cache": {"enabled": True, "maxItems": 20000}}
+    value["llm"] = {"provider": "host", "model": "opus",
+                    "fallbackToHost": False, "maxRetries": 0}
     return value
 
 
