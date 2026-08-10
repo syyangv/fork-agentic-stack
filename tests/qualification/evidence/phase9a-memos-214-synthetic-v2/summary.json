@@ -1,0 +1,87 @@
+{
+  "completed_episodes": 150,
+  "context_bytes": {
+    "p50_bytes": 1781.0,
+    "p95_bytes": 1811.0
+  },
+  "corpus_id": "phase9a-memos-2.0.14-synthetic-v2-five-relevant-per-query",
+  "corpus_policy": "generated synthetic/training only; no held-out material",
+  "cross_project_leak_hits": 0,
+  "degradation_errors": [],
+  "disabled_baseline": {
+    "duplicate_episodes": 0,
+    "injected_context_bytes": 0,
+    "usefulness_rate": 0
+  },
+  "duplicate_episode_rate": 0.0,
+  "duplicate_logical_turns": 0,
+  "evaluation_queries": 30,
+  "gate_assessment": {
+    "limitations": [
+      "Synthetic replay can authorize R8 preparation only, never activation.",
+      "NODE_OPTIONS socket hooks cover Node networking APIs but are not packet capture.",
+      "Usefulness is deterministic expected-solution presence, not blinded human scoring."
+    ],
+    "plausibly_clears_r8_preparation_bar": false,
+    "stop_recommendation": "STOP before R8; preliminary gate failed"
+  },
+  "instrumented_socket_attempt_apis": [
+    "fetch"
+  ],
+  "instrumented_socket_attempt_targets": [
+    "https://huggingface.co/Xenova/all-MiniLM-L6-v2/resolve/main/config.json",
+    "https://huggingface.co/Xenova/all-MiniLM-L6-v2/resolve/main/tokenizer.json",
+    "https://huggingface.co/Xenova/all-MiniLM-L6-v2/resolve/main/tokenizer_config.json"
+  ],
+  "latency": {
+    "episode_close": {
+      "p50_ms": 2.094,
+      "p95_ms": 2.7
+    },
+    "health": {
+      "p50_ms": 590.613,
+      "p95_ms": 590.613
+    },
+    "search": {
+      "p50_ms": 3.049,
+      "p95_ms": 4.661
+    },
+    "session_close": {
+      "p50_ms": 0.247,
+      "p95_ms": 0.445
+    },
+    "session_open": {
+      "p50_ms": 0.44,
+      "p95_ms": 0.688
+    },
+    "total": {
+      "p50_ms": 9.918,
+      "p95_ms": 14.683
+    },
+    "turn_end": {
+      "p50_ms": 1.708,
+      "p95_ms": 3.277
+    },
+    "turn_start": {
+      "p50_ms": 5.189,
+      "p95_ms": 7.774
+    }
+  },
+  "modes": {
+    "assist": false,
+    "benchmark": "isolated shadow-only",
+    "deployed": "unchanged/off",
+    "evolution": false,
+    "r8_run": false
+  },
+  "observed_egress_attempts": 1470,
+  "precision_among_returned": 1.0,
+  "precision_at_5": 1.0,
+  "precision_at_5_method": "conventional fixed-denominator P@5: relevant hits in first five / (evaluation queries * 5); corpus preregisters five relevant traces per query",
+  "query_usefulness_rate": 1.0,
+  "relevant_documents_per_query": 5,
+  "runtime_version": "2.0.14",
+  "schema": "agentic.memory.phase9a-offline-qualification.v1",
+  "shutdown_ms": 17.996,
+  "task_categories": 5
+}

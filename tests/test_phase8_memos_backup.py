@@ -31,6 +31,11 @@ def _runtime(tmp_path: Path) -> Path:
     profile = root / "profiles" / PROJECT_ID / "memos-plugin"
     profile.mkdir(parents=True)
     (profile / "config.yaml").write_text(json.dumps(build_memos_config(PROJECT_ID)))
+    migrations = profile / ".migrations"
+    migrations.mkdir()
+    (migrations / "hermes-viewer-port-v1.json").write_text(json.dumps({
+        "version": 1, "migration": "hermes-viewer-port-v1", "result": "not-needed",
+    }))
     connection = sqlite3.connect(root / "delivery.sqlite3")
     connection.execute("pragma journal_mode=wal")
     connection.execute("create table events(value text)")
@@ -51,6 +56,11 @@ class MemosBackupTest(unittest.TestCase):
             self.assertTrue(any(
                 row["path"] == "delivery.sqlite3" for row in manifest["files"]
             ))
+            marker = (
+                "profiles/0123456789abcdef/memos-plugin/.migrations/"
+                "hermes-viewer-port-v1.json"
+            )
+            self.assertTrue(any(row["path"] == marker for row in manifest["files"]))
             self.assertEqual(stat.S_IMODE(backup.stat().st_mode), 0o700)
             self.assertEqual(
                 stat.S_IMODE((backup / "manifest.json").stat().st_mode), 0o600,
@@ -67,6 +77,9 @@ class MemosBackupTest(unittest.TestCase):
                     connection.execute("select value from events").fetchall(),
                     [("before",)],
                 )
+            self.assertEqual(
+                json.loads((project / marker).read_text())["result"], "not-needed",
+            )
             with sqlite3.connect(rollback / "delivery.sqlite3") as connection:
                 self.assertEqual(
                     connection.execute("select value from events").fetchall(),

@@ -73,7 +73,7 @@ _SENSITIVE = (
 )
 _PROMPT_SPECS = {
     # Base prompt character length, SHA-256, and exact completeJson schema hint
-    # exported/called by the reviewed MemOS 2.0.10 artifact.
+    # exported/called by the reviewed MemOS 2.0.14 artifact.
     "l2.induction": (
         3382, "7040d4e99346c78d9d17396f93384f41149820c20d50bec13a9dc81af4d6b671",
         '{"title":"...","trigger":"...","procedure":"...","verification":"...","rationale":"...","caveats":["..."],"confidence":0..1,"support_trace_ids":["tr_..."]}',

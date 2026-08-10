@@ -83,6 +83,9 @@ def _make_pinned_plugin(code_root: Path, *, version: str = MEMOS_PLUGIN_VERSION)
     (package / "dist").mkdir(parents=True)
     (package / "dist" / "bridge.cjs").write_text("// bridge\n", encoding="utf-8")
     (package / "package.json").write_text(json.dumps({"version": version}), encoding="utf-8")
+    (package / "telemetry.credentials.json").write_text(
+        json.dumps({"audited_public_bootstrap": True}), encoding="utf-8",
+    )
     manifest = _build_file_manifest(plugin)
     manifest_bytes = (json.dumps(manifest, sort_keys=True, separators=(",", ":")) + "\n").encode()
     (plugin / ".agentic-stack-files.json").write_bytes(manifest_bytes)
@@ -174,6 +177,7 @@ class BehavioralExportTest(unittest.TestCase):
             self.assertNotIn("fedcba", exported)
             self.assertNotIn("config.yaml", exported)
             self.assertNotIn("bridge-process", exported)
+            self.assertNotIn("telemetry.credentials.json", exported)
 
     def test_empty_skills_export_has_deterministic_database_only_inventory(self):
         with tempfile.TemporaryDirectory() as tmp:

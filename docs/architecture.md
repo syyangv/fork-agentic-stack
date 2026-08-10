@@ -15,7 +15,7 @@ telemetry, and reusable artifacts are in local files.
 
 - **Governance (agentic-stack)** remains authoritative for permissions,
   preferences, decisions, and human-approved lessons.
-- **Behavioral (MemOS local 2.0.10)** records project-isolated episodes and
+- **Behavioral (MemOS local 2.0.14)** records project-isolated episodes and
   traces through a digest-pinned artifact and committed npm dependency lock,
   with telemetry disabled. Phase 3 is
   shadow-only: its health is visible but its retrieval results are never

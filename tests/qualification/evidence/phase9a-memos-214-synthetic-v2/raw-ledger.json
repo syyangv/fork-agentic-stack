@@ -1,0 +1,752 @@
+[
+  {
+    "context_bytes": 1751,
+    "hit_ids": [
+      "tr_nk5t502s5cbr",
+      "tr_5fb6tfhz4bn7",
+      "tr_csxkcdhwygc9",
+      "tr_pk1brg1a3aw2",
+      "tr_x9c08r6bk5gv"
+    ],
+    "query_index": 0,
+    "relevant": [
+      true,
+      true,
+      true,
+      true,
+      true
+    ],
+    "tier_latency_ms": {
+      "tier1": 0,
+      "tier2": 1,
+      "tier3": 0
+    },
+    "token": "synthetic-python-case-00-quartz",
+    "useful": true
+  },
+  {
+    "context_bytes": 1766,
+    "hit_ids": [
+      "tr_e2y7h2qs043m",
+      "tr_4frdjzd127av",
+      "tr_tej0gxg5stg6",
+      "tr_6c901xq4zg08",
+      "tr_m8vn9az9qzjw"
+    ],
+    "query_index": 1,
+    "relevant": [
+      true,
+      true,
+      true,
+      true,
+      true
+    ],
+    "tier_latency_ms": {
+      "tier1": 0,
+      "tier2": 1,
+      "tier3": 0
+    },
+    "token": "synthetic-testing-case-01-quartz",
+    "useful": true
+  },
+  {
+    "context_bytes": 1781,
+    "hit_ids": [
+      "tr_j9ywavbdtzrp",
+      "tr_ekb8pct8szxt",
+      "tr_se0dy2wxvf0j",
+      "tr_8k8ejb9tkk2f",
+      "tr_3tetbm8x8xpw"
+    ],
+    "query_index": 2,
+    "relevant": [
+      true,
+      true,
+      true,
+      true,
+      true
+    ],
+    "tier_latency_ms": {
+      "tier1": 0,
+      "tier2": 1,
+      "tier3": 0
+    },
+    "token": "synthetic-database-case-02-quartz",
+    "useful": true
+  },
+  {
+    "context_bytes": 1781,
+    "hit_ids": [
+      "tr_04kv5476g75z",
+      "tr_nnfcrctwkbjh",
+      "tr_rxn44xj7kcz8",
+      "tr_39dxzg70wvvh",
+      "tr_92my3etcc1rh"
+    ],
+    "query_index": 3,
+    "relevant": [
+      true,
+      true,
+      true,
+      true,
+      true
+    ],
+    "tier_latency_ms": {
+      "tier1": 0,
+      "tier2": 1,
+      "tier3": 0
+    },
+    "token": "synthetic-frontend-case-03-quartz",
+    "useful": true
+  },
+  {
+    "context_bytes": 1811,
+    "hit_ids": [
+      "tr_9bgdq338pt11",
+      "tr_dkt19x53ft06",
+      "tr_2h53w3kj62e7",
+      "tr_2hehrzk579np",
+      "tr_kesnpg6xdgw9"
+    ],
+    "query_index": 4,
+    "relevant": [
+      true,
+      true,
+      true,
+      true,
+      true
+    ],
+    "tier_latency_ms": {
+      "tier1": 0,
+      "tier2": 1,
+      "tier3": 0
+    },
+    "token": "synthetic-operations-case-04-quartz",
+    "useful": true
+  },
+  {
+    "context_bytes": 1751,
+    "hit_ids": [
+      "tr_qcekkvyv2wct",
+      "tr_ea4wjda0jt4b",
+      "tr_q9x58n3x3cfn",
+      "tr_2eek3man0hxa",
+      "tr_14z70cget73s"
+    ],
+    "query_index": 5,
+    "relevant": [
+      true,
+      true,
+      true,
+      true,
+      true
+    ],
+    "tier_latency_ms": {
+      "tier1": 0,
+      "tier2": 1,
+      "tier3": 0
+    },
+    "token": "synthetic-python-case-05-quartz",
+    "useful": true
+  },
+  {
+    "context_bytes": 1766,
+    "hit_ids": [
+      "tr_vcg7dq444j2m",
+      "tr_08w045jpq2nb",
+      "tr_czb5fmhq2rhr",
+      "tr_w22hmap9x5wq",
+      "tr_hegs53dvr9x5"
+    ],
+    "query_index": 6,
+    "relevant": [
+      true,
+      true,
+      true,
+      true,
+      true
+    ],
+    "tier_latency_ms": {
+      "tier1": 0,
+      "tier2": 1,
+      "tier3": 0
+    },
+    "token": "synthetic-testing-case-06-quartz",
+    "useful": true
+  },
+  {
+    "context_bytes": 1781,
+    "hit_ids": [
+      "tr_6vdqg7z8bqjg",
+      "tr_tee5j3vawkhv",
+      "tr_k04ms4p0s1x8",
+      "tr_8s71mjjqsds5",
+      "tr_dw48mvjg1w4h"
+    ],
+    "query_index": 7,
+    "relevant": [
+      true,
+      true,
+      true,
+      true,
+      true
+    ],
+    "tier_latency_ms": {
+      "tier1": 0,
+      "tier2": 1,
+      "tier3": 0
+    },
+    "token": "synthetic-database-case-07-quartz",
+    "useful": true
+  },
+  {
+    "context_bytes": 1781,
+    "hit_ids": [
+      "tr_bdhj04abpr3a",
+      "tr_fk4fs384es9a",
+      "tr_b53fyn84jsck",
+      "tr_xydehydjs4rr",
+      "tr_af04q038zscz"
+    ],
+    "query_index": 8,
+    "relevant": [
+      true,
+      true,
+      true,
+      true,
+      true
+    ],
+    "tier_latency_ms": {
+      "tier1": 0,
+      "tier2": 0,
+      "tier3": 0
+    },
+    "token": "synthetic-frontend-case-08-quartz",
+    "useful": true
+  },
+  {
+    "context_bytes": 1811,
+    "hit_ids": [
+      "tr_qd7dr3pv762a",
+      "tr_en7wgsra99mt",
+      "tr_0hqvvsvpr86g",
+      "tr_etg2mx7ajt9b",
+      "tr_88x8kf0km4rt"
+    ],
+    "query_index": 9,
+    "relevant": [
+      true,
+      true,
+      true,
+      true,
+      true
+    ],
+    "tier_latency_ms": {
+      "tier1": 0,
+      "tier2": 1,
+      "tier3": 0
+    },
+    "token": "synthetic-operations-case-09-quartz",
+    "useful": true
+  },
+  {
+    "context_bytes": 1751,
+    "hit_ids": [
+      "tr_d9ngc57rc0zx",
+      "tr_4fprdwa74czh",
+      "tr_tdajs265tmhx",
+      "tr_5brqyqd9edhc",
+      "tr_q9ewtshmczrc"
+    ],
+    "query_index": 10,
+    "relevant": [
+      true,
+      true,
+      true,
+      true,
+      true
+    ],
+    "tier_latency_ms": {
+      "tier1": 0,
+      "tier2": 1,
+      "tier3": 0
+    },
+    "token": "synthetic-python-case-10-quartz",
+    "useful": true
+  },
+  {
+    "context_bytes": 1766,
+    "hit_ids": [
+      "tr_yk278abdw7nc",
+      "tr_cdvgxj77wz1n",
+      "tr_xpscmc4cx41w",
+      "tr_m5789qf6z8kg",
+      "tr_ph2zsg8j3d7q"
+    ],
+    "query_index": 11,
+    "relevant": [
+      true,
+      true,
+      true,
+      true,
+      true
+    ],
+    "tier_latency_ms": {
+      "tier1": 0,
+      "tier2": 1,
+      "tier3": 0
+    },
+    "token": "synthetic-testing-case-11-quartz",
+    "useful": true
+  },
+  {
+    "context_bytes": 1781,
+    "hit_ids": [
+      "tr_7rs2efexvmky",
+      "tr_ddca1w8d8zy4",
+      "tr_3w3p5dsje5kw",
+      "tr_4z3fgtf54dm0",
+      "tr_pvfe0ttmzryp"
+    ],
+    "query_index": 12,
+    "relevant": [
+      true,
+      true,
+      true,
+      true,
+      true
+    ],
+    "tier_latency_ms": {
+      "tier1": 0,
+      "tier2": 0,
+      "tier3": 0
+    },
+    "token": "synthetic-database-case-12-quartz",
+    "useful": true
+  },
+  {
+    "context_bytes": 1781,
+    "hit_ids": [
+      "tr_tarb2p5brttk",
+      "tr_n7kb2ry85xm9",
+      "tr_cjskaaxdec2y",
+      "tr_6tzwp5dcrbff",
+      "tr_r6j0m3x3ve3k"
+    ],
+    "query_index": 13,
+    "relevant": [
+      true,
+      true,
+      true,
+      true,
+      true
+    ],
+    "tier_latency_ms": {
+      "tier1": 0,
+      "tier2": 1,
+      "tier3": 0
+    },
+    "token": "synthetic-frontend-case-13-quartz",
+    "useful": true
+  },
+  {
+    "context_bytes": 1811,
+    "hit_ids": [
+      "tr_3h8myh6a1q0a",
+      "tr_j1h1manbvd8f",
+      "tr_5b2dtt3fxpec",
+      "tr_j6ssseqc4931",
+      "tr_gavypgg9afys"
+    ],
+    "query_index": 14,
+    "relevant": [
+      true,
+      true,
+      true,
+      true,
+      true
+    ],
+    "tier_latency_ms": {
+      "tier1": 0,
+      "tier2": 0,
+      "tier3": 0
+    },
+    "token": "synthetic-operations-case-14-quartz",
+    "useful": true
+  },
+  {
+    "context_bytes": 1751,
+    "hit_ids": [
+      "tr_2vf1v8natgr2",
+      "tr_82s24j8jcejb",
+      "tr_ye21vk09kcb7",
+      "tr_pmft1j3dzvtj",
+      "tr_8vgy36pnj90j"
+    ],
+    "query_index": 15,
+    "relevant": [
+      true,
+      true,
+      true,
+      true,
+      true
+    ],
+    "tier_latency_ms": {
+      "tier1": 0,
+      "tier2": 1,
+      "tier3": 0
+    },
+    "token": "synthetic-python-case-15-quartz",
+    "useful": true
+  },
+  {
+    "context_bytes": 1766,
+    "hit_ids": [
+      "tr_6k47kecevq41",
+      "tr_c64a789vz4fc",
+      "tr_ev1fyvs49y4s",
+      "tr_j40qzj78mg9p",
+      "tr_cw5nx7tykqk3"
+    ],
+    "query_index": 16,
+    "relevant": [
+      true,
+      true,
+      true,
+      true,
+      true
+    ],
+    "tier_latency_ms": {
+      "tier1": 0,
+      "tier2": 0,
+      "tier3": 0
+    },
+    "token": "synthetic-testing-case-16-quartz",
+    "useful": true
+  },
+  {
+    "context_bytes": 1781,
+    "hit_ids": [
+      "tr_ydxtketndxbv",
+      "tr_15wg8e4yhpkp",
+      "tr_w0sepgahf6w8",
+      "tr_3er2hq107vpk",
+      "tr_a80nvc9vqqqj"
+    ],
+    "query_index": 17,
+    "relevant": [
+      true,
+      true,
+      true,
+      true,
+      true
+    ],
+    "tier_latency_ms": {
+      "tier1": 0,
+      "tier2": 1,
+      "tier3": 0
+    },
+    "token": "synthetic-database-case-17-quartz",
+    "useful": true
+  },
+  {
+    "context_bytes": 1781,
+    "hit_ids": [
+      "tr_hmvb4ebc1qw9",
+      "tr_r13k54swn8th",
+      "tr_0qkmywrwd3n7",
+      "tr_t4dm51ecfywt",
+      "tr_150z345g7qma"
+    ],
+    "query_index": 18,
+    "relevant": [
+      true,
+      true,
+      true,
+      true,
+      true
+    ],
+    "tier_latency_ms": {
+      "tier1": 0,
+      "tier2": 1,
+      "tier3": 0
+    },
+    "token": "synthetic-frontend-case-18-quartz",
+    "useful": true
+  },
+  {
+    "context_bytes": 1811,
+    "hit_ids": [
+      "tr_bsg3d9cnn3x8",
+      "tr_7yp38qkr4ykr",
+      "tr_36bya94t935c",
+      "tr_qa4fjgy0v20q",
+      "tr_0r47wt16jxtz"
+    ],
+    "query_index": 19,
+    "relevant": [
+      true,
+      true,
+      true,
+      true,
+      true
+    ],
+    "tier_latency_ms": {
+      "tier1": 0,
+      "tier2": 1,
+      "tier3": 0
+    },
+    "token": "synthetic-operations-case-19-quartz",
+    "useful": true
+  },
+  {
+    "context_bytes": 1751,
+    "hit_ids": [
+      "tr_j1k0a661q4tq",
+      "tr_d6ay8p6jpsef",
+      "tr_p2jft12z8dvv",
+      "tr_qq1yb0wh9erh",
+      "tr_jbr0ta4zvncz"
+    ],
+    "query_index": 20,
+    "relevant": [
+      true,
+      true,
+      true,
+      true,
+      true
+    ],
+    "tier_latency_ms": {
+      "tier1": 0,
+      "tier2": 1,
+      "tier3": 0
+    },
+    "token": "synthetic-python-case-20-quartz",
+    "useful": true
+  },
+  {
+    "context_bytes": 1766,
+    "hit_ids": [
+      "tr_3yfh3x6d6nr5",
+      "tr_q3s35rgsrg4j",
+      "tr_f368ew9r8gms",
+      "tr_bg5khqq77vat",
+      "tr_qd03jx3r5mqk"
+    ],
+    "query_index": 21,
+    "relevant": [
+      true,
+      true,
+      true,
+      true,
+      true
+    ],
+    "tier_latency_ms": {
+      "tier1": 0,
+      "tier2": 1,
+      "tier3": 0
+    },
+    "token": "synthetic-testing-case-21-quartz",
+    "useful": true
+  },
+  {
+    "context_bytes": 1781,
+    "hit_ids": [
+      "tr_5fn8w0p94p9j",
+      "tr_gcnh8keexe8y",
+      "tr_hxr4vy11rg21",
+      "tr_6vvnjrtmp8mc",
+      "tr_an975pd37044"
+    ],
+    "query_index": 22,
+    "relevant": [
+      true,
+      true,
+      true,
+      true,
+      true
+    ],
+    "tier_latency_ms": {
+      "tier1": 0,
+      "tier2": 1,
+      "tier3": 0
+    },
+    "token": "synthetic-database-case-22-quartz",
+    "useful": true
+  },
+  {
+    "context_bytes": 1781,
+    "hit_ids": [
+      "tr_fksmekc3f6j6",
+      "tr_jf9rsym6pf4p",
+      "tr_edmv3m9rfft3",
+      "tr_7m8b26rq11x5",
+      "tr_719z4cx004r5"
+    ],
+    "query_index": 23,
+    "relevant": [
+      true,
+      true,
+      true,
+      true,
+      true
+    ],
+    "tier_latency_ms": {
+      "tier1": 0,
+      "tier2": 1,
+      "tier3": 0
+    },
+    "token": "synthetic-frontend-case-23-quartz",
+    "useful": true
+  },
+  {
+    "context_bytes": 1811,
+    "hit_ids": [
+      "tr_gmsn61xwkdfn",
+      "tr_n7tsdm845bfq",
+      "tr_nb5jyf6nkd13",
+      "tr_3gp6ardvtcxw",
+      "tr_a5kmqzy4bdve"
+    ],
+    "query_index": 24,
+    "relevant": [
+      true,
+      true,
+      true,
+      true,
+      true
+    ],
+    "tier_latency_ms": {
+      "tier1": 0,
+      "tier2": 1,
+      "tier3": 0
+    },
+    "token": "synthetic-operations-case-24-quartz",
+    "useful": true
+  },
+  {
+    "context_bytes": 1751,
+    "hit_ids": [
+      "tr_xw1mvqvqe4yg",
+      "tr_jj5mp8hycqsc",
+      "tr_cdxfw3e8xd8b",
+      "tr_b55kc0a3b8jq",
+      "tr_e2t22txe9qwy"
+    ],
+    "query_index": 25,
+    "relevant": [
+      true,
+      true,
+      true,
+      true,
+      true
+    ],
+    "tier_latency_ms": {
+      "tier1": 0,
+      "tier2": 1,
+      "tier3": 0
+    },
+    "token": "synthetic-python-case-25-quartz",
+    "useful": true
+  },
+  {
+    "context_bytes": 1766,
+    "hit_ids": [
+      "tr_g2g179pzr527",
+      "tr_6jb72w2wm4kt",
+      "tr_qym8xd9y6j3e",
+      "tr_x2jren8h532y",
+      "tr_6w9gf4x8bscn"
+    ],
+    "query_index": 26,
+    "relevant": [
+      true,
+      true,
+      true,
+      true,
+      true
+    ],
+    "tier_latency_ms": {
+      "tier1": 0,
+      "tier2": 1,
+      "tier3": 0
+    },
+    "token": "synthetic-testing-case-26-quartz",
+    "useful": true
+  },
+  {
+    "context_bytes": 1781,
+    "hit_ids": [
+      "tr_hy7n5n9bzzm7",
+      "tr_9x5n0aea61r1",
+      "tr_x136pfzme0h0",
+      "tr_9ybexszh08yj",
+      "tr_j504th20mktx"
+    ],
+    "query_index": 27,
+    "relevant": [
+      true,
+      true,
+      true,
+      true,
+      true
+    ],
+    "tier_latency_ms": {
+      "tier1": 0,
+      "tier2": 1,
+      "tier3": 0
+    },
+    "token": "synthetic-database-case-27-quartz",
+    "useful": true
+  },
+  {
+    "context_bytes": 1781,
+    "hit_ids": [
+      "tr_bxhx5dpw857s",
+      "tr_43wmqmn3d18q",
+      "tr_dwyqgab5atnf",
+      "tr_x00nxjj0wh47",
+      "tr_pym0cnbznrpt"
+    ],
+    "query_index": 28,
+    "relevant": [
+      true,
+      true,
+      true,
+      true,
+      true
+    ],
+    "tier_latency_ms": {
+      "tier1": 0,
+      "tier2": 1,
+      "tier3": 0
+    },
+    "token": "synthetic-frontend-case-28-quartz",
+    "useful": true
+  },
+  {
+    "context_bytes": 1811,
+    "hit_ids": [
+      "tr_980wcwnzewct",
+      "tr_bv9v9pzxb0xt",
+      "tr_c4z5m9xmrhbn",
+      "tr_k74gkrrq4xdg",
+      "tr_gp86te4r396y"
+    ],
+    "query_index": 29,
+    "relevant": [
+      true,
+      true,
+      true,
+      true,
+      true
+    ],
+    "tier_latency_ms": {
+      "tier1": 0,
+      "tier2": 1,
+      "tier3": 0
+    },
+    "token": "synthetic-operations-case-29-quartz",
+    "useful": true
+  }
+]

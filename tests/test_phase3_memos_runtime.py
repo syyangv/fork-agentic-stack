@@ -22,6 +22,7 @@ from orchestration.memos_runtime import (
     validate_project_id,
     write_config_atomic,
 )
+from orchestration.memos_bridge import PINNED_MEMOS_VERSION
 from harness_manager.memos_install import (
     LOCK_ASSET_DIR,
     MEMOS_PLUGIN_INTEGRITY,
@@ -64,7 +65,7 @@ class MemosRuntimeTest(unittest.TestCase):
         self.assertFalse(config["hub"]["enabled"])
         self.assertNotIn("enabled", config["viewer"])
         self.assertFalse(config["viewer"]["openOnFirstTurn"])
-        # Every generated key is part of MemOS 2.0.10's ConfigSchema. Viewer
+        # Every generated key is part of MemOS 2.0.14's ConfigSchema. Viewer
         # shutdown itself is the bridge's --no-viewer launch flag.
         self.assertEqual(set(config["viewer"]), {"bindHost", "openOnFirstTurn"})
         self.assertEqual(set(config["bridge"]), {"mode"})
@@ -110,6 +111,7 @@ class MemosRuntimeTest(unittest.TestCase):
             )
             command = bridge_command(paths)
             self.assertIn("--no-viewer", command)
+            self.assertIn(f"--runtime-scope={PROJECT_ID}", command)
             self.assertIn(f"--home={paths.memos_home}", command)
             self.assertTrue(command[1].endswith("/dist/bridge.cjs"))
             for directory in (paths.project_root, paths.memos_home, paths.home):
@@ -135,17 +137,33 @@ class MemosInstallTest(unittest.TestCase):
             with self.assertRaises(ValueError):
                 verify_tarball(artifact, integrity="sha512-AAAA", shasum=shasum)
 
-    def test_pinned_metadata_matches_release(self):
+    def test_runtime_pins_memos_2_0_14(self):
+        self.assertEqual(MEMOS_PLUGIN_VERSION, "2.0.14")
+
+    def test_bridge_attestation_pins_memos_2_0_14(self):
+        self.assertEqual(PINNED_MEMOS_VERSION, "2.0.14")
+
+    def test_lock_assets_select_memos_2_0_14(self):
+        self.assertEqual(LOCK_ASSET_DIR.name, "memos-2.0.14")
+
+    def test_pinned_integrity_matches_memos_2_0_14_release(self):
         self.assertEqual(
             MEMOS_PLUGIN_INTEGRITY,
-            "sha512-Rg2NIjGAObTC3zFQ4wOzB+hxR7qHvHWMVI5Nxc+7QEi5wpBUibkniz3SdHOPrbbCkqhatS0DjZ+aUexl/9Q+EA==",
+            "sha512-yEAroCSBfdf7urP47Hyr2MzTg4BPLIWqlno5r0imHb69s8fh7uXZRuPK23IWCzDFIWuPK/SuZfk8u3MdGQOzLg==",
         )
-        self.assertEqual(MEMOS_PLUGIN_SHASUM, "d75850ce7340d56b8a255831969950b9fbf96995")
+
+    def test_pinned_shasum_matches_memos_2_0_14_release(self):
+        self.assertEqual(MEMOS_PLUGIN_SHASUM, "32639d241918c7da8d536e52eac7e0a7c42c312e")
+
+    def test_lockfile_attests_memos_2_0_14_release(self):
         lock = json.loads((LOCK_ASSET_DIR / "package-lock.json").read_text())
         locked = lock["packages"]["node_modules/@memtensor/memos-local-plugin"]
-        self.assertEqual(locked["version"], MEMOS_PLUGIN_VERSION)
+        self.assertEqual(locked["version"], "2.0.14")
         self.assertEqual(locked["resolved"], "file:plugin.tgz")
-        self.assertEqual(locked["integrity"], MEMOS_PLUGIN_INTEGRITY)
+        self.assertEqual(
+            locked["integrity"],
+            "sha512-yEAroCSBfdf7urP47Hyr2MzTg4BPLIWqlno5r0imHb69s8fh7uXZRuPK23IWCzDFIWuPK/SuZfk8u3MdGQOzLg==",
+        )
 
     def test_installer_requires_node_20_and_uses_local_tarball_only(self):
         with tempfile.TemporaryDirectory() as tmp:

@@ -17,13 +17,13 @@ from typing import Callable, Sequence
 
 
 MEMOS_PLUGIN_NAME = "@memtensor/memos-local-plugin"
-MEMOS_PLUGIN_VERSION = "2.0.10"
+MEMOS_PLUGIN_VERSION = "2.0.14"
 MEMOS_PLUGIN_INTEGRITY = (
-    "sha512-Rg2NIjGAObTC3zFQ4wOzB+hxR7qHvHWMVI5Nxc+7QEi5wpBUibkniz3SdHOPrbbCkqhatS0DjZ+aUexl/9Q+EA=="
+    "sha512-yEAroCSBfdf7urP47Hyr2MzTg4BPLIWqlno5r0imHb69s8fh7uXZRuPK23IWCzDFIWuPK/SuZfk8u3MdGQOzLg=="
 )
-MEMOS_PLUGIN_SHASUM = "d75850ce7340d56b8a255831969950b9fbf96995"
+MEMOS_PLUGIN_SHASUM = "32639d241918c7da8d536e52eac7e0a7c42c312e"
 MINIMUM_NODE_MAJOR = 20
-LOCK_ASSET_DIR = Path(__file__).resolve().parent / "assets" / "memos-2.0.10"
+LOCK_ASSET_DIR = Path(__file__).resolve().parent / "assets" / "memos-2.0.14"
 _SAFE_ENV_KEYS = (
     "PATH", "LANG", "LC_ALL", "TMPDIR", "TEMP", "TMP",
     "SystemRoot", "ComSpec", "PATHEXT",

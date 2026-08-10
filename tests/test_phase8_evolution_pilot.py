@@ -52,17 +52,17 @@ def _write_private(path: Path, payload: dict) -> None:
 class EvolutionPilotConfigTest(unittest.TestCase):
     def test_pinned_plugin_requires_exact_immutable_installer_attestation(self):
         with tempfile.TemporaryDirectory(dir=ROOT) as tmp:
-            root = Path(tmp) / "memos-local-plugin/2.0.10"
+            root = Path(tmp) / "memos-local-plugin/2.0.14"
             package = root / "node_modules/@memtensor/memos-local-plugin"
             (package / "dist").mkdir(parents=True)
             (package / "dist/bridge.cjs").write_text("// fixture\n")
-            (package / "package.json").write_text(json.dumps({"version": "2.0.10"}))
+            (package / "package.json").write_text(json.dumps({"version": "2.0.14"}))
             (root / "package-lock.json").write_text("{}")
             (root / ".agentic-stack-install.json").write_text(json.dumps({
                 "artifact_sha1": MEMOS_PLUGIN_SHASUM,
                 "integrity": MEMOS_PLUGIN_INTEGRITY,
                 "package": "@memtensor/memos-local-plugin",
-                "version": "2.0.10",
+                "version": "2.0.14",
             }))
             manifest = runtime_module.build_plugin_file_manifest(root)
             manifest_path = root / ".agentic-stack-files.json"
@@ -272,7 +272,7 @@ class EvolutionPilotConfigTest(unittest.TestCase):
             repo = root / "repo"; repo.mkdir()
             config = root / "pilot.json"; _write_private(config, _pilot(repo))
             bridge = (
-                root / "code" / "memos-local-plugin" / "2.0.10" / "node_modules" /
+                root / "code" / "memos-local-plugin" / "2.0.14" / "node_modules" /
                 "@memtensor" / "memos-local-plugin" / "dist" / "bridge.cjs"
             )
             bridge.parent.mkdir(parents=True)
@@ -282,7 +282,7 @@ const rl = readline.createInterface({input: process.stdin});
 rl.on('line', line => {
   const msg = JSON.parse(line);
   if (msg.method === 'core.health') {
-    console.log(JSON.stringify({jsonrpc:'2.0', id:msg.id, result:{version:'2.0.10'}}));
+    console.log(JSON.stringify({jsonrpc:'2.0', id:msg.id, result:{version:'2.0.14'}}));
   } else if (msg.method === 'core.shutdown') {
     console.log(JSON.stringify({jsonrpc:'2.0', id:msg.id, result:{ok:true}}));
     setImmediate(() => process.exit(0));
@@ -323,7 +323,7 @@ rl.on('line', line => {
                 with session2:
                     entered_second.set()
             with session as provider:
-                self.assertEqual(provider._validated_health["version"], "2.0.10")
+                self.assertEqual(provider._validated_health["version"], "2.0.14")
                 worker = threading.Thread(target=enter_second)
                 worker.start()
                 time.sleep(0.05)

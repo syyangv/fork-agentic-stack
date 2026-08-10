@@ -20,7 +20,7 @@ from pathlib import Path
 from typing import Any, Callable, Mapping, Sequence
 
 
-PINNED_MEMOS_VERSION = "2.0.10"
+PINNED_MEMOS_VERSION = "2.0.14"
 _UPSTREAM_CONSOLE_LOG = re.compile(
     rb"^\d{2}:\d{2}:\d{2}\.\d{3} (?:TRACE|DEBUG|INFO|WARN|ERROR|FATAL)\s"
 )
@@ -210,7 +210,7 @@ class MemOSBridgeClient:
                     return result
                 except (MemOSUnavailableError, MemOSTimeoutError, MemOSTransportError) as exc:
                     last_error = exc
-                    if attempt + 1 < attempts:
+                    if attempt + 1 < attempts and not exc.ambiguous:
                         self._restart()
                         continue
                     self._circuit_until = time.monotonic() + self.config.circuit_cooldown
@@ -478,7 +478,7 @@ class MemOSBridgeClient:
                 message = json.loads(line)
                 self._validate_message(message)
             except (UnicodeDecodeError, json.JSONDecodeError, MemOSProtocolError) as exc:
-                # The reviewed 2.0.10 bridge emits pre-init logger records to
+                # The reviewed 2.0.14 bridge emits pre-init logger records to
                 # stdout before its config can disable the console sink. Keep
                 # that narrowly recognized upstream defect out of JSON-RPC
                 # framing while rejecting every other malformed line.

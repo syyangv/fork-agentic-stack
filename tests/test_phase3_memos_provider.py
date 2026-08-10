@@ -36,7 +36,7 @@ class FakeClient:
         if failure:
             raise failure
         if method == "core.health":
-            return {"ok": True, "version": "2.0.10"}
+            return {"ok": True, "version": "2.0.14"}
         if method == "memory.timeline":
             return {"traces": [{"id": "tr_1", "summary": "safe trace"}]}
         if method == "skill.list":
@@ -50,7 +50,7 @@ class FakeClient:
     def health(self, *, timeout=None):
         self.calls.append(("core.health", None, True))
         self.timeouts.append(("core.health", timeout))
-        return {"ok": True, "version": "2.0.10", "capabilities": ("core.health",)}
+        return {"ok": True, "version": "2.0.14", "capabilities": ("core.health",)}
 
 
 def event(event_type, *, payload=None, suffix="1"):
@@ -139,7 +139,7 @@ class JournalTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             path = Path(tmp) / "delivery.sqlite3"
             journal = MemosDeliveryJournal(path)
-            journal.enqueue("a", "safe", "session.open", {}, True)
+            journal.enqueue("a", "safe", "memory.search", {}, True)
             journal.enqueue("b", "unsafe", "turn.end", {}, False)
             journal.claim_next()
             journal.claim_next()
@@ -307,6 +307,12 @@ class ProviderTest(unittest.TestCase):
             self.assertEqual(second["delivered"], 0)
             turn = client.calls[-1][1]
             self.assertEqual(turn["userText"], started.intent)
+            self.assertEqual(turn["turnKey"], started.idempotency_key)
+            self.assertIsInstance(turn["deadlineAt"], int)
+            self.assertGreater(turn["deadlineAt"], int(time.time() * 1000))
+            self.assertLessEqual(
+                turn["deadlineAt"], int(time.time() * 1000) + 75_000,
+            )
             self.assertNotIn("episodeId", turn)
             self.assertNotIn("payload", turn)
             self.assertEqual(provider.health()["mode"], "shadow")
@@ -422,7 +428,7 @@ class ProviderTest(unittest.TestCase):
             self.assertEqual(result["ambiguous"], 1)
             self.assertEqual(provider.journal.counts()["ambiguous"], 1)
 
-    def test_successful_turn_start_with_malformed_identity_is_ambiguous(self):
+    def test_restart_unsafe_turn_start_failure_is_never_retried(self):
         class MalformedStart(FakeClient):
             def call(self, method, params, *, timeout=None, retryable=False):
                 if method == "turn.start":
@@ -436,10 +442,43 @@ class ProviderTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             provider = self.provider(tmp, MalformedStart())
             result = provider.record(event("task.started"))
+            provider.record(event("task.started"))
             self.assertEqual(result["ambiguous"], 1)
             self.assertEqual(provider.journal.counts()["ambiguous"], 1)
+            self.assertEqual(
+                [method for method, _, _ in provider.client.calls].count("turn.start"), 1,
+            )
 
-    def test_successful_turn_start_with_mapping_failure_is_ambiguous(self):
+    def test_reopened_journal_with_fresh_provider_never_replays_turn_start(self):
+        class DeliveredWithoutIdentity(FakeClient):
+            def call(self, method, params, *, timeout=None, retryable=False):
+                if method == "turn.start":
+                    self.calls.append((method, params, retryable))
+                    self.timeouts.append((method, timeout))
+                    return {"hits": []}
+                return super().call(
+                    method, params, timeout=timeout, retryable=retryable,
+                )
+
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "delivery.sqlite3"
+            first_client = DeliveredWithoutIdentity()
+            first = MemosLocalProvider(
+                project_id="0123456789abcdef",
+                journal=MemosDeliveryJournal(path), client=first_client, mode="shadow",
+            )
+            self.assertEqual(first.record(event("task.started"))["ambiguous"], 1)
+
+            second_client = FakeClient()
+            restarted = MemosLocalProvider(
+                project_id="0123456789abcdef",
+                journal=MemosDeliveryJournal(path), client=second_client, mode="shadow",
+            )
+            restarted.record(event("task.started"))
+            self.assertNotIn("turn.start", [method for method, _, _ in second_client.calls])
+            self.assertEqual(restarted.journal.counts()["ambiguous"], 1)
+
+    def test_post_delivery_mapping_failure_is_ambiguous_not_retried(self):
         class MappingFailureJournal(MemosDeliveryJournal):
             def set_episode(self, run_id, episode_id):
                 raise sqlite3.OperationalError("mapping unavailable")
@@ -450,8 +489,11 @@ class ProviderTest(unittest.TestCase):
                 journal=MappingFailureJournal(Path(tmp) / "delivery.sqlite3"),
                 client=FakeClient(), mode="shadow",
             )
-            result = provider.record(event("task.started"))
-            self.assertEqual(result["ambiguous"], 1)
+            first = provider.record(event("task.started"))
+            second = provider.record(event("task.started"))
+            self.assertEqual(first["delivered"], 1)
+            self.assertEqual(first["ambiguous"], 1)
+            self.assertEqual(second["delivered"], 0)
             self.assertEqual(provider.journal.counts()["ambiguous"], 1)
 
     def test_nonretryable_unavailable_before_delivery_remains_pending(self):
@@ -488,6 +530,68 @@ class ProviderTest(unittest.TestCase):
             for method in ("episode.close", "session.close"):
                 self.assertEqual(budgets[method], {15.0})
             self.assertEqual(budgets["core.health"], {75.0})
+
+    def test_assist_health_and_turn_share_one_absolute_deadline(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            client = FakeClient()
+            provider = MemosLocalProvider(
+                project_id="0123456789abcdef",
+                journal=MemosDeliveryJournal(Path(tmp) / "delivery.sqlite3"),
+                client=client,
+                mode="assist",
+            )
+            started_at = time.time()
+            provider._assist_deadline = time.monotonic() + 0.5
+            provider.record(event("task.started"))
+            health_timeout = dict(client.timeouts)["core.health"]
+            turn = next(params for method, params, _ in client.calls if method == "turn.start")
+            self.assertGreater(health_timeout, 0)
+            self.assertLessEqual(health_timeout, 0.5)
+            self.assertGreaterEqual(turn["deadlineAt"], int(started_at * 1000))
+            self.assertLessEqual(turn["deadlineAt"], int(started_at * 1000) + 550)
+
+    def test_expired_assist_deadline_degrades_without_delivery(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            client = FakeClient()
+            provider = MemosLocalProvider(
+                project_id="0123456789abcdef",
+                journal=MemosDeliveryJournal(Path(tmp) / "delivery.sqlite3"),
+                client=client, mode="assist",
+            )
+            provider._assist_deadline = time.monotonic() - 0.01
+            result = provider.record(event("task.started"))
+            self.assertEqual(result["delivered"], 0)
+            self.assertEqual(provider.journal.counts()["pending"], 2)
+            self.assertEqual(client.calls, [])
+
+    def test_ignored_deadline_hint_cannot_authorize_retry_after_timeout(self):
+        from orchestration.memos_bridge import MemOSTimeoutError
+
+        class IgnoresDeadline(FakeClient):
+            def call(self, method, params, *, timeout=None, retryable=False):
+                self.calls.append((method, params, retryable))
+                self.timeouts.append((method, timeout))
+                if method == "turn.start":
+                    self.deadline_at = params["deadlineAt"]
+                    raise MemOSTimeoutError("host deadline elapsed", ambiguous=True)
+                return super().call(
+                    method, params, timeout=timeout, retryable=retryable,
+                )
+
+        with tempfile.TemporaryDirectory() as tmp:
+            client = IgnoresDeadline()
+            provider = MemosLocalProvider(
+                project_id="0123456789abcdef",
+                journal=MemosDeliveryJournal(Path(tmp) / "delivery.sqlite3"),
+                client=client, mode="assist",
+            )
+            provider._assist_deadline = time.monotonic() + 0.2
+            result = provider.record(event("task.started"))
+            self.assertEqual(result["ambiguous"], 1)
+            self.assertEqual(
+                [method for method, _, _ in client.calls].count("turn.start"), 1,
+            )
+            self.assertEqual(provider.journal.counts()["ambiguous"], 1)
 
     def test_cold_start_health_uses_long_budget_and_warm_health_is_cached(self):
         class DelayedHealth(FakeClient):

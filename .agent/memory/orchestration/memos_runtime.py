@@ -21,18 +21,18 @@ from typing import Mapping
 from .memos_journal import _project_lock, stable_project_lock_path
 
 
-MEMOS_PLUGIN_VERSION = "2.0.10"
-MEMOS_PLUGIN_SHASUM = "d75850ce7340d56b8a255831969950b9fbf96995"
+MEMOS_PLUGIN_VERSION = "2.0.14"
+MEMOS_PLUGIN_SHASUM = "32639d241918c7da8d536e52eac7e0a7c42c312e"
 MEMOS_PLUGIN_INTEGRITY = (
-    "sha512-Rg2NIjGAObTC3zFQ4wOzB+hxR7qHvHWMVI5Nxc+7QEi5wpBUibkniz3SdHOPrbbCkqhatS0DjZ+aUexl/9Q+EA=="
+    "sha512-yEAroCSBfdf7urP47Hyr2MzTg4BPLIWqlno5r0imHb69s8fh7uXZRuPK23IWCzDFIWuPK/SuZfk8u3MdGQOzLg=="
 )
 MEMOS_PINNED_FILE_SHA256 = {
     "node_modules/@memtensor/memos-local-plugin/dist/bridge.cjs":
-        "fc58eb07a35b6fec9f74646f98dca90ac5576d43ed2d87cad211241efc8a8ad7",
+        "c8171710ece2a1881ae391902f73b89008f29ec4bd9d69d138926cd714465807",
     "node_modules/@memtensor/memos-local-plugin/package.json":
-        "23455d0245a681f2939236451cf23cb02593c0f0b80413374bd5cfea197f90c2",
+        "0aab9cf1fc6ec3f986fb3a4865ee68a82b3c30e602d59a208aaf6e1faa100c24",
     "package-lock.json":
-        "4da221c70a06c5a14948af73c31661957bb7a36832ab764ee6a3c884cd0e7c2b",
+        "9e9b630a41009f3f1719570b929d5d996981823efcae8a7f88886020ee3af6ab",
 }
 _PLUGIN_MANIFEST = ".agentic-stack-files.json"
 _PLUGIN_MARKER = ".agentic-stack-install.json"
@@ -91,7 +91,7 @@ def runtime_paths(
     # siblings, not children, so upstream code cannot accidentally interpret
     # a HOME cache as MemOS project data.
     project_root = data_root / project_id
-    # MemOS 2.0.10's built CommonJS bridge derives feedback ownership only
+    # MemOS 2.0.14's built CommonJS bridge derives feedback ownership only
     # from this supported Hermes profile shape. Keeping the journal at
     # project_root while nesting MemOS data here preserves physical isolation
     # and stamps feedback with the project profile instead of "default".
@@ -107,7 +107,7 @@ def runtime_paths(
 
 
 def validate_pinned_plugin(plugin_dir: str | Path) -> Path:
-    """Require the exact installer-attested immutable MemOS 2.0.10 tree."""
+    """Require the exact installer-attested immutable MemOS 2.0.14 tree."""
     root = Path(plugin_dir)
     _reject_symlink_components(root)
     package_dir = root / "node_modules/@memtensor/memos-local-plugin"
@@ -118,7 +118,7 @@ def validate_pinned_plugin(plugin_dir: str | Path) -> Path:
         manifest = json.loads(manifest_bytes)
         package = json.loads((package_dir / "package.json").read_text("utf-8"))
     except (OSError, json.JSONDecodeError) as exc:
-        raise RuntimeError("pinned MemOS 2.0.10 install is unavailable") from exc
+        raise RuntimeError("pinned MemOS 2.0.14 install is unavailable") from exc
     expected_marker = {
         "artifact_sha1": MEMOS_PLUGIN_SHASUM,
         "integrity": MEMOS_PLUGIN_INTEGRITY,
@@ -133,18 +133,18 @@ def validate_pinned_plugin(plugin_dir: str | Path) -> Path:
             )
             or package.get("version") != MEMOS_PLUGIN_VERSION
             or not bridge.is_file()):
-        raise RuntimeError("pinned MemOS 2.0.10 install attestation is invalid")
+        raise RuntimeError("pinned MemOS 2.0.14 install attestation is invalid")
     if manifest != build_plugin_file_manifest(root):
-        raise RuntimeError("pinned MemOS 2.0.10 file inventory mismatch")
+        raise RuntimeError("pinned MemOS 2.0.14 file inventory mismatch")
     if root.is_symlink() or bridge.is_symlink() or root.stat().st_mode & 0o222:
-        raise RuntimeError("pinned MemOS 2.0.10 install must be immutable")
+        raise RuntimeError("pinned MemOS 2.0.14 install must be immutable")
     for relative, expected_digest in MEMOS_PINNED_FILE_SHA256.items():
         path = root / relative
         if path.is_symlink() or not path.is_file():
-            raise RuntimeError("pinned MemOS 2.0.10 required file is unsafe")
+            raise RuntimeError("pinned MemOS 2.0.14 required file is unsafe")
         actual = hashlib.sha256(path.read_bytes()).hexdigest()
         if actual != expected_digest:
-            raise RuntimeError("pinned MemOS 2.0.10 required file digest mismatch")
+            raise RuntimeError("pinned MemOS 2.0.14 required file digest mismatch")
     resolved_root = root.resolve(strict=True)
     for directory, directories, files in os.walk(root):
         for name in (*directories, *files):
@@ -157,7 +157,7 @@ def validate_pinned_plugin(plugin_dir: str | Path) -> Path:
                 if not target.is_relative_to(resolved_root):
                     raise RuntimeError("pinned MemOS tree symlink escapes its root")
             elif path.stat().st_mode & 0o222:
-                raise RuntimeError("pinned MemOS 2.0.10 install contains writable code")
+                raise RuntimeError("pinned MemOS 2.0.14 install contains writable code")
     return bridge
 
 
@@ -193,7 +193,7 @@ def build_memos_config(
     host_model: str = "gpt",
     min_distinct_episodes: int = 3,
 ) -> dict:
-    """Return the minimal offline/privacy profile accepted by MemOS 2.0.10.
+    """Return the minimal offline/privacy profile accepted by MemOS 2.0.14.
 
     JSON is intentionally emitted into ``config.yaml``: JSON is a YAML subset,
     avoids adding a YAML dependency, and gives byte-for-byte deterministic
@@ -508,10 +508,10 @@ def runtime_environment(
 def bridge_command(paths: MemosRuntimePaths, node_command: str = "node") -> tuple[str, ...]:
     """Return the only supported bridge launch shape: stdio and headless.
 
-    MemOS 2.0.10 controls viewer startup with ``--no-viewer`` rather than a
+    MemOS 2.0.14 controls viewer startup with ``--no-viewer`` rather than a
     schema-backed boolean.  Keeping the flag here makes the privacy setting
     executable instead of relying only on documentation/config metadata. The
-    packaged CJS bridge is intentional: unlike 2.0.10's MJS build, it derives
+    packaged CJS bridge is intentional: unlike 2.0.14's MJS build, it derives
     the project profile from MEMOS_HOME so feedback ownership remains scoped.
     """
     return (
@@ -526,6 +526,7 @@ def bridge_command(paths: MemosRuntimePaths, node_command: str = "node") -> tupl
         ),
         "--agent=hermes",
         "--no-viewer",
+        f"--runtime-scope={paths.project_root.name}",
         f"--home={paths.memos_home}",
     )
 

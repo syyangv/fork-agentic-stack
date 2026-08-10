@@ -1,3 +1,4 @@
+import hashlib
 import json
 import os
 import stat
@@ -21,6 +22,7 @@ from orchestration.host_evolution import (  # noqa: E402
     HostEvolutionError,
     MemosOpusHostHandler,
     NativeCompletion,
+    _PROMPT_SPECS,
     audit_metadata,
     build_host_environment,
     load_pilot_config,
@@ -53,8 +55,34 @@ def dto(**changes):
 class HostEvolutionTest(unittest.TestCase):
     def setUp(self):
         self.native_fixtures = json.loads(
-            (ROOT / "tests/fixtures/memos_2_0_10_host_requests.json").read_text()
+            (ROOT / "tests/fixtures/memos_2_0_14_host_requests.json").read_text()
         )
+
+    def test_pinned_2_0_14_extracted_prompt_contract(self):
+        """The checked-in extraction fixture must match the pinned artifact contract."""
+        lock = json.loads(
+            (ROOT / "harness_manager/assets/memos-2.0.14/package-lock.json").read_text()
+        )
+        plugin = lock["packages"]["node_modules/@memtensor/memos-local-plugin"]
+        self.assertEqual(self.native_fixtures["artifact"], "@memtensor/memos-local-plugin@2.0.14")
+        self.assertEqual(plugin["version"], "2.0.14")
+        self.assertEqual(plugin["integrity"], self.native_fixtures["artifact_integrity"])
+        expected = {
+            "l2": (3382, "7040d4e99346c78d9d17396f93384f41149820c20d50bec13a9dc81af4d6b671",
+                   "package/core/llm/prompts/l2-induction.ts"),
+            "l3": (3837, "b2bea0992127a3958c1f57222adbc9061d55b7532c556428f48e42e3d6bbdfca",
+                   "package/core/llm/prompts/l3-abstraction.ts"),
+            "skill": (2648, "9d1fd417e05687bc5e4b0ae4174bb4635a6171ff090d85d22a6e4f3d5deb0f56",
+                      "package/core/skill/crystallize.ts"),
+        }
+        for family, (length, digest, source) in expected.items():
+            with self.subTest(family=family):
+                extracted_base = self.native_fixtures[family]["system"][:length]
+                self.assertEqual(len(extracted_base), length)
+                self.assertEqual(hashlib.sha256(extracted_base.encode()).hexdigest(), digest)
+                self.assertEqual(self.native_fixtures["extracted_sources"][family], source)
+                operation = {"l2": "l2.induction", "l3": "l3.abstraction", "skill": "skill.crystallize"}[family]
+                self.assertEqual(_PROMPT_SPECS[operation][:2], (length, digest))
 
     def native_request(self, family: str = "l2", user: str | None = None):
         fixture = self.native_fixtures[family]

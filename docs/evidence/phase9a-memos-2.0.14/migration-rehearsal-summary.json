@@ -1,0 +1,110 @@
+{
+  "artifacts": {
+    "2.0.10": {
+      "artifact_tgz_sha256": "8fc583236c088694854a6e430d0612209812c938d2eca1ca630c381c9d4b171f",
+      "bridge_sha256": "fc58eb07a35b6fec9f74646f98dca90ac5576d43ed2d87cad211241efc8a8ad7",
+      "package_sha256": "23455d0245a681f2939236451cf23cb02593c0f0b80413374bd5cfea197f90c2"
+    },
+    "2.0.14": {
+      "artifact_tgz_sha256": "575af9121f86ad3eacfc6aca9d8a3e3e0856b2caa91a7d537a3c37ad3ee43907",
+      "bridge_sha256": "c8171710ece2a1881ae391902f73b89008f29ec4bd9d69d138926cd714465807",
+      "package_sha256": "0aab9cf1fc6ec3f986fb3a4865ee68a82b3c30e602d59a208aaf6e1faa100c24"
+    }
+  },
+  "assertions": {
+    "deployed_state_touched": false,
+    "evidence_checksum_entries_verified": 11,
+    "migration_count": 12,
+    "schema_table_count": 44,
+    "upgrade_restore_content_digest_preserved": "53cc88e54527921fa54146a46a3bfc5dcbc7da3e0a6670fee1da626204d47ae4"
+  },
+  "config_migration_inventory": {
+    "backup_restored_2010": [],
+    "fresh_2014": [
+      {
+        "content": {
+          "migration": "hermes-viewer-port-v1",
+          "result": "not-needed",
+          "version": 1
+        },
+        "path": "profiles/0123456789abcdef/memos-plugin/.migrations/hermes-viewer-port-v1.json",
+        "sha256": "4ee2ad2157d2103f79db9174855d55248c05e29df1dcb17cc3fa5d16a4192904"
+      }
+    ],
+    "pre_upgrade_2010": [],
+    "pristine_rollback_2010": [],
+    "upgraded_backup_restored_2014": [
+      {
+        "content": {
+          "migration": "hermes-viewer-port-v1",
+          "result": "not-needed",
+          "version": 1
+        },
+        "path": "profiles/0123456789abcdef/memos-plugin/.migrations/hermes-viewer-port-v1.json",
+        "sha256": "4ee2ad2157d2103f79db9174855d55248c05e29df1dcb17cc3fa5d16a4192904"
+      }
+    ],
+    "upgraded_copy_2014": [
+      {
+        "content": {
+          "migration": "hermes-viewer-port-v1",
+          "result": "not-needed",
+          "version": 1
+        },
+        "path": "profiles/0123456789abcdef/memos-plugin/.migrations/hermes-viewer-port-v1.json",
+        "sha256": "4ee2ad2157d2103f79db9174855d55248c05e29df1dcb17cc3fa5d16a4192904"
+      }
+    ]
+  },
+  "database_checks": [
+    {
+      "canonical_content_sha256": "53cc88e54527921fa54146a46a3bfc5dcbc7da3e0a6670fee1da626204d47ae4",
+      "migration_count": 12,
+      "quick_check": "ok",
+      "state": "backup_restored_2010",
+      "table_count": 44
+    },
+    {
+      "canonical_content_sha256": "666ce588934aa2e9011a4830f6048c801789a5ceb2b1706a42bebbff05d58567",
+      "migration_count": 12,
+      "quick_check": "ok",
+      "state": "fresh_2014",
+      "table_count": 44
+    },
+    {
+      "canonical_content_sha256": "53cc88e54527921fa54146a46a3bfc5dcbc7da3e0a6670fee1da626204d47ae4",
+      "migration_count": 12,
+      "quick_check": "ok",
+      "state": "pre_upgrade_2010",
+      "table_count": 44
+    },
+    {
+      "canonical_content_sha256": "53cc88e54527921fa54146a46a3bfc5dcbc7da3e0a6670fee1da626204d47ae4",
+      "migration_count": 12,
+      "quick_check": "ok",
+      "state": "pristine_rollback_2010",
+      "table_count": 44
+    },
+    {
+      "canonical_content_sha256": "53cc88e54527921fa54146a46a3bfc5dcbc7da3e0a6670fee1da626204d47ae4",
+      "migration_count": 12,
+      "quick_check": "ok",
+      "state": "upgraded_backup_restored_2014",
+      "table_count": 44
+    },
+    {
+      "canonical_content_sha256": "53cc88e54527921fa54146a46a3bfc5dcbc7da3e0a6670fee1da626204d47ae4",
+      "migration_count": 12,
+      "quick_check": "ok",
+      "state": "upgraded_copy_2014",
+      "table_count": 44
+    }
+  ],
+  "decision": "passed",
+  "schema": "agentic.memory.phase9a-migration-sanitized.v1",
+  "scope": "isolated synthetic data only; deployed state untouched",
+  "versions": {
+    "2.0.10": "2.0.10",
+    "2.0.14": "2.0.14"
+  }
+}
