@@ -46,6 +46,38 @@ class _Plutil:
 
 
 class SchedulerGate12Test(unittest.TestCase):
+    def test_loaded_idle_launch_agents_are_observed_as_loaded(self) -> None:
+        class IdleRunner:
+            def run(self, argv, *, shell):
+                return type("Result", (), {
+                    "returncode": 0,
+                    "stdout": b"state = not running\nlast exit code = 0\n",
+                    "stderr": b"",
+                })()
+
+        self.assertEqual(
+            scheduler_doctor.observe_loaded_state(
+                IdleRunner(), launchctl="/bin/launchctl", uid=501,
+            ),
+            {label: True for label in scheduler_lifecycle.LABELS},
+        )
+
+    def test_loaded_launch_agents_that_never_exited_are_observed_as_loaded(self) -> None:
+        class NeverExitedRunner:
+            def run(self, argv, *, shell):
+                return type("Result", (), {
+                    "returncode": 0,
+                    "stdout": b"state = not running\nlast exit code = (never exited)\n",
+                    "stderr": b"",
+                })()
+
+        self.assertEqual(
+            scheduler_doctor.observe_loaded_state(
+                NeverExitedRunner(), launchctl="/bin/launchctl", uid=501,
+            ),
+            {label: True for label in scheduler_lifecycle.LABELS},
+        )
+
     def _jobs(self) -> dict[str, bytes]:
         return {
             scheduler_lifecycle.AUTO_DREAM_LABEL: plistlib.dumps({

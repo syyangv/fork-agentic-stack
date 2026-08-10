@@ -221,13 +221,17 @@ def _launchd_state(runner: object, launchctl: str, uid: int, label: str) -> tupl
             return False, 0
         raise ValueError("launchctl observation failed without not-found attestation")
     text = output.decode("utf-8", "strict")
-    state_match = re.search(r"(?mi)^\s*state\s*=\s*([a-z-]+)\s*$", text)
+    state_match = re.search(r"(?mi)^\s*state\s*=\s*([a-z-]+(?: [a-z-]+)?)\s*$", text)
     match = re.search(r"(?mi)^\s*last exit (?:code|status)\s*=\s*(-?\d+)\s*$", text)
-    if state_match is None or match is None or state_match.group(1) not in {
-        "running", "waiting", "exited", "spawned",
-    }:
+    never_exited = re.search(
+        r"(?mi)^\s*last exit (?:code|status)\s*=\s*\(never exited\)\s*$", text,
+    )
+    valid_state = state_match is not None and state_match.group(1) in {
+        "running", "not running", "waiting", "exited", "spawned",
+    }
+    if not valid_state or (match is None and never_exited is None):
         raise ValueError("launchctl observation is malformed")
-    last_exit = int(match.group(1))
+    last_exit = 0 if match is None else int(match.group(1))
     if not -(2 ** 31) <= last_exit < 2 ** 31:
         raise ValueError("launchctl last exit is invalid")
     return True, last_exit
