@@ -35,6 +35,8 @@ from .scheduled_review_health import default_scheduler_path, inspect_scheduler
 
 def _owned_memos_profile_configs(data_root: Path) -> tuple[tuple[Path, str], ...]:
     """Resolve only manifest-attested active/rollback configs and validate topology."""
+    if data_root.is_symlink():
+        raise ValueError("MemOS data root is symlinked")
     if not data_root.exists():
         return ()
     expected = memos_config_migration.owned_config_paths(data_root)
@@ -55,7 +57,9 @@ def _owned_memos_profile_configs(data_root: Path) -> tuple[tuple[Path, str], ...
                 raise ValueError("MemOS profile topology contains a symlink")
             current = current.parent
         info = config_path.lstat()
-        if not config_path.is_file() or (hasattr(os, "getuid") and info.st_uid != os.getuid()):
+        parent = config_path.parent.stat()
+        if (not config_path.is_file() or info.st_nlink != 1 or info.st_gid != parent.st_gid
+                or (hasattr(os, "getuid") and info.st_uid != os.getuid())):
             raise ValueError("MemOS profile is not a regular owner-managed file")
         if info.st_mode & 0o022:
             raise ValueError("MemOS profile mode is unsafe")

@@ -198,6 +198,35 @@ class DoctorOrchestrationHealthTest(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "symlink"):
                 doctor._owned_memos_profile_configs(data)
 
+    def test_memos_profile_ownership_rejects_dangling_root_and_hard_link(self):
+        project = "0123456789abcdef"
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            dangling = root / "dangling-memos"
+            dangling.symlink_to(root / "missing", target_is_directory=True)
+            with self.assertRaisesRegex(ValueError, "data root is symlinked"):
+                doctor._owned_memos_profile_configs(dangling)
+
+            data = root / "memos"
+            pilots = data / "pilot-configs"
+            pilots.mkdir(parents=True)
+            manifest = pilots / f"{project}.json"
+            manifest.write_text(json.dumps({
+                "schema": "agentic.memory.evolution-pilot.v2", "enabled": False,
+                "project_id": project, "repo_root": tmp, "provider": "claude_opus",
+                "model": "opus", "daily_caps": {}, "min_distinct_episodes": 3,
+                "timeout_seconds": 60,
+            }))
+            manifest.chmod(0o600)
+            outside = root / "foreign-config"
+            outside.write_text("{}")
+            outside.chmod(0o600)
+            config = data / project / "profiles" / project / "memos-plugin" / "config.yaml"
+            config.parent.mkdir(parents=True)
+            os.link(outside, config)
+            with self.assertRaisesRegex(ValueError, "owner-managed"):
+                doctor._owned_memos_profile_configs(data)
+
     def test_memos_process_requires_matching_bridge_and_project_attestation(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
