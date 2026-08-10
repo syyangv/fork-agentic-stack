@@ -153,8 +153,12 @@ def _replacement(snapshot: ConfigSnapshot) -> bytes | None:
         raise ValueError(f"managed MemOS config is not an object: {snapshot.path}")
     embedding = value.get("embedding")
     approved = {"enabled": False, "provider": "lexical", "engine": "sqlite_fts5"}
-    if embedding == approved:
+    project_id = snapshot.path.parts[-3]
+    target = approved_config(project_id)
+    if value == target:
         return None
+    if embedding == approved:
+        raise ValueError(f"managed MemOS lexical config is not exact: {snapshot.path}")
     if embedding not in (
         {"provider": "local", "model": "Xenova/all-MiniLM-L6-v2"},
         {"provider": "local", "model": "Xenova/all-MiniLM-L6-v2",
@@ -169,8 +173,7 @@ def _replacement(snapshot: ConfigSnapshot) -> bytes | None:
                  "maxRetries": 0},
             )):
         raise ValueError(f"managed MemOS legacy config violates offline policy: {snapshot.path}")
-    value = approved_config(snapshot.path.parts[-3])
-    return (json.dumps(value, separators=(",", ":"), sort_keys=True) + "\n").encode("utf-8")
+    return (json.dumps(target, separators=(",", ":"), sort_keys=True) + "\n").encode("utf-8")
 
 
 def _same_identity(snapshot: ConfigSnapshot) -> bool:
