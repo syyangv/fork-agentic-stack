@@ -1,0 +1,8 @@
+{
+  "evidence:egress-attempts.jsonl": "a73e70eaa7c825821566037061bbf00cf8d446408b206397ce7b16f1690ebf0a",
+  "evidence:raw-ledger.json": "643451c285fc43670c49a358e00f820268815758bed1fea556daea7b1dad86f9",
+  "evidence:summary.json": "de28bb9b9a9574dff93639cc8f7a37a8e1e224e5cab0c1252a2a3a7bb4968520",
+  "repo:tests/qualification/phase9a_memos_214_offline_benchmark.py": "dec4181809fc92df72ede5731a1c60769534f9cc31566d5a905bd907385f32a2",
+  "runtime:dist/bridge.cjs": "c8171710ece2a1881ae391902f73b89008f29ec4bd9d69d138926cd714465807",
+  "runtime:package.json": "0aab9cf1fc6ec3f986fb3a4865ee68a82b3c30e602d59a208aaf6e1faa100c24"
+}

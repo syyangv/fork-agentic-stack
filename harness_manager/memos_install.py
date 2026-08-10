@@ -17,13 +17,14 @@ from typing import Callable, Sequence
 
 
 MEMOS_PLUGIN_NAME = "@memtensor/memos-local-plugin"
-MEMOS_PLUGIN_VERSION = "2.0.10"
+MEMOS_PLUGIN_VERSION = "2.0.14"
 MEMOS_PLUGIN_INTEGRITY = (
-    "sha512-Rg2NIjGAObTC3zFQ4wOzB+hxR7qHvHWMVI5Nxc+7QEi5wpBUibkniz3SdHOPrbbCkqhatS0DjZ+aUexl/9Q+EA=="
+    "sha512-yEAroCSBfdf7urP47Hyr2MzTg4BPLIWqlno5r0imHb69s8fh7uXZRuPK23IWCzDFIWuPK/SuZfk8u3MdGQOzLg=="
 )
-MEMOS_PLUGIN_SHASUM = "d75850ce7340d56b8a255831969950b9fbf96995"
+MEMOS_PLUGIN_SHASUM = "32639d241918c7da8d536e52eac7e0a7c42c312e"
+MEMOS_DISTRIBUTION = "agentic-stack-memos-2.0.14-lexical.1"
 MINIMUM_NODE_MAJOR = 20
-LOCK_ASSET_DIR = Path(__file__).resolve().parent / "assets" / "memos-2.0.10"
+LOCK_ASSET_DIR = Path(__file__).resolve().parent / "assets" / "memos-2.0.14"
 _SAFE_ENV_KEYS = (
     "PATH", "LANG", "LC_ALL", "TMPDIR", "TEMP", "TMP",
     "SystemRoot", "ComSpec", "PATHEXT",
@@ -183,12 +184,15 @@ def install_verified_tarball(
             )
         staged_package = staging / package_rel
         _validate_package_version(staged_package)
+        _apply_reviewed_lexical_delta(staged_package)
+        _prune_model_loader_dependencies(staging, Path(lock_asset_dir))
         (staging / "plugin.tgz").unlink(missing_ok=False)
         marker = {
             "artifact_sha1": artifact.sha1,
             "integrity": artifact.integrity,
             "package": MEMOS_PLUGIN_NAME,
             "version": MEMOS_PLUGIN_VERSION,
+            "distribution": MEMOS_DISTRIBUTION,
         }
         file_manifest = _build_file_manifest(staging)
         manifest_path = staging / ".agentic-stack-files.json"
@@ -241,6 +245,127 @@ def _validate_package_version(package_dir: Path) -> None:
         )
     if not (package_dir / "dist" / "bridge.cjs").is_file():
         raise RuntimeError("installed MemOS package is missing dist/bridge.cjs")
+
+
+_LEXICAL_DELTA_FILES = {
+    "core/config/schema.ts": "d4884f1339c00125ae1d7e21b522ee4ce4c4c5920acf3131a9f84b6b2f5995b5",
+    "core/config/defaults.ts": "b0992d4dbbeefaf1cb60fe01baa99a9c9eee664d98cd10a7c92aad93d14cff74",
+    "core/pipeline/memory-core.ts": "dfe4eb6741686c00ba0433b96da054c658071f87b0bc8f1e83f484a03fcec721",
+    "dist/core/config/schema.js": "3ef95230ecfc99b1d9b4b266f6845324f69a63289d0cf89b1b7830aec947af06",
+    "dist/core/config/defaults.js": "a0eb9e13f6523a1a09979463405b46af173d68dcb0fc4805ac5cdf406278e2f5",
+    "dist/core/pipeline/memory-core.js": "cb811d6b4ebfa0bb395d376a8d743bf780dea1826610209b0f0fa79d5d81428d",
+    "core/embedding/embedder.ts": "dfde79b44a4716247f377511b9186a6cba57a3233b8a7fb638494a32fe0755eb",
+    "dist/core/embedding/embedder.js": "41d6f1a0af4a5440b79bb9d1081a8b12eacbd20b0ceb9880ab542cefd71c6621",
+    "core/embedding/index.ts": "3c8a4618194ab388e943e52cb7251e214ab22fa4ae9dcb650d11822742ef8f4d",
+    "dist/core/embedding/index.js": "449d01d449c824d60fd7a612c81cedae12304651e6838e0b8708d204397d495b",
+}
+
+
+def _apply_reviewed_lexical_delta(package_dir: Path) -> None:
+    """Apply the deterministic, source-attested lexical-only 2.0.14 delta.
+
+    The npm tarball remains the pristine upstream input.  The installed tree
+    is deliberately identified by ``MEMOS_DISTRIBUTION`` and its exact file
+    manifest; it must never be described as the pristine upstream package.
+    """
+    for relative, expected in _LEXICAL_DELTA_FILES.items():
+        path = package_dir / relative
+        try:
+            payload = path.read_bytes()
+        except OSError as exc:
+            raise RuntimeError(f"MemOS lexical delta input is missing: {relative}") from exc
+        if not hmac.compare_digest(hashlib.sha256(payload).hexdigest(), expected):
+            raise RuntimeError(f"MemOS lexical delta input mismatch: {relative}")
+        text = payload.decode("utf-8")
+        if relative.endswith("schema.ts"):
+            old, new = (
+                "const EmbeddingSchema = Type.Object({\n  provider:",
+                "const EmbeddingSchema = Type.Object({\n  /** Disable all embedding provider construction and model loading. */\n  enabled: Bool(true),\n  /** Non-model retrieval is represented explicitly for managed profiles. */\n  engine: Type.Optional(Type.Literal(\"sqlite_fts5\")),\n  provider:",
+            )
+        elif relative.endswith("schema.js"):
+            old, new = (
+                "const EmbeddingSchema = Type.Object({\n    provider:",
+                "const EmbeddingSchema = Type.Object({\n    /** Disable all embedding provider construction and model loading. */\n    enabled: Bool(true),\n    /** Non-model retrieval is represented explicitly for managed profiles. */\n    engine: Type.Optional(Type.Literal(\"sqlite_fts5\")),\n    provider:",
+            )
+        elif relative.endswith("defaults.ts"):
+            old, new = "  embedding: {\n    provider:", "  embedding: {\n    enabled: true,\n    provider:"
+        elif relative.endswith("defaults.js"):
+            old, new = "    embedding: {\n        provider:", "    embedding: {\n        enabled: true,\n        provider:"
+        elif relative.endswith("embedding/index.ts"):
+            old = 'export { LocalEmbeddingProvider, __resetLocalExtractorForTests } from "./providers/local.js";'
+            new = "// Local embedding exports removed by the reviewed lexical distribution."
+        elif relative.endswith("embedding/index.js"):
+            old = 'export { LocalEmbeddingProvider, __resetLocalExtractorForTests } from "./providers/local.js";'
+            new = "// Local embedding exports removed by the reviewed lexical distribution."
+        elif relative.endswith("embedder.ts"):
+            old = 'import { LocalEmbeddingProvider } from "./providers/local.js";'
+            new = "// Local model loading is removed by the reviewed lexical distribution."
+        elif relative.endswith("embedding/embedder.js"):
+            old = 'import { LocalEmbeddingProvider } from "./providers/local.js";'
+            new = "// Local model loading is removed by the reviewed lexical distribution."
+        elif relative.endswith("memory-core.ts"):
+            old, new = "  try {\n    embedder = createEmbedder({", "  try {\n    if (config.embedding.enabled === false) {\n      log.info(\"embedder.disabled\", { retrieval: \"lexical_fts\" });\n    } else embedder = createEmbedder({"
+        else:
+            old, new = "    try {\n        embedder = createEmbedder({", "    try {\n        if (config.embedding.enabled === false) {\n            log.info(\"embedder.disabled\", { retrieval: \"lexical_fts\" });\n        }\n        else embedder = createEmbedder({"
+        if text.count(old) != 1:
+            raise RuntimeError(f"MemOS lexical delta anchor mismatch: {relative}")
+        text = text.replace(old, new)
+        if relative.endswith(("schema.ts", "schema.js")):
+            anchor = 'Type.Literal("local"),'
+            if text.count(anchor) != 1:
+                raise RuntimeError(f"MemOS lexical provider anchor mismatch: {relative}")
+            text = text.replace(anchor, 'Type.Literal("lexical"),\n        ' + anchor)
+        if relative.endswith(("embedder.ts", "embedding/embedder.js")):
+            local_case = 'case "local":\n      return new LocalEmbeddingProvider();' if relative.endswith(".ts") else 'case "local":\n            return new LocalEmbeddingProvider();'
+            replacement = 'case "local":\n      throw new MemosError(ERROR_CODES.UNSUPPORTED, "Local embedding is removed in the lexical distribution");' if relative.endswith(".ts") else 'case "local":\n            throw new MemosError(ERROR_CODES.UNSUPPORTED, "Local embedding is removed in the lexical distribution");'
+            if text.count(local_case) != 1:
+                raise RuntimeError(f"MemOS local loader anchor mismatch: {relative}")
+            text = text.replace(local_case, replacement)
+        path.write_text(text, encoding="utf-8")
+
+    package_json = package_dir / "package.json"
+    package = json.loads(package_json.read_text(encoding="utf-8"))
+    dependencies = package.get("dependencies")
+    if not isinstance(dependencies, dict) or dependencies.pop("@huggingface/transformers", None) is None:
+        raise RuntimeError("MemOS lexical delta package dependency anchor mismatch")
+    package["agenticStackDistribution"] = MEMOS_DISTRIBUTION
+    package_json.write_text(json.dumps(package, indent=2) + "\n", encoding="utf-8")
+
+    # Remove both source and built local loaders. Static imports were removed
+    # above, so retaining these files would only preserve an unapproved loader.
+    for relative in ("core/embedding/providers/local.ts", "dist/core/embedding/providers/local.js", "dist/core/embedding/providers/local.d.ts"):
+        path = package_dir / relative
+        if not path.is_file():
+            raise RuntimeError(f"MemOS lexical loader input is missing: {relative}")
+        path.unlink()
+
+
+def _prune_model_loader_dependencies(staging: Path, lock_asset_dir: Path) -> None:
+    """Make the final installed dependency tree match the lexical lock."""
+    lexical_lock_path = lock_asset_dir / "package-lock.lexical.json"
+    try:
+        lexical = json.loads(lexical_lock_path.read_text(encoding="utf-8"))
+        original = json.loads((staging / "package-lock.json").read_text(encoding="utf-8"))
+        keep = set(lexical["packages"])
+        installed = set(original["packages"])
+    except (OSError, KeyError, TypeError, json.JSONDecodeError) as exc:
+        raise RuntimeError("MemOS lexical dependency lock is invalid") from exc
+    for key in sorted(installed - keep, key=lambda value: value.count("/"), reverse=True):
+        if not key.startswith("node_modules/"):
+            continue
+        path = staging / key
+        if path.is_symlink() or path.is_file():
+            path.unlink(missing_ok=True)
+        elif path.is_dir():
+            shutil.rmtree(path)
+    # npm's hidden lock describes the pre-prune tree and is not authoritative
+    # for this immutable distribution. The reviewed top-level lexical lock is.
+    (staging / "node_modules" / ".package-lock.json").unlink(missing_ok=True)
+    for directory, directories, files in os.walk(staging / "node_modules", topdown=False):
+        path = Path(directory)
+        if path != staging / "node_modules" and not any(path.iterdir()):
+            path.rmdir()
+    shutil.copy2(lexical_lock_path, staging / "package-lock.json")
 
 
 def _prepare_locked_install(
@@ -298,6 +423,8 @@ def _validate_installed_package(
         raise RuntimeError("existing MemOS code directory came from a different artifact")
     if marker.get("version") != MEMOS_PLUGIN_VERSION:
         raise RuntimeError("existing MemOS code directory has an invalid version marker")
+    if marker.get("distribution") != MEMOS_DISTRIBUTION:
+        raise RuntimeError("existing MemOS code directory lacks the reviewed lexical delta")
     if marker.get("integrity") != integrity or marker.get("package") != MEMOS_PLUGIN_NAME:
         raise RuntimeError("existing MemOS code directory has invalid artifact metadata")
     manifest_path = plugin_dir / ".agentic-stack-files.json"
@@ -343,7 +470,10 @@ def _make_tree_immutable(root: Path) -> None:
             if path.is_symlink():
                 _validate_internal_symlink(path, resolved_root)
             else:
-                os.chmod(path, 0o444)
+                # Preserve executability for native/CLI payloads while still
+                # removing every write bit from the immutable code tree.
+                executable = bool(path.stat().st_mode & 0o111)
+                os.chmod(path, 0o555 if executable else 0o444)
         for name in directories:
             path = Path(directory) / name
             if path.is_symlink():

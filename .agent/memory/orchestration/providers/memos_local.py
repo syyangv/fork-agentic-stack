@@ -141,9 +141,10 @@ class MemosLocalProvider:
                     "eventId": event.event_id, "runId": event.run_id,
                     "harness": event.harness, "projectId": event.project_id,
                 },
-            }, True
+            }, False
             yield "turn.start", {
                 **common, "userText": event.intent[:2000],
+                "turnKey": event.idempotency_key,
                 "contextHints": {
                     "eventId": event.event_id, "harness": event.harness,
                     "revision": event.revision, "runId": event.run_id,
@@ -190,8 +191,8 @@ class MemosLocalProvider:
                 },
                 "ts": timestamp,
             }, False
-            yield "episode.close", {"episodeId": episode_id}, True
-            yield "session.close", {"sessionId": session_id}, True
+            yield "episode.close", {"episodeId": episode_id}, False
+            yield "session.close", {"sessionId": session_id}, False
         elif event.event_type == "retrieval.used":
             # Decision/recovery retrieval is exercised in shadow and discarded.
             lifecycle = self.journal.lifecycle(event.run_id)
@@ -230,7 +231,12 @@ class MemosLocalProvider:
             return result
         with self.journal.delivery_worker():
             try:
-                self._ensure_validated()
+                validation_timeout = (
+                    _remaining(self._assist_deadline)
+                    if self.mode == "assist" and self._assist_deadline is not None
+                    else _UPSTREAM_COLD_START_TIMEOUT
+                )
+                self._ensure_validated(timeout=validation_timeout)
             except Exception:
                 return result
             for _ in range(limit):
@@ -238,9 +244,17 @@ class MemosLocalProvider:
                 if delivery is None:
                     break
                 try:
+                    timeout = self._delivery_timeout(delivery.method)
+                    params = delivery.params
+                    if delivery.method == "turn.start":
+                        assert timeout is not None
+                        params = {
+                            **params,
+                            "deadlineAt": int((time.time() + timeout) * 1000),
+                        }
                     response = self.client.call(
-                        delivery.method, delivery.params,
-                        timeout=_method_timeout(delivery.method),
+                        delivery.method, params,
+                        timeout=timeout,
                         retryable=delivery.retryable,
                     )
                     if delivery.method == "turn.start":
@@ -276,6 +290,13 @@ class MemosLocalProvider:
                     if delivery.method == "turn.start":
                         self._materialize_completion(run_id)
         return result
+
+    def _delivery_timeout(self, method: str) -> float | None:
+        method_timeout = _method_timeout(method)
+        if self.mode != "assist" or self._assist_deadline is None:
+            return method_timeout
+        remaining = _remaining(self._assist_deadline)
+        return min(method_timeout, remaining) if method_timeout else remaining
 
     def _materialize_completion(self, run_id: str) -> None:
         raw = self.journal.deferred_completion(run_id)
@@ -340,6 +361,16 @@ class MemosLocalProvider:
             return [], {
                 "status": "degraded", "mode": self.mode, "version": None,
                 "queue": {}, "warnings": [self._session_lock_error],
+                "assist_candidates": 0,
+            }
+        if deadline <= time.monotonic():
+            health = self.health(probe=False)
+            return [], {
+                **health, "status": "degraded",
+                "warnings": [
+                    *health.get("warnings", []),
+                    "behavioral_retrieval_deadline_exhausted",
+                ],
                 "assist_candidates": 0,
             }
         if run_id:

@@ -1,0 +1,81 @@
+{
+  "completed_episodes": 150,
+  "context_bytes": {
+    "p50_bytes": 1781.0,
+    "p95_bytes": 1811.0
+  },
+  "corpus_id": "phase9a-memos-2.0.14-synthetic-v2-five-relevant-per-query",
+  "corpus_policy": "generated synthetic/training only; no held-out material",
+  "cross_project_leak_hits": 0,
+  "degradation_errors": [],
+  "disabled_baseline": {
+    "duplicate_episodes": 0,
+    "injected_context_bytes": 0,
+    "usefulness_rate": 0
+  },
+  "duplicate_episode_rate": 0.0,
+  "duplicate_logical_turns": 0,
+  "evaluation_queries": 30,
+  "gate_assessment": {
+    "limitations": [
+      "Synthetic replay can authorize R8 preparation only, never activation.",
+      "NODE_OPTIONS socket hooks cover Node networking APIs but are not packet capture.",
+      "Usefulness is deterministic expected-solution presence, not blinded human scoring."
+    ],
+    "plausibly_clears_r8_preparation_bar": true,
+    "stop_recommendation": null
+  },
+  "instrumented_socket_attempt_apis": [],
+  "instrumented_socket_attempt_targets": [],
+  "latency": {
+    "episode_close": {
+      "p50_ms": 1.103,
+      "p95_ms": 1.318
+    },
+    "health": {
+      "p50_ms": 542.823,
+      "p95_ms": 542.823
+    },
+    "search": {
+      "p50_ms": 2.415,
+      "p95_ms": 2.97
+    },
+    "session_close": {
+      "p50_ms": 0.245,
+      "p95_ms": 0.549
+    },
+    "session_open": {
+      "p50_ms": 0.44,
+      "p95_ms": 0.682
+    },
+    "total": {
+      "p50_ms": 7.373,
+      "p95_ms": 13.849
+    },
+    "turn_end": {
+      "p50_ms": 0.921,
+      "p95_ms": 3.069
+    },
+    "turn_start": {
+      "p50_ms": 4.464,
+      "p95_ms": 7.126
+    }
+  },
+  "modes": {
+    "assist": false,
+    "benchmark": "isolated shadow-only",
+    "deployed": "unchanged/off",
+    "evolution": false,
+    "r8_run": false
+  },
+  "observed_egress_attempts": 0,
+  "precision_among_returned": 1.0,
+  "precision_at_5": 1.0,
+  "precision_at_5_method": "conventional fixed-denominator P@5: relevant hits in first five / (evaluation queries * 5); corpus preregisters five relevant traces per query",
+  "query_usefulness_rate": 1.0,
+  "relevant_documents_per_query": 5,
+  "runtime_version": "2.0.14",
+  "schema": "agentic.memory.phase9a-offline-qualification.v1",
+  "shutdown_ms": 23.003,
+  "task_categories": 5
+}

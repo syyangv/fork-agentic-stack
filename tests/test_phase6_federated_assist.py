@@ -49,7 +49,7 @@ class FakeClient:
         self.calls = []
 
     def health(self, *, timeout=None):
-        return {"ok": True, "version": "2.0.10", "capabilities": ("memory.search",)}
+        return {"ok": True, "version": "2.0.14", "capabilities": ("memory.search",)}
 
     def call(self, method, params, *, timeout=None, retryable=False):
         self.calls.append((method, params, timeout, retryable))

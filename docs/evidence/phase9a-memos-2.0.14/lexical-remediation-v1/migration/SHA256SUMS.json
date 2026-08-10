@@ -1,0 +1,13 @@
+{
+  "artifact:memos-local-plugin-2.0.10.tgz": "8fc583236c088694854a6e430d0612209812c938d2eca1ca630c381c9d4b171f",
+  "artifact:memos-local-plugin-2.0.14.tgz": "575af9121f86ad3eacfc6aca9d8a3e3e0856b2caa91a7d537a3c37ad3ee43907",
+  "backup:pre-upgrade/manifest.json": "735bafcc13faca2169634d224170a5729a2d7eadc6ad56001c4d0b22cda390ee",
+  "backup:upgraded/manifest.json": "4eecda7020d72e9ce2557b4efc3c80ef63b953647379ed733aa48079f30f9711",
+  "evidence:migration-evidence.json": "66454881ecf510f99dc8e8bd9e4b4e20271f0f91f48e560c694f49fc0337cd09",
+  "repo:tests/qualification/phase9a_memos_214_migration_rehearsal.py": "5db00ddd2dd94c02fe100033ab7402231d0b4605630c2d07ada6b3e090fa1b3c",
+  "runtime-2.0.10:dist/bridge.cjs": "fc58eb07a35b6fec9f74646f98dca90ac5576d43ed2d87cad211241efc8a8ad7",
+  "runtime-2.0.10:package.json": "23455d0245a681f2939236451cf23cb02593c0f0b80413374bd5cfea197f90c2",
+  "runtime-2.0.14:dist/bridge.cjs": "c8171710ece2a1881ae391902f73b89008f29ec4bd9d69d138926cd714465807",
+  "runtime-2.0.14:package-lock.json": "acb61ce0d0806fae9fb155cc1fa18cccb8275ffa5f27a0857567f3973f160f92",
+  "runtime-2.0.14:package.json": "1b6349dcc3fac8cbc27962a00c35b5abbab73a6166c6d28d73db6de55f97a708"
+}

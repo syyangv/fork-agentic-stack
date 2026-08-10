@@ -1,0 +1,94 @@
+{
+  "artifact_attestation": {
+    "common_manifest_sha256": "9f7b082daee46beb4b689c34935b7c6c933fa49277d275ad7d3d775ea1d3f673",
+    "full_manifest_sha256": "26a6e3eba5ba2cef555a80f27643f74687fb855e4d2401c592539bb591d944c9",
+    "native": {
+      "node_modules/better-sqlite3/build/Release/better_sqlite3.node": [
+        "1946ab352978b5b3493f99080dc04ed6d0a4157c511c7139cbf50b3d44d8d560",
+        1931552
+      ],
+      "node_modules/esbuild/bin/esbuild": [
+        "e2dc9a52440a2a34f09434a2f4843cb1e30f84e40dcf238976ec61ef8cd7f36a",
+        10573778
+      ]
+    },
+    "platform": "darwin-arm64",
+    "platform_variant_paths": [
+      "node_modules/better-sqlite3/build/Release/better_sqlite3.node",
+      "node_modules/esbuild/bin/esbuild"
+    ],
+    "schema": "agentic.memory.phase9a-runtime-attestation.v2"
+  },
+  "constraints": {
+    "production_changed": false,
+    "r8_run": false,
+    "raw_evidence_committed": false,
+    "reason": "avoid publishing host paths, symbols, addresses, and process metadata"
+  },
+  "review_scope": {
+    "candidate": "Darwin ARM64 MemOS 2.0.14 lexical distribution",
+    "durable_summary": "zero-egress-summary.json",
+    "raw_evidence_retention": "owner-local /private/tmp/phase9a-arm64-xctrace-run-20260810f; not committed because XML contains host paths and addresses",
+    "source_head": "72f8ce1"
+  },
+  "reviewed_at": "2026-08-10",
+  "reviewer": {
+    "agent_task": "senior_pr16_final_review",
+    "harness": "Codex",
+    "role": "independent senior engineer"
+  },
+  "schema": "agentic.memory.phase9a-independent-trace-review.v1",
+  "verdict": "CLEAN for Phase 9A Darwin ARM64 qualification evidence; does not authorize deployment, activation, or R8",
+  "verification": {
+    "all_normalized_observations_match": true,
+    "all_raw_hashes_match": true,
+    "candidate_child_creations": 0,
+    "candidate_network_attempts": 0,
+    "child_boundary_canary_detected_child_creation": true,
+    "direct_canary_calls": [
+      "socket",
+      "connect",
+      "sendto"
+    ],
+    "method": "For every run, recomputed raw .trace tree, syscall XML, and target-output SHA-256; reparsed XML with scripts/qualify_memos_arm64_xctrace.py::parse_syscalls; required exact equality with each durable normalized observation.",
+    "runs": [
+      {
+        "label": "direct-canary",
+        "syscall_export_sha256": "99485c48963d5d507fe1b3642acb98615c1c211eaf7a3e5812dc3b1dfb87e8b5",
+        "target_output_sha256": "ef69350cba2cb80c3a5e4c0377e963ff15bb658819285efac274ef3fead35a20",
+        "trace_tree_sha256": "1eb502d935257615378b95b87f52817de8d4f606d6141bc5c40cc2713f7eb89d"
+      },
+      {
+        "label": "child-boundary-canary",
+        "syscall_export_sha256": "3bcb4e04e7172f2c855fd24a4ecd77d943049d24c02b074f6c44bf17c266616a",
+        "target_output_sha256": "7d8925c2b24674dfdaf0f5018c906e6f3a9d42f5983c4e2449cae9cee72f2644",
+        "trace_tree_sha256": "e608edce79c8419888c418b4ea866ff693ddd8b17fd53cc1595a366c4c7f32ff"
+      },
+      {
+        "label": "source-2.0.10",
+        "syscall_export_sha256": "e4d6ff9ad7fd593c88ed383ee5db525e0cd4fcda28c1e73dcb519f8c177535fe",
+        "target_output_sha256": "5199b8ce874b70fca75eeee7eab278806057f99c4c777dc77cced42ec18cb19b",
+        "trace_tree_sha256": "d47c2a64782e885d09b881f37be189ee168b3a01401b6f21a462eeb7d6f0ae5e"
+      },
+      {
+        "label": "fresh-2.0.14",
+        "syscall_export_sha256": "376d2e13554ededa8b58105846f0cfff1279eaf8cdf39a22745bc57a3c53db64",
+        "target_output_sha256": "c9ffb70b0d9bac95149e4d0a6f9e3c22e8ca8f5dea712ad1bf457cfbb48bf3e7",
+        "trace_tree_sha256": "00c9b6729d3d6243f0aa7e3a32de9d528d056cd606032ea10a6d2c80046acde4"
+      },
+      {
+        "label": "copied-2.0.10-opened-by-2.0.14",
+        "syscall_export_sha256": "32864adc328dcb99f75f9f2994216785ab39bb1cd5ac42afd3a0e3b80a84d5e4",
+        "target_output_sha256": "5cfcfa3c385935bea19a0b6a0a4850095fc27776d09bf2b6084f0c6f5f99120b",
+        "trace_tree_sha256": "62972dc1d94694c78aceb690a543d97fdb1a6d6befea9490f127f4b0df662824"
+      },
+      {
+        "label": "restored-2.0.10-opened-by-2.0.14",
+        "syscall_export_sha256": "2b9a8d9744fd06ff92fde7702e0e8fb7c73669ed39c096cd97756ca18917cd80",
+        "target_output_sha256": "c10da59d12e0293698072dfede223b410dd9c5772f75246cccdcd6aae83401b5",
+        "trace_tree_sha256": "c3fa46c29932127a7389c01415e1fd8b71f7a46bbebd3dc97bcaef7c19ba68fc"
+      }
+    ],
+    "verifier_sha256": "acc479a253d053e36a6afc94a15dccb47ef71bb281b679e27c509bbe593cc385"
+  }
+}

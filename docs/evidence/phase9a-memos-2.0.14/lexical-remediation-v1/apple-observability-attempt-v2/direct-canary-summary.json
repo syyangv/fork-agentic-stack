@@ -1,0 +1,52 @@
+{
+  "network_syscalls": [
+    {
+      "arguments": [
+        "0x2",
+        "0x1",
+        "0x0",
+        "0x16b30da90"
+      ],
+      "call": "socket",
+      "errno": [
+        "0x0"
+      ]
+    },
+    {
+      "arguments": [
+        "0x3",
+        "0x16b30e098",
+        "0x10",
+        "0x1"
+      ],
+      "call": "connect",
+      "errno": [
+        "0x1"
+      ]
+    },
+    {
+      "arguments": [
+        "0x2",
+        "0x2",
+        "0x0",
+        "0x16b30da90"
+      ],
+      "call": "socket",
+      "errno": [
+        "0x0"
+      ]
+    },
+    {
+      "arguments": [
+        "0x3",
+        "0x104c678f0",
+        "0x6",
+        "0x0"
+      ],
+      "call": "sendto",
+      "errno": [
+        "0x1"
+      ]
+    }
+  ]
+}

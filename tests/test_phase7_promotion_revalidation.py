@@ -321,7 +321,7 @@ class EvidenceAndRevalidationTest(unittest.TestCase):
 
         class Client:
             def health(self, *, timeout=None):
-                return {"version": "2.0.10"}
+                return {"version": "2.0.14"}
 
             def call(self, method, params, *, timeout=None, retryable=False):
                 if method == "memory.search":

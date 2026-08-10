@@ -1,6 +1,6 @@
 """Quiesced, whole-project backup and rollback for MemOS runtime state.
 
-MemOS 2.0.10 has no backup RPC.  These helpers therefore operate only while
+MemOS 2.0.14 has no backup RPC.  These helpers therefore operate only while
 holding the same per-project lock used by the delivery worker and preserve the
 entire project root, including SQLite WAL/SHM files and the active profile.
 """

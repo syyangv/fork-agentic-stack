@@ -35,8 +35,11 @@ recovery attempts and selected item outcomes (`used`, `contradicted`, or
 `ignored`). Task completion sends those outcomes and bounded verification
 evidence to MemOS as context hints.
 
-MemOS search is namespace-scoped and has a 700 ms total local deadline. Thin
-2.0.10 search hits are enriched through read-only detail methods. Skill detail
+MemOS search is namespace-scoped and has a 700 ms total local deadline. The
+host's monotonic deadline is authoritative across health checks, delivery,
+transport retry, and bridge shutdown. `deadlineAt` is only an advisory
+wall-clock hint to MemOS; ignored or expired hints never extend the host budget. Thin
+2.0.14 search hits are enriched through read-only detail methods. Skill detail
 uses `skill.list`; `skill.get` is intentionally avoided because it records a
 usage/trial side effect. Missing ownership, hub-shared results, foreign project
 ownership, sensitive plaintext, and malformed results are never injected.
@@ -50,7 +53,7 @@ Upstream `active` remains a behavioral observation and always maps to local
 `memory_orchestrate.py candidates --intent ...` previews candidates, and
 `--stage` adds them to the review queue.
 
-The pinned MemOS 2.0.10 bridge exposes no policy-list or decision-repair
+The pinned MemOS 2.0.14 bridge exposes no policy-list or decision-repair
 list/get RPC. Policies may therefore be discovered only through search and
 safe enrichment. Repair-shaped policy guidance remains a policy candidate;
 the system never opens MemOS SQLite or pretends a trace is a decision repair.
@@ -87,9 +90,17 @@ project ID. The default profile remains `lightweightMemory.enabled: true`.
 Recognized managed profiles can be switched back to lightweight mode without
 deleting behavioral data.
 
+The managed default is model-free: `embedding.enabled` is false and retrieval
+uses the pinned `lexical` / `sqlite_fts5` path. MemOS receives no embedding or
+LLM provider credentials, model IDs, or remote fallback. The only model-backed
+exception is the separately gated evolution pilot's approved host route; it is
+disabled by default and never supplies provider credentials to MemOS. Doctor,
+behavioral export, backup/restore validation, and qualification evidence all
+enforce or record this same model inventory.
+
 The `agentic.memory.evolution-pilot.v2` contract permits only provider
 `claude_opus` and an Opus routing label. The native reverse boundary accepts
-only exact, post-normalization MemOS 2.0.10 L2/L3/skill system contracts and
+only exact, post-normalization MemOS 2.0.14 L2/L3/skill system contracts and
 two-message role shapes. Per-operation allowlist translators reconstruct
 metadata-only DTOs (opaque IDs/digests, bounded taxonomy tags/tool names,
 numeric evidence, and outcome metadata); raw user/agent text, policy bodies,
@@ -120,7 +131,7 @@ path/type/size/SHA-256 set and rejects modified or extra executable content.
 
 ## Behavioral backup and rollback
 
-MemOS 2.0.10 has no backup RPC. Every compliant provider session holds the
+MemOS 2.0.14 has no backup RPC. Every compliant provider session holds the
 stable project lifecycle lock for its lifetime. The lock is a sibling of the
 project root rather than a child, so its inode survives an atomic project-tree
 swap and already-waiting providers cannot bypass restore exclusion.

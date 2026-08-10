@@ -18,7 +18,7 @@ from harness_manager.behavioral_export import (
     export_behavioral_artifact,
 )
 from harness_manager.memos_install import (
-    MEMOS_PLUGIN_INTEGRITY, MEMOS_PLUGIN_NAME, MEMOS_PLUGIN_SHASUM,
+    MEMOS_DISTRIBUTION, MEMOS_PLUGIN_INTEGRITY, MEMOS_PLUGIN_NAME, MEMOS_PLUGIN_SHASUM,
     MEMOS_PLUGIN_VERSION, _build_file_manifest, validate_installed_plugin,
 )
 
@@ -51,11 +51,14 @@ def make_project(base: Path, project_id: str = PROJECT_ID) -> Path:
         "telemetry": {"enabled": False},
         "bridge": {"mode": "stdio"},
         "viewer": {"bindHost": "127.0.0.1", "openOnFirstTurn": False},
-        "embedding": {"provider": "local", "model": "Xenova/all-MiniLM-L6-v2", "cache": {"enabled": True}},
+        "embedding": {"enabled": False, "provider": "lexical", "engine": "sqlite_fts5"},
         "llm": {"provider": "local_only", "fallbackToHost": False},
         "hub": {"enabled": False},
         "logging": {"llmLog": {"enabled": False, "redactPrompts": True, "redactCompletions": True}},
-        "algorithm": {"lightweightMemory": {"enabled": True}},
+        "algorithm": {
+            "lightweightMemory": {"enabled": True},
+            "capture": {"embedTraces": False},
+        },
     }), encoding="utf-8")
     (plugin / "skills" / "nested" / "skill.md").write_text(
         "# bounded behavioral skill\n", encoding="utf-8"
@@ -83,6 +86,9 @@ def _make_pinned_plugin(code_root: Path, *, version: str = MEMOS_PLUGIN_VERSION)
     (package / "dist").mkdir(parents=True)
     (package / "dist" / "bridge.cjs").write_text("// bridge\n", encoding="utf-8")
     (package / "package.json").write_text(json.dumps({"version": version}), encoding="utf-8")
+    (package / "telemetry.credentials.json").write_text(
+        json.dumps({"audited_public_bootstrap": True}), encoding="utf-8",
+    )
     manifest = _build_file_manifest(plugin)
     manifest_bytes = (json.dumps(manifest, sort_keys=True, separators=(",", ":")) + "\n").encode()
     (plugin / ".agentic-stack-files.json").write_bytes(manifest_bytes)
@@ -91,6 +97,7 @@ def _make_pinned_plugin(code_root: Path, *, version: str = MEMOS_PLUGIN_VERSION)
         "integrity": MEMOS_PLUGIN_INTEGRITY,
         "package": MEMOS_PLUGIN_NAME,
         "version": MEMOS_PLUGIN_VERSION,
+        "distribution": MEMOS_DISTRIBUTION,
         "files_manifest_sha256": hashlib.sha256(manifest_bytes).hexdigest(),
     }), encoding="utf-8")
     for path in sorted(plugin.rglob("*"), key=lambda item: len(item.parts), reverse=True):
@@ -174,6 +181,7 @@ class BehavioralExportTest(unittest.TestCase):
             self.assertNotIn("fedcba", exported)
             self.assertNotIn("config.yaml", exported)
             self.assertNotIn("bridge-process", exported)
+            self.assertNotIn("telemetry.credentials.json", exported)
 
     def test_empty_skills_export_has_deterministic_database_only_inventory(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -371,7 +379,7 @@ class BehavioralExportTest(unittest.TestCase):
             project = make_project(root)
             config = project / "profiles" / PROJECT_ID / "memos-plugin" / "config.yaml"
             value = json.loads(config.read_text())
-            value["algorithm"]["capture"] = {"alphaScoring": False}
+            value["algorithm"]["reward"] = {"enabled": False}
             config.write_text(json.dumps(value), encoding="utf-8")
             with self.assertRaisesRegex(BehavioralExportError, "evolution fields"):
                 export_behavioral_artifact(project, root / "artifact", PROJECT_ID, provenance="repo")

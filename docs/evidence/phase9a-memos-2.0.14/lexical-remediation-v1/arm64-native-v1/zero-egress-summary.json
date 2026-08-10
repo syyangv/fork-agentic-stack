@@ -1,0 +1,234 @@
+{
+  "application_attempts": {},
+  "attestation": {
+    "common_manifest_sha256": "9f7b082daee46beb4b689c34935b7c6c933fa49277d275ad7d3d775ea1d3f673",
+    "full_manifest_sha256": "26a6e3eba5ba2cef555a80f27643f74687fb855e4d2401c592539bb591d944c9",
+    "native": {
+      "node_modules/better-sqlite3/build/Release/better_sqlite3.node": [
+        "1946ab352978b5b3493f99080dc04ed6d0a4157c511c7139cbf50b3d44d8d560",
+        1931552
+      ],
+      "node_modules/esbuild/bin/esbuild": [
+        "e2dc9a52440a2a34f09434a2f4843cb1e30f84e40dcf238976ec61ef8cd7f36a",
+        10573778
+      ]
+    },
+    "platform": "darwin-arm64",
+    "platform_variant_paths": [
+      "node_modules/better-sqlite3/build/Release/better_sqlite3.node",
+      "node_modules/esbuild/bin/esbuild"
+    ],
+    "schema": "agentic.memory.phase9a-runtime-attestation.v2"
+  },
+  "boundary_hashes": {
+    "arm_node_sha256": "4819b5cfd260f57097de49762b2c330b59364f7eec5b038e46e973ed0e27f76a",
+    "arm_python_sha256": "0a192c2c4badc82fd0281090068b8572f78a65cf0536a5071dbdff0f5828b825",
+    "bridge_2_0_10_sha256": "fc58eb07a35b6fec9f74646f98dca90ac5576d43ed2d87cad211241efc8a8ad7",
+    "bridge_2_0_14_sha256": "c8171710ece2a1881ae391902f73b89008f29ec4bd9d69d138926cd714465807",
+    "canary_sha256": "cfdaaa88ed11de61c35853deaa68fa060e8cd00465623f3f448671f07d8300e1",
+    "controller": {
+      "executable": "/opt/homebrew/opt/python@3.14/bin/python3.14",
+      "script_sha256": "7d42fbe3232625d465868bb8842dad2daa1bd2ca349c258b2aeb5cb8e6618389",
+      "sha256": "0a192c2c4badc82fd0281090068b8572f78a65cf0536a5071dbdff0f5828b825"
+    },
+    "rpc_driver_sha256": "212e47c5dbebe72950510935a51f0576831293a6bea54232bb83d9a335892bbf",
+    "sandbox_profile_sha256": "5c358b8d847211333e7ba22df82d84f796b5f30a41a2682209a949d783adbd08",
+    "tripwire_sha256": "e6193a4569a519a6c7b692fadd542d024101a6c10f4afa9d07690d6425a7a6e6",
+    "xctrace": "Apple System Call Trace"
+  },
+  "deployed_state": "unchanged/off",
+  "durable_evidence_policy": "retain normalized evidence.json and checksums only; raw trace/XML stay temporary and are not committed",
+  "host": {
+    "machine": "arm64",
+    "node": "v22.23.2",
+    "sip": "System Integrity Protection status: enabled.",
+    "xctrace": "xctrace version 16.0 (16C5032a)"
+  },
+  "passed": true,
+  "r8_run": false,
+  "runs": [
+    {
+      "completion": {
+        "denied": true
+      },
+      "label": "direct-canary",
+      "observation": {
+        "child_creations": [],
+        "descendant_trace_visibility": "not-required-no-child-created",
+        "network_attempts": [
+          {
+            "arguments": [
+              "0x2",
+              "0x1",
+              "0x0",
+              "0x16d119f90"
+            ],
+            "call": "socket",
+            "errno": [
+              "0x0"
+            ]
+          },
+          {
+            "arguments": [
+              "0x3",
+              "0x16d11aaa8",
+              "0x10",
+              "0x1"
+            ],
+            "call": "connect",
+            "errno": [
+              "0x1"
+            ]
+          },
+          {
+            "arguments": [
+              "0x2",
+              "0x2",
+              "0x0",
+              "0x16d119f90"
+            ],
+            "call": "socket",
+            "errno": [
+              "0x0"
+            ]
+          },
+          {
+            "arguments": [
+              "0x3",
+              "0x102f37140",
+              "0x6",
+              "0x0"
+            ],
+            "call": "sendto",
+            "errno": [
+              "0x1"
+            ]
+          }
+        ],
+        "processes": [
+          "sandbox-exec (43995)"
+        ],
+        "syscall_count": 1708
+      },
+      "syscall_export_sha256": "99485c48963d5d507fe1b3642acb98615c1c211eaf7a3e5812dc3b1dfb87e8b5",
+      "target_output_sha256": "ef69350cba2cb80c3a5e4c0377e963ff15bb658819285efac274ef3fead35a20",
+      "trace_tree_sha256": "1eb502d935257615378b95b87f52817de8d4f606d6141bc5c40cc2713f7eb89d"
+    },
+    {
+      "completion": {
+        "denied": true
+      },
+      "label": "child-boundary-canary",
+      "observation": {
+        "child_creations": [
+          {
+            "arguments": [
+              "0x1ed2bcc48",
+              "0x50000"
+            ],
+            "call": "fork"
+          }
+        ],
+        "descendant_trace_visibility": false,
+        "network_attempts": [],
+        "processes": [
+          "sandbox-exec (44029)"
+        ],
+        "syscall_count": 1725
+      },
+      "syscall_export_sha256": "3bcb4e04e7172f2c855fd24a4ecd77d943049d24c02b074f6c44bf17c266616a",
+      "target_output_sha256": "7d8925c2b24674dfdaf0f5018c906e6f3a9d42f5983c4e2449cae9cee72f2644",
+      "trace_tree_sha256": "e608edce79c8419888c418b4ea866ff693ddd8b17fd53cc1595a366c4c7f32ff"
+    },
+    {
+      "completion": {
+        "episodeId": null,
+        "label": "source-2.0.10",
+        "phase9aDriverComplete": true,
+        "searchHits": "not-applicable"
+      },
+      "label": "source-2.0.10",
+      "observation": {
+        "child_creations": [],
+        "descendant_trace_visibility": "not-required-no-child-created",
+        "network_attempts": [],
+        "processes": [
+          "sandbox-exec (44199)"
+        ],
+        "syscall_count": 11268
+      },
+      "syscall_export_sha256": "e4d6ff9ad7fd593c88ed383ee5db525e0cd4fcda28c1e73dcb519f8c177535fe",
+      "target_output_sha256": "5199b8ce874b70fca75eeee7eab278806057f99c4c777dc77cced42ec18cb19b",
+      "trace_tree_sha256": "d47c2a64782e885d09b881f37be189ee168b3a01401b6f21a462eeb7d6f0ae5e"
+    },
+    {
+      "completion": {
+        "episodeId": "ep_sxaxv6q99fnz",
+        "label": "fresh-2.0.14",
+        "phase9aDriverComplete": true,
+        "searchHits": "verified"
+      },
+      "label": "fresh-2.0.14",
+      "observation": {
+        "child_creations": [],
+        "descendant_trace_visibility": "not-required-no-child-created",
+        "network_attempts": [],
+        "processes": [
+          "sandbox-exec (44057)"
+        ],
+        "syscall_count": 11981
+      },
+      "syscall_export_sha256": "376d2e13554ededa8b58105846f0cfff1279eaf8cdf39a22745bc57a3c53db64",
+      "target_output_sha256": "c9ffb70b0d9bac95149e4d0a6f9e3c22e8ca8f5dea712ad1bf457cfbb48bf3e7",
+      "trace_tree_sha256": "00c9b6729d3d6243f0aa7e3a32de9d528d056cd606032ea10a6d2c80046acde4"
+    },
+    {
+      "completion": {
+        "episodeId": "ep_n8k0k65z6nft",
+        "label": "copied-2.0.10-opened-by-2.0.14",
+        "phase9aDriverComplete": true,
+        "searchHits": "verified"
+      },
+      "label": "copied-2.0.10-opened-by-2.0.14",
+      "observation": {
+        "child_creations": [],
+        "descendant_trace_visibility": "not-required-no-child-created",
+        "network_attempts": [],
+        "processes": [
+          "sandbox-exec (44242)"
+        ],
+        "syscall_count": 11362
+      },
+      "syscall_export_sha256": "32864adc328dcb99f75f9f2994216785ab39bb1cd5ac42afd3a0e3b80a84d5e4",
+      "target_output_sha256": "5cfcfa3c385935bea19a0b6a0a4850095fc27776d09bf2b6084f0c6f5f99120b",
+      "trace_tree_sha256": "62972dc1d94694c78aceb690a543d97fdb1a6d6befea9490f127f4b0df662824"
+    },
+    {
+      "completion": {
+        "episodeId": "ep_pvghe4aze1ns",
+        "label": "restored-2.0.10-opened-by-2.0.14",
+        "phase9aDriverComplete": true,
+        "searchHits": "verified"
+      },
+      "label": "restored-2.0.10-opened-by-2.0.14",
+      "observation": {
+        "child_creations": [],
+        "descendant_trace_visibility": "not-required-no-child-created",
+        "network_attempts": [],
+        "processes": [
+          "sandbox-exec (44591)"
+        ],
+        "syscall_count": 11294
+      },
+      "syscall_export_sha256": "2b9a8d9744fd06ff92fde7702e0e8fb7c73669ed39c096cd97756ca18917cd80",
+      "target_output_sha256": "c10da59d12e0293698072dfede223b410dd9c5772f75246cccdcd6aae83401b5",
+      "trace_tree_sha256": "c3fa46c29932127a7389c01415e1fd8b71f7a46bbebd3dc97bcaef7c19ba68fc"
+    }
+  ],
+  "schema": "agentic.memory.phase9a-arm64-xctrace.v1",
+  "scope": {
+    "candidate_retrieval": "2.0.14 lexical only",
+    "legacy_2_0_10": "schema seed, health, and session lifecycle only",
+    "legacy_retrieval_used_as_qualification_evidence": false
+  }
+}

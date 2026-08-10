@@ -7,6 +7,7 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -22,6 +23,7 @@ from orchestration.memos_runtime import (
     validate_project_id,
     write_config_atomic,
 )
+from orchestration.memos_bridge import PINNED_MEMOS_VERSION
 from harness_manager.memos_install import (
     LOCK_ASSET_DIR,
     MEMOS_PLUGIN_INTEGRITY,
@@ -64,11 +66,13 @@ class MemosRuntimeTest(unittest.TestCase):
         self.assertFalse(config["hub"]["enabled"])
         self.assertNotIn("enabled", config["viewer"])
         self.assertFalse(config["viewer"]["openOnFirstTurn"])
-        # Every generated key is part of MemOS 2.0.10's ConfigSchema. Viewer
+        # Every generated key is part of MemOS 2.0.14's ConfigSchema. Viewer
         # shutdown itself is the bridge's --no-viewer launch flag.
         self.assertEqual(set(config["viewer"]), {"bindHost", "openOnFirstTurn"})
         self.assertEqual(set(config["bridge"]), {"mode"})
-        self.assertEqual(config["embedding"]["provider"], "local")
+        self.assertEqual(config["embedding"], {
+            "enabled": False, "provider": "lexical", "engine": "sqlite_fts5",
+        })
         self.assertEqual(config["llm"], {
             "provider": "local_only", "fallbackToHost": False, "maxRetries": 0,
         })
@@ -110,6 +114,7 @@ class MemosRuntimeTest(unittest.TestCase):
             )
             command = bridge_command(paths)
             self.assertIn("--no-viewer", command)
+            self.assertIn(f"--runtime-scope={PROJECT_ID}", command)
             self.assertIn(f"--home={paths.memos_home}", command)
             self.assertTrue(command[1].endswith("/dist/bridge.cjs"))
             for directory in (paths.project_root, paths.memos_home, paths.home):
@@ -135,17 +140,33 @@ class MemosInstallTest(unittest.TestCase):
             with self.assertRaises(ValueError):
                 verify_tarball(artifact, integrity="sha512-AAAA", shasum=shasum)
 
-    def test_pinned_metadata_matches_release(self):
+    def test_runtime_pins_memos_2_0_14(self):
+        self.assertEqual(MEMOS_PLUGIN_VERSION, "2.0.14")
+
+    def test_bridge_attestation_pins_memos_2_0_14(self):
+        self.assertEqual(PINNED_MEMOS_VERSION, "2.0.14")
+
+    def test_lock_assets_select_memos_2_0_14(self):
+        self.assertEqual(LOCK_ASSET_DIR.name, "memos-2.0.14")
+
+    def test_pinned_integrity_matches_memos_2_0_14_release(self):
         self.assertEqual(
             MEMOS_PLUGIN_INTEGRITY,
-            "sha512-Rg2NIjGAObTC3zFQ4wOzB+hxR7qHvHWMVI5Nxc+7QEi5wpBUibkniz3SdHOPrbbCkqhatS0DjZ+aUexl/9Q+EA==",
+            "sha512-yEAroCSBfdf7urP47Hyr2MzTg4BPLIWqlno5r0imHb69s8fh7uXZRuPK23IWCzDFIWuPK/SuZfk8u3MdGQOzLg==",
         )
-        self.assertEqual(MEMOS_PLUGIN_SHASUM, "d75850ce7340d56b8a255831969950b9fbf96995")
+
+    def test_pinned_shasum_matches_memos_2_0_14_release(self):
+        self.assertEqual(MEMOS_PLUGIN_SHASUM, "32639d241918c7da8d536e52eac7e0a7c42c312e")
+
+    def test_lockfile_attests_memos_2_0_14_release(self):
         lock = json.loads((LOCK_ASSET_DIR / "package-lock.json").read_text())
         locked = lock["packages"]["node_modules/@memtensor/memos-local-plugin"]
-        self.assertEqual(locked["version"], MEMOS_PLUGIN_VERSION)
+        self.assertEqual(locked["version"], "2.0.14")
         self.assertEqual(locked["resolved"], "file:plugin.tgz")
-        self.assertEqual(locked["integrity"], MEMOS_PLUGIN_INTEGRITY)
+        self.assertEqual(
+            locked["integrity"],
+            "sha512-yEAroCSBfdf7urP47Hyr2MzTg4BPLIWqlno5r0imHb69s8fh7uXZRuPK23IWCzDFIWuPK/SuZfk8u3MdGQOzLg==",
+        )
 
     def test_installer_requires_node_20_and_uses_local_tarball_only(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -182,18 +203,32 @@ class MemosInstallTest(unittest.TestCase):
                 (package / "dist").mkdir(parents=True)
                 (package / "package.json").write_text(json.dumps({"version": MEMOS_PLUGIN_VERSION}))
                 (package / "dist" / "bridge.cjs").write_text("// built")
+                executable = prefix / "node_modules" / "esbuild" / "bin" / "esbuild"
+                executable.parent.mkdir(parents=True)
+                executable.write_bytes(b"native-binary")
+                executable.chmod(0o755)
                 return type("Result", (), {"returncode": 0, "stdout": "", "stderr": ""})()
+
+            def fake_delta(package):
+                metadata = json.loads((package / "package.json").read_text())
+                metadata["agenticStackDistribution"] = "agentic-stack-memos-2.0.14-lexical.1"
+                (package / "package.json").write_text(json.dumps(metadata))
+
+            def fake_prune(staging, _lock_dir):
+                (staging / "package-lock.json").write_text(json.dumps({"packages": {}}))
 
             with self.assertRaises(RuntimeError):
                 install_verified_tarball(
                     artifact, root / "code", integrity=integrity, shasum=shasum,
                     node_version="v19.9.0", runner=fake_run, lock_asset_dir=lock_dir,
                 )
-            result = install_verified_tarball(
-                artifact, root / "code", integrity=integrity, shasum=shasum,
-                node_version="v20.11.1", npm_command=("offline-npm",), runner=fake_run,
-                lock_asset_dir=lock_dir,
-            )
+            with patch("harness_manager.memos_install._apply_reviewed_lexical_delta", fake_delta), \
+                    patch("harness_manager.memos_install._prune_model_loader_dependencies", fake_prune):
+                result = install_verified_tarball(
+                    artifact, root / "code", integrity=integrity, shasum=shasum,
+                    node_version="v20.11.1", npm_command=("offline-npm",), runner=fake_run,
+                    lock_asset_dir=lock_dir,
+                )
             command = calls[0][0]
             self.assertEqual(command[0], "offline-npm")
             self.assertEqual(command[1], "ci")
@@ -208,6 +243,10 @@ class MemosInstallTest(unittest.TestCase):
             self.assertNotIn("@memtensor/memos-local-plugin@2.0.10", command)
             self.assertEqual(result.version, MEMOS_PLUGIN_VERSION)
             self.assertEqual(stat.S_IMODE(result.plugin_dir.stat().st_mode), 0o555)
+            self.assertEqual(
+                stat.S_IMODE((result.plugin_dir / "node_modules/esbuild/bin/esbuild").stat().st_mode),
+                0o555,
+            )
             self.assertTrue((result.plugin_dir / ".agentic-stack-files.json").is_file())
 
             data = root / "state" / PROJECT_ID / "keep.db"

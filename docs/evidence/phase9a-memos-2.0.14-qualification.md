@@ -1,0 +1,148 @@
+# Phase 9A MemOS 2.0.14 qualification evidence index
+
+Date: 2026-08-10
+Decision: **PHASE 9A QUALIFIED FOR THE REVIEWED DARWIN ARM64 CANDIDATE — STOP before R8**
+
+This index binds the small, reviewable source changes to durable sanitized
+evidence in the repository and records the original isolated-run locations.
+It does not retain runtime databases. All workloads used synthetic data and
+neither R7 nor R8 material.
+
+## Lexical-only remediation rerun
+
+- Durable packet: [`phase9a-memos-2.0.14/lexical-remediation-v1/`](phase9a-memos-2.0.14/lexical-remediation-v1/README.md)
+- Supplied zero-egress source SHA-256: `a893fc6b7ef1d6c7b37298af728e56232de98267ed0077148b621aa5374a4b5d`
+- Candidate states: fresh 2.0.14, copied 2.0.10 opened by 2.0.14, and restored 2.0.10 opened by 2.0.14 all used lexical FTS5 retrieval, loaded no model, and recorded zero Node networking API attempts.
+- Benchmark: precision@5 `1.0`, usefulness `1.0`, and zero duplicate logical turns, cross-project leaks, degradation errors, or observed egress attempts.
+- Reproducible install: two real independent `install_verified_tarball` runs from the pinned 2.0.14 tarball produced identical manifest SHA-256 `dc0aae1417698ed4343895b292fb2f6ac1bcef4820eff6eb46875405b1ed73d9`; exact lexical lock/package hashes `acb61ce0d0806fae9fb155cc1fa18cccb8275ffa5f27a0857567f3973f160f92` / `1b6349dcc3fac8cbc27962a00c35b5abbab73a6166c6d28d73db6de55f97a708`; the reviewed distribution marker; no loader files or `@huggingface/transformers`; and two validated immutable installed trees. Durable artifact: `reproducible-install.json`; runner: `tests/qualification/phase9a_memos_214_reproducible_install.py`.
+- Migration/rollback: passed in isolated synthetic stores. The pristine 2.0.10 rollback's schema-valid `local` provider label with `embedTraces=false` is compatibility-only and never loads a model; every 2.0.14 candidate state is lexical/no-model.
+- Modes: deployed runtime unchanged/off; assist and evolution false; `r8_run=false`. No R7 or R8 material was used.
+
+The application-layer tripwire is not packet capture or native syscall tracing.
+The subsequent Darwin ARM64-native lane supplied that missing process-level
+observation and passed final independent review. Qualification still authorizes
+neither deployment nor R8.
+
+## Historical process-level observation attempt — blocked before workload trace
+
+- Durable packet: [`phase9a-memos-2.0.14/lexical-remediation-v1/process-trace-attempt-v1/`](phase9a-memos-2.0.14/lexical-remediation-v1/process-trace-attempt-v1/README.md)
+- The authorized macOS `dtruss` process did not start the qualification workload. SIP rejected execution of `/usr/bin/sandbox-exec` with `Operation not permitted`; SIP remained enabled.
+- The disposable Debian 12 / arm64 alternative used the pinned artifacts and reviewed lexical installer, but stopped before `strace`: its immutable manifest was `532c042b5117d0c084b108e4d20a716333b4ac674e1908bc1ad7a95831accf48`, not the reviewed Darwin manifest `dc0aae1417698ed4343895b292fb2f6ac1bcef4820eff6eb46875405b1ed73d9`. The differing runtime files were the platform-native `better_sqlite3.node` and `esbuild` executables.
+- No deny canary or workload trace was run after that prerequisite failed. Linux evidence did not replace host-native observation. This blocker was later superseded by the separately attested Darwin ARM64 candidate lane.
+
+## Historical Apple-supported host attempt — x86/Rosetta limitation
+
+- Durable packet: [`phase9a-memos-2.0.14/lexical-remediation-v1/apple-observability-attempt-v2/`](phase9a-memos-2.0.14/lexical-remediation-v1/apple-observability-attempt-v2/README.md)
+- Native-arm64 Xcode 16 `System Call Trace` passed a direct-target deny-network canary: it observed `socket(AF_INET)`, denied `connect`, and denied `sendto` without payload capture. A child-only canary was denied but recorded zero network syscalls, so process-scoped tracing did not cover the existing runner's Node child.
+- The exact reviewed candidate uses x86_64 Node/native artifacts through Rosetta 2. Apple's tracing backend rejected this exact execution mode before recording: `ktrace cannot trace the system under Rosetta translation`. An arm64 rebuild would have a different immutable manifest and cannot substitute.
+- Network Connections, unified sandbox logs, and sampling are non-exhaustive; `fs_usage`/`sc_usage` require broader privilege. None can prove the current zero-attempt standard.
+- No evidence-standard tradeoff was accepted. The user instead authorized a separate Darwin ARM64 artifact route; that route has its own immutable two-root attestation and closes the gate only for the ARM64 candidate.
+
+## Darwin ARM64-native qualification — passed
+
+- Durable packet: [`phase9a-memos-2.0.14/lexical-remediation-v1/arm64-native-v1/`](phase9a-memos-2.0.14/lexical-remediation-v1/arm64-native-v1/README.md)
+- Complete committed x86_64 and ARM64 manifests reproduce the two-root contract: 2,846 common paths are byte-identical and only pinned `better_sqlite3.node` and `esbuild` leaves differ.
+- Xcode System Call Trace observed direct sandboxed candidate processes. Fresh 2.0.14, copied 2.0.10 state, and restored 2.0.10 state completed with no internet socket/connect/send attempt and no child creation; the launcher closes inherited non-standard descriptors.
+- Native ABI/FTS, synthetic benchmark, migration, backup/restore, and rollback checks passed. Final senior review checked the retained raw exports against the normalized packet, reproduced the artifact attestation, and recorded the identified digest binding in `independent-trace-review.json`.
+- Scope is Darwin ARM64 only. Production stays immutable 2.0.10 and off; R8 remains unauthorized.
+
+## Historical pre-remediation qualification
+
+## Observable egress qualification
+
+- Artifact: `/private/tmp/memos-2.0.14-zero-egress-populated.json`
+- SHA-256: `561bbfa8a1aac30defd3acd4aeba4617cd92d01febb88dd6ab2dfbfd9807e7db`
+- Runner: `scripts/qualify_memos_zero_egress.py`
+- Result: failed. Fresh 2.0.14, copied 2.0.10 opened by 2.0.14, and restored
+  2.0.10 opened by 2.0.14 each attempted 12 blocked Hugging Face fetches while
+  processing a populated turn and retrieval query.
+- The 2.0.10 source baseline made the same 12 attempts. This is shared
+  local-embedding remote-fetch behavior, not evidence of a 2.0.14 regression.
+- Durable sanitized summaries and a portable checksum manifest are retained in
+  [`phase9a-memos-2.0.14/`](phase9a-memos-2.0.14/README.md).
+
+```bash
+TMP_ROOT="$(python3 -c 'import tempfile; print(tempfile.gettempdir())')"
+python3 scripts/qualify_memos_zero_egress.py \
+  --bridge-2-0-14 "$TMP_ROOT/phase9a-real-install/node_modules/@memtensor/memos-local-plugin/dist/bridge.cjs" \
+  --bridge-2-0-10 "$TMP_ROOT/phase9a-real-install-2010/node_modules/@memtensor/memos-local-plugin/dist/bridge.cjs" \
+  --output "$TMP_ROOT/memos-2.0.14-zero-egress-populated.json"
+```
+
+Limitation: the preload tripwire records and rejects Node application APIs
+(`dns`, `net`, `tls`, `http`, `https`, `dgram`, and `fetch`). It is not kernel
+syscall tracing or packet capture. The result establishes attempted remote
+access and blocked completion, not process-level zero-egress.
+
+## Synthetic disabled/shadow benchmark
+
+- Durable directory:
+  `tests/qualification/evidence/phase9a-memos-214-synthetic-v2/`
+- Files: `summary.json`, `raw-ledger.json`, `egress-attempts.jsonl`, and
+  `SHA256SUMS.json`
+- Runner: `tests/qualification/phase9a_memos_214_offline_benchmark.py`
+- Result: quality/latency pass, privacy STOP. Conventional fixed-denominator
+  precision@5 `1.0`; precision among returned hits `1.0`; usefulness `1.0`;
+  context bytes p50/p95 `1781/1811`; search p50/p95 `3.049/4.661 ms`; total
+  p50/p95 `9.918/14.683 ms`; `turn.start` p50/p95 `5.189/7.774 ms`;
+  `turn.end` p50/p95 `1.708/3.277 ms`; duplicates, leakage, and degradation
+  errors `0`; blocked Hugging Face fetch attempts `1470`.
+- Corpus: 150 synthetic episodes, five categories, 30 evaluation queries,
+  exactly five relevant traces per query. All six packet checksums verified.
+- Modes: deployed runtime unchanged/off; benchmark isolated shadow-only;
+  assist/evolution false; `r8_run=false`.
+
+```bash
+TMP_ROOT="$(python3 -c 'import tempfile; print(tempfile.gettempdir())')"
+python3 tests/qualification/phase9a_memos_214_offline_benchmark.py \
+  --plugin-root "$TMP_ROOT/phase9a-real-install" \
+  --work-root "$TMP_ROOT/phase9a-memos-214-synthetic-v2-run" \
+  --output tests/qualification/evidence/phase9a-memos-214-synthetic-v2
+```
+
+Limitation: this synthetic replay can only qualify preparation for a new
+experiment; it cannot authorize activation. The corrected quality and latency
+metrics pass, but the no-egress-attempt gate fails, so STOP is solely due to
+privacy/egress.
+
+## Migration, backup, restore, and rollback rehearsal
+
+- Durable directory:
+  `tests/qualification/evidence/phase9a-memos-214-migration-v1/`
+- Canonical artifact: `migration-evidence.json`
+- Artifact SHA-256:
+  `47c0274fd0f48fddfd72ee7e4fc3ec5643b1dd741a5e4267f1b6c7b7c213481a`
+- Checksum manifest: `SHA256SUMS.json` — 11 of 11 entries matched.
+- Runner: `tests/qualification/phase9a_memos_214_migration_rehearsal.py`
+- Runner SHA-256:
+  `66561bf5e893ca410cb09b752e268120b5e05027058215d87fcef44ff8e0aa35`
+- Result: passed. All tested database paths returned `quick_check=ok`, retained
+  the same 44-table schema and 12 migration records, and preserved the seeded
+  canonical content digest across upgrade and restore.
+- Marker: 2.0.14 paths contained
+  `.migrations/hermes-viewer-port-v1.json` with
+  `{"version":1,"migration":"hermes-viewer-port-v1","result":"not-needed"}`
+  and SHA-256
+  `4ee2ad2157d2103f79db9174855d55248c05e29df1dcb17cc3fa5d16a4192904`;
+  2.0.10 rollback paths did not contain it.
+
+```bash
+TMP_ROOT="$(python3 -c 'import tempfile; print(tempfile.gettempdir())')"
+python3 tests/qualification/phase9a_memos_214_migration_rehearsal.py \
+  --plugin-2010 "$TMP_ROOT/phase9a-real-install-2010" \
+  --plugin-2014 "$TMP_ROOT/phase9a-real-install" \
+  --artifact-2010 "$TMP_ROOT/memos-2010-artifact/memos-local-plugin-2.0.10.tgz" \
+  --artifact-2014 "$TMP_ROOT/phase9a-real-install/plugin.tgz" \
+  --work-root "$TMP_ROOT/phase9a-214-migration-run" \
+  --output docs/evidence/phase9a-memos-2.0.14/migration-rehearsal-run
+```
+
+## Gate disposition
+
+The earlier MiniLM remediation proposal is superseded and prohibited. The
+reviewed 2.0.14 distribution removes the loader and uses lexical SQLite FTS5.
+Darwin ARM64 native ABI, process-level zero-egress, migration/rollback, and
+synthetic benchmark lanes passed, and final independent review reproduced the
+two-root artifact attestation from committed manifests. Production remains
+version 2.0.10 and off; Phase 9A qualification authorizes neither deployment
+nor R8. R8 remains a separate, explicit decision gate.
