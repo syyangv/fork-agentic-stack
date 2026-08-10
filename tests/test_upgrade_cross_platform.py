@@ -37,6 +37,72 @@ class CrossPlatformUpgradeTest(unittest.TestCase):
             _descriptor_relative_supported=mock.Mock(return_value=False),
         )
 
+    def add_legacy_memos_configs(self, target: Path):
+        project = "0123456789abcdef"
+        data = target / ".agent/runtime/memos"
+        pilots = data / "pilot-configs"
+        pilots.mkdir(parents=True)
+        manifest = pilots / f"{project}.json"
+        manifest.write_text(json.dumps({
+            "schema": "agentic.memory.evolution-pilot.v2", "enabled": False,
+            "project_id": project, "repo_root": str(target), "provider": "claude_opus",
+            "model": "opus", "daily_caps": {"policy": 5, "world_model": 2, "skill": 2, "other": 50},
+            "min_distinct_episodes": 3, "timeout_seconds": 60,
+        }))
+        manifest.chmod(0o600)
+        legacy = {
+            "version": 1,
+            "embedding": {"provider": "local", "model": "Xenova/all-MiniLM-L6-v2"},
+            "llm": {"provider": "local_only", "fallbackToHost": False, "maxRetries": 0},
+            "algorithm": {"capture": {"embedTraces": False}},
+            "hub": {"enabled": False}, "telemetry": {"enabled": False},
+        }
+        active = data / project / "profiles" / project / "memos-plugin" / "config.yaml"
+        rollback = data / f".{project}.rollback-{'a' * 32}" / "profiles" / project / "memos-plugin" / "config.yaml"
+        for path in (active, rollback):
+            path.parent.mkdir(parents=True)
+            path.write_text(json.dumps(legacy)); path.chmod(0o600)
+        unrelated = data / "foreign/profiles" / project / "memos-plugin/config.yaml"
+        unrelated.parent.mkdir(parents=True); unrelated.write_text(json.dumps(legacy))
+        return active, rollback, unrelated
+
+    @unittest.skipUnless(os.name == "posix", "MemOS config migration is POSIX-only")
+    def test_upgrade_transaction_migrates_only_owned_memos_configs(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            target = Path(tmp)
+            self.install_standard(target)
+            active, rollback, unrelated = self.add_legacy_memos_configs(target)
+            result = upgrade_mod.upgrade(target, ROOT, yes=True, log=lambda _message: None)
+            self.assertEqual(result, 0)
+            for path in (active, rollback):
+                self.assertEqual(json.loads(path.read_text())["embedding"]["provider"], "lexical")
+            self.assertEqual(json.loads(unrelated.read_text())["embedding"]["provider"], "local")
+            record = target / ".agent/runtime/memos/migrations/current.json"
+            self.assertTrue(json.loads(record.read_text())["committed"])
+
+    @unittest.skipUnless(os.name == "posix", "MemOS config migration is POSIX-only")
+    def test_upgrade_failure_after_migration_restores_configs_and_provenance(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            target = Path(tmp)
+            self.install_standard(target)
+            active, rollback, _unrelated = self.add_legacy_memos_configs(target)
+            before = {path: path.read_bytes() for path in (active, rollback)}
+            real_commit = upgrade_mod._UpgradeRollback.commit
+            calls = 0
+            def fail_once(transaction):
+                nonlocal calls
+                calls += 1
+                if calls == 1:
+                    raise OSError("injected post-migration commit failure")
+                return real_commit(transaction)
+            with mock.patch.object(upgrade_mod._UpgradeRollback, "commit", fail_once):
+                result = upgrade_mod.upgrade(target, ROOT, yes=True, log=lambda _message: None)
+            self.assertEqual(result, 2)
+            for path, raw in before.items():
+                self.assertEqual(path.read_bytes(), raw)
+            self.assertFalse((target / ".agent/runtime/memos/migrations/current.json").exists())
+            self.assertFalse((target / ".agent/.upgrade-transaction.json").exists())
+
     def test_upgrade_uses_portable_backend_without_dir_fd_support(self):
         with tempfile.TemporaryDirectory() as tmp:
             target = Path(tmp)

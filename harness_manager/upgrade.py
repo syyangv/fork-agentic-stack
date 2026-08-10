@@ -15,6 +15,7 @@ from typing import Callable
 from . import profiles
 from . import state
 from . import skill_manifest
+from . import memos_config_migration
 from .local_schedule_config import (
     DEFAULT_LOCAL_CONFIG,
     DEFAULT_LOCAL_TEMPLATE,
@@ -219,6 +220,19 @@ def upgrade(
             }
             if record_migration:
                 transaction_relatives.add(Path("install.json"))
+            memos_data_root = dst_agent / "runtime" / "memos"
+            owned_memos_configs: tuple[Path, ...] = ()
+            memos_provenance = memos_data_root / "migrations" / "current.json"
+            memos_migration_required = (memos_data_root / "pilot-configs").is_dir()
+            if memos_migration_required:
+                owned_memos_configs = memos_config_migration.owned_config_paths(
+                    memos_data_root
+                )
+                transaction_relatives.update(
+                    path.relative_to(dst_agent)
+                    for path in owned_memos_configs
+                )
+                transaction_relatives.add(memos_provenance.relative_to(dst_agent))
             rollback = _UpgradeRollback.capture(
                 root_fd=root_fd,
                 dst_agent=dst_agent,
@@ -272,6 +286,16 @@ def upgrade(
                         portable_root_identity=portable_root_identity,
                         mode=existing_state[1],
                     )
+                if memos_migration_required:
+                    migrated = memos_config_migration.migrate_owned_legacy_configs(
+                        memos_data_root, memos_data_root / "migrations",
+                        configs=owned_memos_configs,
+                    )
+                    if migrated.migrated:
+                        log(
+                            "migrated " + str(len(migrated.migrated))
+                            + " installer-owned MemOS config(s) to lexical/no-model"
+                        )
                 rollback.commit()
             except BaseException:
                 try:
@@ -282,7 +306,7 @@ def upgrade(
                     pass
                 raise
         return 0
-    except (OSError, ValueError) as exc:
+    except (OSError, ValueError, RuntimeError) as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 2
     finally:
