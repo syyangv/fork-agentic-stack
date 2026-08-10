@@ -1,0 +1,1320 @@
+{
+  "inputs": {
+    "bridge_2_0_10_sha256": "fc58eb07a35b6fec9f74646f98dca90ac5576d43ed2d87cad211241efc8a8ad7",
+    "bridge_2_0_14_sha256": "c8171710ece2a1881ae391902f73b89008f29ec4bd9d69d138926cd714465807",
+    "pristine_restore_tree_sha256": "18bcdbdcb7344465f80eea7da1ec28e0ad5578e08e9aa5d0086dce333fea77aa",
+    "source_2_0_10_tree_sha256": "1e8f007fd5baef168606631817d15541ecc1a1304bdd36ba7f45f942bff5a0eb",
+    "tripwire_sha256": "e6193a4569a519a6c7b692fadd542d024101a6c10f4afa9d07690d6425a7a6e6"
+  },
+  "isolation_root": "<system-temporary-directory>",
+  "observation": {
+    "apis": [
+      "dns",
+      "net",
+      "tls",
+      "http",
+      "https",
+      "dgram",
+      "fetch"
+    ],
+    "layer": "Node application APIs",
+    "native_syscall_observation": false,
+    "policy": "record and fail every attempted operation"
+  },
+  "passed": true,
+  "project_id": "0123456789abcdef",
+  "qualification": "memos-2.0.14-zero-egress",
+  "schema_version": 1,
+  "states": [
+    {
+      "controls": {
+        "hub_enabled": false,
+        "provider_credentials_present": false,
+        "runtime_credential_files": [],
+        "telemetry_enabled": false
+      },
+      "egress_attempts": [],
+      "health": {
+        "agent": "hermes",
+        "embedder_provider": "lexical",
+        "llm_provider": "local_only",
+        "ok": true,
+        "version": "2.0.14"
+      },
+      "label": "fresh-2.0.14",
+      "model_inventory": {
+        "embedding": {
+          "enabled": false,
+          "provider_credentials": false
+        },
+        "host_evolution": {
+          "mode": "disabled",
+          "route": "approved_host_only"
+        },
+        "memos_llm": {
+          "mode": "disabled",
+          "provider_credentials": false
+        },
+        "observed": {
+          "embedder_provider": "lexical",
+          "llm_provider": "local_only"
+        },
+        "remote_fallback": false,
+        "retrieval": {
+          "engine": "sqlite_fts5",
+          "mode": "lexical",
+          "model": null
+        }
+      },
+      "passed": true,
+      "returncode": 0,
+      "stderr_bytes": 57,
+      "stdout": {
+        "frames": [
+          {
+            "method": "logs.forward",
+            "type": "notification"
+          },
+          {
+            "method": "logs.forward",
+            "type": "notification"
+          },
+          {
+            "method": "logs.forward",
+            "type": "notification"
+          },
+          {
+            "method": "logs.forward",
+            "type": "notification"
+          },
+          {
+            "method": "logs.forward",
+            "type": "notification"
+          },
+          {
+            "method": "logs.forward",
+            "type": "notification"
+          },
+          {
+            "method": "logs.forward",
+            "type": "notification"
+          },
+          {
+            "method": "logs.forward",
+            "type": "notification"
+          },
+          {
+            "method": "logs.forward",
+            "type": "notification"
+          },
+          {
+            "method": "logs.forward",
+            "type": "notification"
+          },
+          {
+            "method": "logs.forward",
+            "type": "notification"
+          },
+          {
+            "method": "logs.forward",
+            "type": "notification"
+          },
+          {
+            "method": "logs.forward",
+            "type": "notification"
+          },
+          {
+            "method": "logs.forward",
+            "type": "notification"
+          },
+          {
+            "method": "logs.forward",
+            "type": "notification"
+          },
+          {
+            "method": "logs.forward",
+            "type": "notification"
+          },
+          {
+            "method": "logs.forward",
+            "type": "notification"
+          },
+          {
+            "method": "logs.forward",
+            "type": "notification"
+          },
+          {
+            "method": "logs.forward",
+            "type": "notification"
+          },
+          {
+            "method": "logs.forward",
+            "type": "notification"
+          },
+          {
+            "method": "logs.forward",
+            "type": "notification"
+          },
+          {
+            "id": 1,
+            "type": "response"
+          },
+          {
+            "method": "logs.forward",
+            "type": "notification"
+          },
+          {
+            "method": "events.notify",
+            "type": "notification"
+          },
+          {
+            "id": 2,
+            "type": "response"
+          },
+          {
+            "method": "logs.forward",
+            "type": "notification"
+          },
+          {
+            "method": "events.notify",
+            "type": "notification"
+          },
+          {
+            "method": "logs.forward",
+            "type": "notification"
+          },
+          {
+            "method": "events.notify",
+            "type": "notification"
+          },
+          {
+            "method": "logs.forward",
+            "type": "notification"
+          },
+          {
+            "method": "events.notify",
+            "type": "notification"
+          },
+          {
+            "method": "logs.forward",
+            "type": "notification"
+          },
+          {
+            "method": "logs.forward",
+            "type": "notification"
+          },
+          {
+            "method": "logs.forward",
+            "type": "notification"
+          },
+          {
+            "method": "logs.forward",
+            "type": "notification"
+          },
+          {
+            "method": "events.notify",
+            "type": "notification"
+          },
+          {
+            "method": "logs.forward",
+            "type": "notification"
+          },
+          {
+            "id": 3,
+            "type": "response"
+          },
+          {
+            "method": "logs.forward",
+            "type": "notification"
+          },
+          {
+            "method": "events.notify",
+            "type": "notification"
+          },
+          {
+            "method": "events.notify",
+            "type": "notification"
+          },
+          {
+            "method": "logs.forward",
+            "type": "notification"
+          },
+          {
+            "method": "logs.forward",
+            "type": "notification"
+          },
+          {
+            "id": 4,
+            "type": "response"
+          },
+          {
+            "method": "logs.forward",
+            "type": "notification"
+          },
+          {
+            "method": "events.notify",
+            "type": "notification"
+          },
+          {
+            "id": 5,
+            "type": "response"
+          },
+          {
+            "method": "logs.forward",
+            "type": "notification"
+          },
+          {
+            "method": "events.notify",
+            "type": "notification"
+          },
+          {
+            "id": 6,
+            "type": "response"
+          },
+          {
+            "method": "logs.forward",
+            "type": "notification"
+          },
+          {
+            "method": "logs.forward",
+            "type": "notification"
+          },
+          {
+            "method": "logs.forward",
+            "type": "notification"
+          },
+          {
+            "method": "logs.forward",
+            "type": "notification"
+          },
+          {
+            "id": 7,
+            "type": "response"
+          },
+          {
+            "method": "logs.forward",
+            "type": "notification"
+          },
+          {
+            "id": 8,
+            "type": "response"
+          }
+        ],
+        "invalid_lines": [],
+        "line_count": 57
+      },
+      "strict_jsonrpc_framing_required": true,
+      "workload": {
+        "populated_turn": true,
+        "retrieval": true,
+        "search_hit_count": 1
+      }
+    },
+    {
+      "controls": {
+        "hub_enabled": false,
+        "provider_credentials_present": false,
+        "runtime_credential_files": [],
+        "telemetry_enabled": false
+      },
+      "egress_attempts": [
+        {
+          "args": [
+            "https://huggingface.co/Xenova/all-MiniLM-L6-v2/resolve/main/tokenizer.json",
+            {}
+          ],
+          "kind": "fetch"
+        },
+        {
+          "args": [
+            "https://huggingface.co/Xenova/all-MiniLM-L6-v2/resolve/main/tokenizer_config.json",
+            {}
+          ],
+          "kind": "fetch"
+        },
+        {
+          "args": [
+            "https://huggingface.co/Xenova/all-MiniLM-L6-v2/resolve/main/config.json",
+            {}
+          ],
+          "kind": "fetch"
+        },
+        {
+          "args": [
+            "https://huggingface.co/Xenova/all-MiniLM-L6-v2/resolve/main/tokenizer.json",
+            {}
+          ],
+          "kind": "fetch"
+        },
+        {
+          "args": [
+            "https://huggingface.co/Xenova/all-MiniLM-L6-v2/resolve/main/tokenizer_config.json",
+            {}
+          ],
+          "kind": "fetch"
+        },
+        {
+          "args": [
+            "https://huggingface.co/Xenova/all-MiniLM-L6-v2/resolve/main/config.json",
+            {}
+          ],
+          "kind": "fetch"
+        },
+        {
+          "args": [
+            "https://huggingface.co/Xenova/all-MiniLM-L6-v2/resolve/main/tokenizer.json",
+            {}
+          ],
+          "kind": "fetch"
+        },
+        {
+          "args": [
+            "https://huggingface.co/Xenova/all-MiniLM-L6-v2/resolve/main/tokenizer_config.json",
+            {}
+          ],
+          "kind": "fetch"
+        },
+        {
+          "args": [
+            "https://huggingface.co/Xenova/all-MiniLM-L6-v2/resolve/main/config.json",
+            {}
+          ],
+          "kind": "fetch"
+        },
+        {
+          "args": [
+            "https://huggingface.co/Xenova/all-MiniLM-L6-v2/resolve/main/tokenizer.json",
+            {}
+          ],
+          "kind": "fetch"
+        },
+        {
+          "args": [
+            "https://huggingface.co/Xenova/all-MiniLM-L6-v2/resolve/main/tokenizer_config.json",
+            {}
+          ],
+          "kind": "fetch"
+        },
+        {
+          "args": [
+            "https://huggingface.co/Xenova/all-MiniLM-L6-v2/resolve/main/config.json",
+            {}
+          ],
+          "kind": "fetch"
+        }
+      ],
+      "health": {
+        "agent": "hermes",
+        "embedder_provider": "local",
+        "llm_provider": "local_only",
+        "ok": true,
+        "version": "2.0.10"
+      },
+      "label": "source-2.0.10",
+      "model_inventory": {
+        "embedding": {
+          "enabled": false,
+          "provider_credentials": false
+        },
+        "host_evolution": {
+          "mode": "disabled",
+          "route": "approved_host_only"
+        },
+        "memos_llm": {
+          "mode": "disabled",
+          "provider_credentials": false
+        },
+        "observed": {
+          "embedder_provider": "local",
+          "llm_provider": "local_only"
+        },
+        "remote_fallback": false,
+        "retrieval": {
+          "engine": "sqlite_fts5",
+          "mode": "lexical",
+          "model": null
+        }
+      },
+      "passed": false,
+      "returncode": 0,
+      "stderr_bytes": 3971,
+      "stdout": {
+        "frames": [
+          {
+            "method": "logs.forward",
+            "type": "notification"
+          },
+          {
+            "method": "logs.forward",
+            "type": "notification"
+          },
+          {
+            "method": "logs.forward",
+            "type": "notification"
+          },
+          {
+            "method": "logs.forward",
+            "type": "notification"
+          },
+          {
+            "method": "logs.forward",
+            "type": "notification"
+          },
+          {
+            "method": "logs.forward",
+            "type": "notification"
+          },
+          {
+            "method": "logs.forward",
+            "type": "notification"
+          },
+          {
+            "method": "logs.forward",
+            "type": "notification"
+          },
+          {
+            "method": "logs.forward",
+            "type": "notification"
+          },
+          {
+            "method": "logs.forward",
+            "type": "notification"
+          },
+          {
+            "method": "logs.forward",
+            "type": "notification"
+          },
+          {
+            "method": "logs.forward",
+            "type": "notification"
+          },
+          {
+            "method": "logs.forward",
+            "type": "notification"
+          },
+          {
+            "method": "logs.forward",
+            "type": "notification"
+          },
+          {
+            "method": "logs.forward",
+            "type": "notification"
+          },
+          {
+            "method": "logs.forward",
+            "type": "notification"
+          },
+          {
+            "method": "logs.forward",
+            "type": "notification"
+          },
+          {
+            "method": "logs.forward",
+            "type": "notification"
+          },
+          {
+            "method": "logs.forward",
+            "type": "notification"
+          },
+          {
+            "id": 1,
+            "type": "response"
+          },
+          {
+            "method": "logs.forward",
+            "type": "notification"
+          },
+          {
+            "method": "events.notify",
+            "type": "notification"
+          },
+          {
+            "id": 2,
+            "type": "response"
+          },
+          {
+            "method": "logs.forward",
+            "type": "notification"
+          },
+          {
+            "method": "events.notify",
+            "type": "notification"
+          },
+          {
+            "method": "logs.forward",
+            "type": "notification"
+          },
+          {
+            "method": "events.notify",
+            "type": "notification"
+          },
+          {
+            "method": "logs.forward",
+            "type": "notification"
+          },
+          {
+            "method": "events.notify",
+            "type": "notification"
+          },
+          {
+            "method": "logs.forward",
+            "type": "notification"
+          },
+          {
+            "method": "logs.forward",
+            "type": "notification"
+          },
+          {
+            "method": "logs.forward",
+            "type": "notification"
+          },
+          {
+            "method": "logs.forward",
+            "type": "notification"
+          },
+          {
+            "method": "logs.forward",
+            "type": "notification"
+          },
+          {
+            "method": "logs.forward",
+            "type": "notification"
+          },
+          {
+            "method": "logs.forward",
+            "type": "notification"
+          },
+          {
+            "method": "logs.forward",
+            "type": "notification"
+          },
+          {
+            "method": "logs.forward",
+            "type": "notification"
+          },
+          {
+            "method": "logs.forward",
+            "type": "notification"
+          },
+          {
+            "method": "logs.forward",
+            "type": "notification"
+          },
+          {
+            "method": "events.notify",
+            "type": "notification"
+          },
+          {
+            "method": "events.notify",
+            "type": "notification"
+          },
+          {
+            "method": "logs.forward",
+            "type": "notification"
+          },
+          {
+            "id": 3,
+            "type": "response"
+          },
+          {
+            "method": "logs.forward",
+            "type": "notification"
+          },
+          {
+            "method": "events.notify",
+            "type": "notification"
+          },
+          {
+            "method": "events.notify",
+            "type": "notification"
+          },
+          {
+            "method": "logs.forward",
+            "type": "notification"
+          },
+          {
+            "method": "logs.forward",
+            "type": "notification"
+          },
+          {
+            "method": "logs.forward",
+            "type": "notification"
+          },
+          {
+            "method": "logs.forward",
+            "type": "notification"
+          },
+          {
+            "method": "logs.forward",
+            "type": "notification"
+          },
+          {
+            "method": "logs.forward",
+            "type": "notification"
+          },
+          {
+            "method": "logs.forward",
+            "type": "notification"
+          },
+          {
+            "method": "logs.forward",
+            "type": "notification"
+          },
+          {
+            "method": "logs.forward",
+            "type": "notification"
+          },
+          {
+            "id": 4,
+            "type": "response"
+          },
+          {
+            "method": "logs.forward",
+            "type": "notification"
+          },
+          {
+            "method": "events.notify",
+            "type": "notification"
+          },
+          {
+            "method": "logs.forward",
+            "type": "notification"
+          },
+          {
+            "method": "logs.forward",
+            "type": "notification"
+          },
+          {
+            "method": "logs.forward",
+            "type": "notification"
+          },
+          {
+            "method": "logs.forward",
+            "type": "notification"
+          },
+          {
+            "method": "logs.forward",
+            "type": "notification"
+          },
+          {
+            "method": "logs.forward",
+            "type": "notification"
+          },
+          {
+            "method": "logs.forward",
+            "type": "notification"
+          },
+          {
+            "method": "events.notify",
+            "type": "notification"
+          },
+          {
+            "id": 5,
+            "type": "response"
+          },
+          {
+            "method": "logs.forward",
+            "type": "notification"
+          },
+          {
+            "method": "events.notify",
+            "type": "notification"
+          },
+          {
+            "id": 6,
+            "type": "response"
+          },
+          {
+            "method": "logs.forward",
+            "type": "notification"
+          },
+          {
+            "method": "logs.forward",
+            "type": "notification"
+          },
+          {
+            "method": "logs.forward",
+            "type": "notification"
+          },
+          {
+            "method": "logs.forward",
+            "type": "notification"
+          },
+          {
+            "method": "logs.forward",
+            "type": "notification"
+          },
+          {
+            "method": "logs.forward",
+            "type": "notification"
+          },
+          {
+            "method": "logs.forward",
+            "type": "notification"
+          },
+          {
+            "method": "logs.forward",
+            "type": "notification"
+          },
+          {
+            "method": "logs.forward",
+            "type": "notification"
+          },
+          {
+            "id": 7,
+            "type": "response"
+          },
+          {
+            "method": "logs.forward",
+            "type": "notification"
+          },
+          {
+            "id": 8,
+            "type": "response"
+          }
+        ],
+        "invalid_lines": [
+          "08:14:14.125 INFO  [storage] sqlite.open filepath=\"<system-temporary-directory>/\u2026\" agent=\"hermes\" readonly=false wal=true busyTimeoutMs=5000",
+          "08:14:14.163 INFO  [storage.migration] migration.applied version=1 name=\"initial\" durationMs=13 file=\"001-initial.sql\"",
+          "08:14:14.163 INFO  [storage.migration] migration.applied version=2 name=\"embedding-retry-queue\" durationMs=0 file=\"002-embedding-retry-queue.sql\"",
+          "08:14:14.170 INFO  [storage.migration] migration.applied version=3 name=\"embedding-retry-lease\" durationMs=6 file=\"003-embedding-retry-lease.sql\"",
+          "08:14:14.171 INFO  [storage.migration] migration.applied version=4 name=\"skill-usage\" durationMs=1 file=\"004-skill-usage.sql\"",
+          "08:14:14.171 INFO  [storage.migration] migration.applied version=5 name=\"skill-trials\" durationMs=0 file=\"005-skill-trials.sql\"",
+          "08:14:14.172 INFO  [storage.migration] migration.applied version=6 name=\"world-model-version\" durationMs=1 file=\"006-world-model-version.sql\"",
+          "08:14:14.173 INFO  [storage.migration] migration.applied version=7 name=\"namespace-visibility\" durationMs=1 file=\"007-namespace-visibility.sql\"",
+          "08:14:14.173 INFO  [storage.migration] migration.applied version=8 name=\"feedback-experience-metadata\" durationMs=0 file=\"008-feedback-experience-metadata.sql\"",
+          "08:14:14.175 INFO  [storage.migration] migration.applied version=9 name=\"policies-fts\" durationMs=1 file=\"009-policies-fts.sql\"",
+          "08:14:14.176 INFO  [storage.migration] migration.applied version=10 name=\"trace-policy-links\" durationMs=1 file=\"010-trace-policy-links.sql\"",
+          "08:14:14.176 INFO  [storage.migration] migration.applied version=11 name=\"hub-sharing\" durationMs=0 file=\"011-hub-sharing.sql\"",
+          "08:14:14.177 INFO  [storage.migration] migration.applied version=12 name=\"trace-turn-pagination-index\" durationMs=1 file=\"012-trace-turn-pagination-index.sql\"",
+          "08:14:14.177 INFO  [storage.migration] migrations.summary total=12 applied=12 skipped=0",
+          "08:14:14.185 INFO  [core.pipeline.bootstrap] hostLlmBridge.registered id=\"stdio.host.hermes.v1\" agent=\"hermes\"",
+          "08:14:14.185 INFO  [embedding] init provider=\"local\" model=\"Xenova/all-MiniLM-L6-v2\" dimensions=384 cacheEnabled=true batchSize=32",
+          "08:14:14.185 INFO  [llm] init provider=\"local_only\" model=\"\" temperature=0 timeoutMs=45000 maxRetries=0 fallbackToHost=false circuitBreaker={enabled,cooldownMs}",
+          "08:14:14.186 INFO  [core.pipeline.bootstrap] pipeline.lightweight_mode.enabled skipped=[5] agent=\"hermes\"",
+          "08:14:14.189 INFO  [core.pipeline.bootstrap] pipeline.ready agent=\"hermes\" home=\"<system-temporary-directory>/\u2026\" algorithm={captureEmbed,rewardDecayDays,l2MinSim,\u2026} agent=\"",
+          "08:14:14.203 INFO  [core.session] session.opened sessionId=\"zero-egress-source-2.0.10\" agent=\"hermes\" startedAt=1786349654201 new=true",
+          "08:14:14.204 INFO  [core.session] session.opened sessionId=\"zero-egress-source-2.0.10\" agent=\"hermes\" startedAt=1786349654201 new=false",
+          "08:14:14.206 INFO  [core.episode] episode.started episodeId=\"ep_1fxaex77whmk\" sessionId=\"zero-egress-source-2.0.10\" intent=\"unknown\" retrieval={tier1,tier2,tier3} sessionId=\"zero-egress-source-2.0.10\"",
+          "08:14:14.206 INFO  [core.session] episode.begun episodeId=\"ep_1fxaex77whmk\" sessionId=\"zero-egress-source-2.0.10\" intent=\"unknown\" intentConfidence=0.4 retrieval={tier1,tier2,tier3} sessionId=\"zero-eg",
+          "08:14:14.209 INFO  [embedding.local] loading model=\"Xenova/all-MiniLM-L6-v2\"",
+          "08:14:14.388 INFO  [core.retrieval.tier2] done traceCount=0 episodeCount=0 keywordPoolSize=20 latencyMs=3",
+          "08:14:14.389 INFO  [core.retrieval.tier3] done candidates=0 kept=0 latencyMs=0",
+          "08:14:14.390 INFO  [core.retrieval.tier1] done candidates=0 kept=0 latencyMs=6",
+          "08:14:14.391 INFO  [core.retrieval] done reason=\"turn_start\" sessionId=\"zero-egress-source-2.0.10\" tier1=0 tier2=0 tier2Ep=0 tier2Experience=0 tier3=0 kept=0 totalMs=185",
+          "08:14:14.391 INFO  [core.pipeline.bootstrap] turn.started agent=\"hermes\" sessionId=\"zero-egress-source-2.0.10\" episodeId=\"ep_1fxaex77whmk\" userChars=55 retrievalScenario=\"UNKNOWN_SAFE\" retrievalTotalM",
+          "08:14:14.392 INFO  [core.session] session.opened sessionId=\"zero-egress-source-2.0.10\" agent=\"hermes\" startedAt=1786349654201 new=false",
+          "08:14:14.395 INFO  [embedding.local] loading model=\"Xenova/all-MiniLM-L6-v2\"",
+          "08:14:14.402 INFO  [core.capture] capture.lightweight.done episodeId=\"ep_1fxaex77whmk\" sessionId=\"zero-egress-source-2.0.10\" traces=1 llmCalls={reflectionSynth,alphaScoring,batchedReflection,\u2026} totalM",
+          "08:14:14.403 INFO  [core.pipeline.bootstrap] turn.ended agent=\"hermes\" sessionId=\"zero-egress-source-2.0.10\" episodeId=\"ep_1fxaex77whmk\" toolCalls=0 agentChars=37 agent=\"hermes\"",
+          "08:14:14.403 INFO  [core.episode] episode.finalized episodeId=\"ep_1fxaex77whmk\" sessionId=\"zero-egress-source-2.0.10\" turnCount=2 durationMs=202",
+          "08:14:14.404 INFO  [embedding.local] loading model=\"Xenova/all-MiniLM-L6-v2\"",
+          "08:14:14.406 INFO  [core.session] session.closed sessionId=\"zero-egress-source-2.0.10\" reason=\"client\"",
+          "08:14:14.408 INFO  [embedding.local] loading model=\"Xenova/all-MiniLM-L6-v2\"",
+          "08:14:14.411 INFO  [core.retrieval.tier2] done traceCount=0 episodeCount=0 keywordPoolSize=20 latencyMs=1",
+          "08:14:14.411 INFO  [core.retrieval] done reason=\"tool_driven\" sessionId=\"adhoc-session-dd6b30a4\" tier1=0 tier2=0 tier2Ep=0 tier2Experience=0 tier3=0 kept=0 totalMs=5",
+          "08:14:14.411 INFO  [core.pipeline.bootstrap] pipeline.shutdown.begin reason=\"memory-core.shutdown\" agent=\"hermes\"",
+          "08:14:14.412 INFO  [core.session] shutdown.begin reason=\"memory-core.shutdown\"",
+          "08:14:14.412 INFO  [core.session] shutdown.done reason=\"memory-core.shutdown\"",
+          "08:14:14.412 INFO  [core.pipeline.bootstrap] pipeline.shutdown.done reason=\"memory-core.shutdown\" agent=\"hermes\"",
+          "08:14:14.415 INFO  [storage] sqlite.close filepath=\"<system-temporary-directory>/\u2026\" agent=\"hermes\""
+        ],
+        "line_count": 127
+      },
+      "strict_jsonrpc_framing_required": false,
+      "workload": {
+        "populated_turn": true,
+        "retrieval": true,
+        "search_hit_count": 0
+      }
+    },
+    {
+      "controls": {
+        "hub_enabled": false,
+        "provider_credentials_present": false,
+        "runtime_credential_files": [],
+        "telemetry_enabled": false
+      },
+      "egress_attempts": [],
+      "health": {
+        "agent": "hermes",
+        "embedder_provider": "lexical",
+        "llm_provider": "local_only",
+        "ok": true,
+        "version": "2.0.14"
+      },
+      "label": "copied-2.0.10-opened-by-2.0.14",
+      "model_inventory": {
+        "embedding": {
+          "enabled": false,
+          "provider_credentials": false
+        },
+        "host_evolution": {
+          "mode": "disabled",
+          "route": "approved_host_only"
+        },
+        "memos_llm": {
+          "mode": "disabled",
+          "provider_credentials": false
+        },
+        "observed": {
+          "embedder_provider": "lexical",
+          "llm_provider": "local_only"
+        },
+        "remote_fallback": false,
+        "retrieval": {
+          "engine": "sqlite_fts5",
+          "mode": "lexical",
+          "model": null
+        }
+      },
+      "passed": true,
+      "returncode": 0,
+      "stderr_bytes": 57,
+      "stdout": {
+        "frames": [
+          {
+            "method": "logs.forward",
+            "type": "notification"
+          },
+          {
+            "method": "logs.forward",
+            "type": "notification"
+          },
+          {
+            "method": "logs.forward",
+            "type": "notification"
+          },
+          {
+            "method": "logs.forward",
+            "type": "notification"
+          },
+          {
+            "method": "logs.forward",
+            "type": "notification"
+          },
+          {
+            "method": "logs.forward",
+            "type": "notification"
+          },
+          {
+            "method": "logs.forward",
+            "type": "notification"
+          },
+          {
+            "method": "logs.forward",
+            "type": "notification"
+          },
+          {
+            "method": "logs.forward",
+            "type": "notification"
+          },
+          {
+            "id": 1,
+            "type": "response"
+          },
+          {
+            "method": "logs.forward",
+            "type": "notification"
+          },
+          {
+            "method": "events.notify",
+            "type": "notification"
+          },
+          {
+            "id": 2,
+            "type": "response"
+          },
+          {
+            "method": "logs.forward",
+            "type": "notification"
+          },
+          {
+            "method": "events.notify",
+            "type": "notification"
+          },
+          {
+            "method": "logs.forward",
+            "type": "notification"
+          },
+          {
+            "method": "events.notify",
+            "type": "notification"
+          },
+          {
+            "method": "logs.forward",
+            "type": "notification"
+          },
+          {
+            "method": "events.notify",
+            "type": "notification"
+          },
+          {
+            "method": "logs.forward",
+            "type": "notification"
+          },
+          {
+            "method": "logs.forward",
+            "type": "notification"
+          },
+          {
+            "method": "logs.forward",
+            "type": "notification"
+          },
+          {
+            "method": "logs.forward",
+            "type": "notification"
+          },
+          {
+            "method": "logs.forward",
+            "type": "notification"
+          },
+          {
+            "method": "logs.forward",
+            "type": "notification"
+          },
+          {
+            "method": "events.notify",
+            "type": "notification"
+          },
+          {
+            "method": "logs.forward",
+            "type": "notification"
+          },
+          {
+            "id": 3,
+            "type": "response"
+          },
+          {
+            "method": "logs.forward",
+            "type": "notification"
+          },
+          {
+            "method": "events.notify",
+            "type": "notification"
+          },
+          {
+            "method": "events.notify",
+            "type": "notification"
+          },
+          {
+            "method": "logs.forward",
+            "type": "notification"
+          },
+          {
+            "method": "logs.forward",
+            "type": "notification"
+          },
+          {
+            "id": 4,
+            "type": "response"
+          },
+          {
+            "method": "logs.forward",
+            "type": "notification"
+          },
+          {
+            "method": "events.notify",
+            "type": "notification"
+          },
+          {
+            "id": 5,
+            "type": "response"
+          },
+          {
+            "method": "logs.forward",
+            "type": "notification"
+          },
+          {
+            "method": "events.notify",
+            "type": "notification"
+          },
+          {
+            "id": 6,
+            "type": "response"
+          },
+          {
+            "method": "logs.forward",
+            "type": "notification"
+          },
+          {
+            "method": "logs.forward",
+            "type": "notification"
+          },
+          {
+            "method": "logs.forward",
+            "type": "notification"
+          },
+          {
+            "method": "logs.forward",
+            "type": "notification"
+          },
+          {
+            "id": 7,
+            "type": "response"
+          },
+          {
+            "method": "logs.forward",
+            "type": "notification"
+          },
+          {
+            "id": 8,
+            "type": "response"
+          }
+        ],
+        "invalid_lines": [],
+        "line_count": 47
+      },
+      "strict_jsonrpc_framing_required": true,
+      "workload": {
+        "populated_turn": true,
+        "retrieval": true,
+        "search_hit_count": 1
+      }
+    },
+    {
+      "controls": {
+        "hub_enabled": false,
+        "provider_credentials_present": false,
+        "runtime_credential_files": [],
+        "telemetry_enabled": false
+      },
+      "egress_attempts": [],
+      "health": {
+        "agent": "hermes",
+        "embedder_provider": "lexical",
+        "llm_provider": "local_only",
+        "ok": true,
+        "version": "2.0.14"
+      },
+      "label": "restored-2.0.10-opened-by-2.0.14",
+      "model_inventory": {
+        "embedding": {
+          "enabled": false,
+          "provider_credentials": false
+        },
+        "host_evolution": {
+          "mode": "disabled",
+          "route": "approved_host_only"
+        },
+        "memos_llm": {
+          "mode": "disabled",
+          "provider_credentials": false
+        },
+        "observed": {
+          "embedder_provider": "lexical",
+          "llm_provider": "local_only"
+        },
+        "remote_fallback": false,
+        "retrieval": {
+          "engine": "sqlite_fts5",
+          "mode": "lexical",
+          "model": null
+        }
+      },
+      "passed": true,
+      "returncode": 0,
+      "stderr_bytes": 57,
+      "stdout": {
+        "frames": [
+          {
+            "method": "logs.forward",
+            "type": "notification"
+          },
+          {
+            "method": "logs.forward",
+            "type": "notification"
+          },
+          {
+            "method": "logs.forward",
+            "type": "notification"
+          },
+          {
+            "method": "logs.forward",
+            "type": "notification"
+          },
+          {
+            "method": "logs.forward",
+            "type": "notification"
+          },
+          {
+            "method": "logs.forward",
+            "type": "notification"
+          },
+          {
+            "method": "logs.forward",
+            "type": "notification"
+          },
+          {
+            "method": "logs.forward",
+            "type": "notification"
+          },
+          {
+            "method": "logs.forward",
+            "type": "notification"
+          },
+          {
+            "id": 1,
+            "type": "response"
+          },
+          {
+            "method": "logs.forward",
+            "type": "notification"
+          },
+          {
+            "method": "events.notify",
+            "type": "notification"
+          },
+          {
+            "id": 2,
+            "type": "response"
+          },
+          {
+            "method": "logs.forward",
+            "type": "notification"
+          },
+          {
+            "method": "events.notify",
+            "type": "notification"
+          },
+          {
+            "method": "logs.forward",
+            "type": "notification"
+          },
+          {
+            "method": "events.notify",
+            "type": "notification"
+          },
+          {
+            "method": "logs.forward",
+            "type": "notification"
+          },
+          {
+            "method": "events.notify",
+            "type": "notification"
+          },
+          {
+            "method": "logs.forward",
+            "type": "notification"
+          },
+          {
+            "method": "logs.forward",
+            "type": "notification"
+          },
+          {
+            "method": "logs.forward",
+            "type": "notification"
+          },
+          {
+            "method": "logs.forward",
+            "type": "notification"
+          },
+          {
+            "method": "logs.forward",
+            "type": "notification"
+          },
+          {
+            "method": "logs.forward",
+            "type": "notification"
+          },
+          {
+            "method": "events.notify",
+            "type": "notification"
+          },
+          {
+            "method": "logs.forward",
+            "type": "notification"
+          },
+          {
+            "id": 3,
+            "type": "response"
+          },
+          {
+            "method": "logs.forward",
+            "type": "notification"
+          },
+          {
+            "method": "events.notify",
+            "type": "notification"
+          },
+          {
+            "method": "events.notify",
+            "type": "notification"
+          },
+          {
+            "method": "logs.forward",
+            "type": "notification"
+          },
+          {
+            "method": "logs.forward",
+            "type": "notification"
+          },
+          {
+            "id": 4,
+            "type": "response"
+          },
+          {
+            "method": "logs.forward",
+            "type": "notification"
+          },
+          {
+            "method": "events.notify",
+            "type": "notification"
+          },
+          {
+            "id": 5,
+            "type": "response"
+          },
+          {
+            "method": "logs.forward",
+            "type": "notification"
+          },
+          {
+            "method": "events.notify",
+            "type": "notification"
+          },
+          {
+            "id": 6,
+            "type": "response"
+          },
+          {
+            "method": "logs.forward",
+            "type": "notification"
+          },
+          {
+            "method": "logs.forward",
+            "type": "notification"
+          },
+          {
+            "method": "logs.forward",
+            "type": "notification"
+          },
+          {
+            "method": "logs.forward",
+            "type": "notification"
+          },
+          {
+            "id": 7,
+            "type": "response"
+          },
+          {
+            "method": "logs.forward",
+            "type": "notification"
+          },
+          {
+            "id": 8,
+            "type": "response"
+          }
+        ],
+        "invalid_lines": [],
+        "line_count": 47
+      },
+      "strict_jsonrpc_framing_required": true,
+      "workload": {
+        "populated_turn": true,
+        "retrieval": true,
+        "search_hit_count": 1
+      }
+    }
+  ]
+}

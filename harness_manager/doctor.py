@@ -698,8 +698,38 @@ def _audit_memos_artifact(agent: Path, stack_root: Path, env: dict[str, str], ad
             add(YELLOW, "MemOS disabled; pinned artifact invalid/unavailable")
         else:
             add(GREEN, "MemOS pinned artifact valid and disabled; doctor did not start it")
+            data_root = Path(env.get("AGENTIC_MEMOS_DATA_ROOT", str(agent / "runtime" / "memos")))
+            profiles = sorted(data_root.glob("*/profiles/*/memos-plugin/config.yaml"))
+            invalid_profiles: list[str] = []
+            inventories: list[dict[str, object]] = []
+            for config_path in profiles:
+                try:
+                    value = json.loads(config_path.read_text(encoding="utf-8"))
+                    if not isinstance(value, dict):
+                        raise ValueError("profile is not an object")
+                    if not runtime._is_managed_alternate_config(value, config_path.parts[-5]):
+                        raise ValueError("profile is outside exact model allowlist")
+                    inventories.append(runtime.memos_model_inventory(value))
+                except (OSError, UnicodeError, json.JSONDecodeError, ValueError):
+                    invalid_profiles.append(str(config_path))
+            if invalid_profiles:
+                add(RED, "MemOS model policy invalid: " + ", ".join(invalid_profiles))
+            elif profiles:
+                host_models = sorted({
+                    str(row["llm"]["model"])
+                    for row in inventories
+                    if row["llm"]["route"] == "approved_claude_codex_host"
+                })
+                if host_models:
+                    add(
+                        GREEN,
+                        "MemOS model inventory: embeddings disabled; retrieval lexical/sqlite_fts5; "
+                        "approved Claude/Codex host route=" + ",".join(host_models),
+                    )
+                else:
+                    add(GREEN, "MemOS model inventory is model-free lexical/sqlite_fts5; LLM disabled")
             _audit_owned_memos_processes(
-                env.get("AGENTIC_MEMOS_DATA_ROOT", str(agent / "runtime" / "memos")),
+                data_root,
                 plugin / "node_modules/@memtensor/memos-local-plugin/dist/bridge.cjs", add,
             )
     except Exception as exc:

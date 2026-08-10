@@ -1,6 +1,6 @@
 # MemOS 2.0.14 Phase 9A durable evidence
 
-Decision: **FAILED/BLOCKED — STOP before R8**
+Decision: **LEXICAL REMEDIATION EVIDENCE PASSED; FINAL QUALIFICATION PENDING — STOP before R8**
 
 This directory retains sanitized, substantive evidence summaries without raw
 databases, large ledgers, hostnames, user-home paths, secrets, or credentials.
@@ -9,6 +9,26 @@ databases, large ledgers, hostnames, user-home paths, secrets, or credentials.
 ```bash
 (cd docs/evidence/phase9a-memos-2.0.14 && shasum -a 256 -c SHA256SUMS)
 ```
+
+## Lexical-only remediation rerun
+
+The durable [`lexical-remediation-v1/`](lexical-remediation-v1/README.md) packet
+records a passing lexical/FTS-only rerun: all MemOS 2.0.14 candidate states
+used no model and produced zero observed Node networking API attempts; synthetic
+precision@5 and usefulness were `1.0` with zero duplicates, leakage, degradation,
+or egress attempts; and isolated migration/restore/rollback passed. The legacy
+2.0.10 provenance state is not a candidate-state gate. Its schema-valid `local`
+label with `embedTraces=false` exists solely for isolated rollback compatibility
+and never loads a model.
+
+This supersedes the failed model-backed packet for remediation assessment, but
+does not yet establish the plan-required process-level zero-egress observation.
+Independent review also remains required. STOP before R8; no deployment,
+activation, assist, or evolution is authorized.
+
+## Historical failed packet
+
+The files below retain the pre-remediation model-backed qualification failure.
 
 ## Files
 

@@ -63,6 +63,7 @@ class EvolutionPilotConfigTest(unittest.TestCase):
                 "integrity": MEMOS_PLUGIN_INTEGRITY,
                 "package": "@memtensor/memos-local-plugin",
                 "version": "2.0.14",
+                "distribution": runtime_module.MEMOS_DISTRIBUTION,
             }))
             manifest = runtime_module.build_plugin_file_manifest(root)
             manifest_path = root / ".agentic-stack-files.json"
@@ -125,6 +126,7 @@ class EvolutionPilotConfigTest(unittest.TestCase):
         self.assertEqual(pilot["algorithm"], {
             "lightweightMemory": {"enabled": False},
             "capture": {
+                "embedTraces": False,
                 "alphaScoring": False, "synthReflections": False,
                 "batchMode": "per_step",
             },

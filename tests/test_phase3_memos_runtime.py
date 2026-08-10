@@ -7,6 +7,7 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -69,7 +70,9 @@ class MemosRuntimeTest(unittest.TestCase):
         # shutdown itself is the bridge's --no-viewer launch flag.
         self.assertEqual(set(config["viewer"]), {"bindHost", "openOnFirstTurn"})
         self.assertEqual(set(config["bridge"]), {"mode"})
-        self.assertEqual(config["embedding"]["provider"], "local")
+        self.assertEqual(config["embedding"], {
+            "enabled": False, "provider": "lexical", "engine": "sqlite_fts5",
+        })
         self.assertEqual(config["llm"], {
             "provider": "local_only", "fallbackToHost": False, "maxRetries": 0,
         })
@@ -202,16 +205,26 @@ class MemosInstallTest(unittest.TestCase):
                 (package / "dist" / "bridge.cjs").write_text("// built")
                 return type("Result", (), {"returncode": 0, "stdout": "", "stderr": ""})()
 
+            def fake_delta(package):
+                metadata = json.loads((package / "package.json").read_text())
+                metadata["agenticStackDistribution"] = "agentic-stack-memos-2.0.14-lexical.1"
+                (package / "package.json").write_text(json.dumps(metadata))
+
+            def fake_prune(staging, _lock_dir):
+                (staging / "package-lock.json").write_text(json.dumps({"packages": {}}))
+
             with self.assertRaises(RuntimeError):
                 install_verified_tarball(
                     artifact, root / "code", integrity=integrity, shasum=shasum,
                     node_version="v19.9.0", runner=fake_run, lock_asset_dir=lock_dir,
                 )
-            result = install_verified_tarball(
-                artifact, root / "code", integrity=integrity, shasum=shasum,
-                node_version="v20.11.1", npm_command=("offline-npm",), runner=fake_run,
-                lock_asset_dir=lock_dir,
-            )
+            with patch("harness_manager.memos_install._apply_reviewed_lexical_delta", fake_delta), \
+                    patch("harness_manager.memos_install._prune_model_loader_dependencies", fake_prune):
+                result = install_verified_tarball(
+                    artifact, root / "code", integrity=integrity, shasum=shasum,
+                    node_version="v20.11.1", npm_command=("offline-npm",), runner=fake_run,
+                    lock_asset_dir=lock_dir,
+                )
             command = calls[0][0]
             self.assertEqual(command[0], "offline-npm")
             self.assertEqual(command[1], "ci")

@@ -312,14 +312,17 @@ def _validate_managed_profile(plugin: Path) -> None:
     embedding = value.get("embedding")
     if not isinstance(embedding, dict):
         raise BehavioralExportError("managed MemOS profile embedding is not local-private")
-    cache = embedding.get("cache")
-    if (embedding.get("provider") != "local"
-            or embedding.get("model") != "Xenova/all-MiniLM-L6-v2"
-            or not isinstance(cache, dict)
-            or cache.get("enabled") is not True):
-        raise BehavioralExportError("managed MemOS profile embedding is not local-private")
+    if (set(embedding) != {"enabled", "provider", "engine"}
+            or embedding.get("enabled") is not False
+            or embedding.get("provider") != "lexical"
+            or embedding.get("engine") != "sqlite_fts5"):
+        raise BehavioralExportError("managed MemOS profile embedding is not model-free lexical")
     llm = value.get("llm")
-    if not isinstance(llm, dict) or llm.get("provider") != "local_only" or llm.get("fallbackToHost") is not False or "model" in llm:
+    if (not isinstance(llm, dict)
+            or set(llm) - {"provider", "fallbackToHost", "maxRetries"}
+            or llm.get("provider") != "local_only"
+            or llm.get("fallbackToHost") is not False
+            or "model" in llm):
         raise BehavioralExportError("managed MemOS profile is not local-only")
     hub = value.get("hub")
     if not isinstance(hub, dict) or hub.get("enabled") is not False:
@@ -338,7 +341,10 @@ def _validate_managed_profile(plugin: Path) -> None:
     lightweight_memory = algorithm.get("lightweightMemory")
     if not isinstance(lightweight_memory, dict) or lightweight_memory.get("enabled") is not True:
         raise BehavioralExportError("managed MemOS profile is not the blocked-quality profile")
-    if any(key in algorithm for key in ("capture", "reward", "l2Induction", "l3Abstraction", "skill", "feedback", "retrieval")):
+    capture = algorithm.get("capture")
+    if capture != {"embedTraces": False}:
+        raise BehavioralExportError("managed MemOS profile does not disable trace embeddings")
+    if any(key in algorithm for key in ("reward", "l2Induction", "l3Abstraction", "skill", "feedback", "retrieval")):
         raise BehavioralExportError("managed MemOS profile contains evolution fields")
 
 

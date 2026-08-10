@@ -17,6 +17,13 @@ from typing import Any
 
 ROOT = Path(__file__).resolve().parents[1]
 PROJECT_ID = "0123456789abcdef"
+MODEL_INVENTORY = {
+    "retrieval": {"mode": "lexical", "engine": "sqlite_fts5", "model": None},
+    "embedding": {"enabled": False, "provider_credentials": False},
+    "memos_llm": {"mode": "disabled", "provider_credentials": False},
+    "host_evolution": {"mode": "disabled", "route": "approved_host_only"},
+    "remote_fallback": False,
+}
 TRIPWIRE = r'''"use strict";
 const fs = require("fs");
 const dns = require("dns");
@@ -87,12 +94,28 @@ def _config() -> dict[str, Any]:
     return build_memos_config(PROJECT_ID)
 
 
+def _legacy_2010_config() -> dict[str, Any]:
+    """Build only the isolated 2.0.10 seed profile used for copy rehearsals."""
+    value = _config()
+    value["embedding"] = {
+        "provider": "local", "model": "Xenova/all-MiniLM-L6-v2",
+    }
+    # 2.0.10 requires a schema-valid provider label, but its loader must not be
+    # invoked while seeding an isolated copy/rollback store.
+    value["algorithm"]["capture"]["embedTraces"] = False
+    return value
+
+
 def _run_bridge(
     bridge: Path, state: Path, hook: Path, label: str, *, strict_framing: bool = True,
+    config_value: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     state.mkdir(parents=True, exist_ok=True)
     config = state / "config.yaml"
-    config.write_text(json.dumps(_config(), sort_keys=True) + "\n", encoding="utf-8")
+    config.write_text(
+        json.dumps(config_value or _config(), sort_keys=True) + "\n",
+        encoding="utf-8",
+    )
     attempts = state / "egress-attempts.jsonl"
     attempts.write_text("", encoding="utf-8")
     os.chmod(attempts, 0o600)
@@ -141,25 +164,27 @@ def _run_bridge(
         "sessionKey": session_id,
     }
     common = {"agent": "hermes", "sessionId": session_id, "namespace": namespace}
+    now_ms = int(time.time() * 1000)
+    token = "synthetic-python-case-00-quartz"
     call(2, "session.open", {**common, "meta": {"qualification": True}})
     turn = call(3, "turn.start", {
         **common, "turnKey": f"turn-{label}",
-        "userText": "synthetic zero egress embedding probe quartz",
-        "contextHints": {"synthetic": True}, "ts": 1700000000000,
+        "userText": f"training example python {token}",
+        "contextHints": {"synthetic": True}, "ts": now_ms,
     })
     episode_id = (turn.get("result") or {}).get("query", {}).get("episodeId")
     if not episode_id:
         raise RuntimeError("turn.start did not return an episode ID")
     call(4, "turn.end", {
         **common, "episodeId": episode_id,
-        "agentText": "synthetic verified offline solution quartz", "toolCalls": [],
-        "contextHints": {"synthetic": True}, "ts": 1700000000001,
+        "agentText": "synthetic-solution-python-00-verified", "toolCalls": [],
+        "contextHints": {"synthetic": True}, "ts": now_ms + 1,
     })
     call(5, "episode.close", {"episodeId": episode_id})
     call(6, "session.close", {"sessionId": session_id})
     search = call(7, "memory.search", {
         "agent": "hermes", "namespace": namespace,
-        "query": "recall synthetic zero egress embedding probe quartz",
+        "query": f"recall training solution for {token}",
         "topK": {"tier1": 5, "tier2": 5, "tier3": 5},
         "filters": {"reason": "zero_egress_qualification"},
     })
@@ -186,6 +211,13 @@ def _run_bridge(
         "embedder_provider": (raw_health.get("embedder") or {}).get("provider"),
         "llm_provider": (raw_health.get("llm") or {}).get("provider"),
     }
+    model_inventory = {
+        **MODEL_INVENTORY,
+        "observed": {
+            "embedder_provider": None if health is None else health["embedder_provider"],
+            "llm_provider": None if health is None else health["llm_provider"],
+        },
+    }
     framing = [
         {"type": "response", "id": row["id"]}
         if "id" in row else {"type": "notification", "method": row.get("method")}
@@ -195,12 +227,19 @@ def _run_bridge(
     credentials = sorted(
         path.relative_to(state).as_posix() for path in state.rglob("telemetry.credentials.json")
     )
+    search_hits = (search.get("result") or {}).get("hits", [])
     passed = (
         process.returncode == 0 and (not invalid or not strict_framing) and not attempts_rows
         and isinstance(health, dict)
         and not any("error" in response for response in responses.values())
         and config_value.get("telemetry", {}).get("enabled") is False
         and config_value.get("hub", {}).get("enabled") is False
+        and config_value.get("embedding") == {
+            "enabled": False, "provider": "lexical", "engine": "sqlite_fts5",
+        }
+        and health.get("embedder_provider") in (None, "lexical")
+        and health.get("llm_provider") == "local_only"
+        and bool(search_hits)
         and not credentials
     )
     return {
@@ -208,6 +247,7 @@ def _run_bridge(
         "passed": passed,
         "returncode": process.returncode,
         "health": health,
+        "model_inventory": model_inventory,
         "stdout": {"line_count": len(lines), "frames": framing, "invalid_lines": invalid},
         "strict_jsonrpc_framing_required": strict_framing,
         "stderr_bytes": len(stderr.encode()),
@@ -215,12 +255,13 @@ def _run_bridge(
         "workload": {
             "populated_turn": True,
             "retrieval": True,
-            "search_hit_count": len((search.get("result") or {}).get("hits", [])),
+            "search_hit_count": len(search_hits),
         },
         "controls": {
             "telemetry_enabled": config_value["telemetry"]["enabled"],
             "hub_enabled": config_value["hub"]["enabled"],
             "runtime_credential_files": credentials,
+            "provider_credentials_present": False,
         },
     }
 
@@ -248,6 +289,7 @@ def main() -> int:
         old_source = work / "source-2.0.10"
         old_result = _run_bridge(
             bridge_old, old_source, hook, "source-2.0.10", strict_framing=False,
+            config_value=_legacy_2010_config(),
         )
         copied = work / "copied-2.0.10"
         shutil.copytree(old_source, copied, ignore=shutil.ignore_patterns("daemon", "egress-attempts.jsonl"))
@@ -279,7 +321,12 @@ def main() -> int:
             },
             "states": [fresh_result, old_result, copied_result, restored_result],
         }
-        artifact["passed"] = all(row["passed"] for row in artifact["states"])
+        # The old source run is a seed/baseline and is expected to violate the
+        # new model policy. Qualification applies to all states opened by the
+        # reviewed 2.0.14 lexical distribution.
+        artifact["passed"] = all(
+            row["passed"] for row in (fresh_result, copied_result, restored_result)
+        )
         output = args.output.resolve()
         output.parent.mkdir(parents=True, exist_ok=True)
         payload = json.dumps(artifact, indent=2, sort_keys=True) + "\n"

@@ -47,7 +47,7 @@ class ZeroEgressQualificationTest(unittest.TestCase):
         bridge_source = r'''const readline=require("readline");
 const rl=readline.createInterface({input:process.stdin});
 rl.on("line",line=>{const r=JSON.parse(line);let result={ok:true};
-if(r.method==="core.health")result={ok:true,version:"2.0.14",agent:"hermes",embedder:{provider:"local"},llm:{provider:"local_only"}};
+if(r.method==="core.health")result={ok:true,version:"2.0.14",agent:"hermes",embedder:{provider:"lexical"},llm:{provider:"local_only"}};
 if(r.method==="turn.start")result={query:{episodeId:"episode-1"}};
 if(r.method==="memory.search")result={hits:[{refId:"trace-1"}]};
 process.stdout.write(JSON.stringify({jsonrpc:"2.0",id:r.id,result})+"\n");

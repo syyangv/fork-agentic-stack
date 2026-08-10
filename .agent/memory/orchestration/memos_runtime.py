@@ -22,6 +22,7 @@ from .memos_journal import _project_lock, stable_project_lock_path
 
 
 MEMOS_PLUGIN_VERSION = "2.0.14"
+MEMOS_DISTRIBUTION = "agentic-stack-memos-2.0.14-lexical.1"
 MEMOS_PLUGIN_SHASUM = "32639d241918c7da8d536e52eac7e0a7c42c312e"
 MEMOS_PLUGIN_INTEGRITY = (
     "sha512-yEAroCSBfdf7urP47Hyr2MzTg4BPLIWqlno5r0imHb69s8fh7uXZRuPK23IWCzDFIWuPK/SuZfk8u3MdGQOzLg=="
@@ -38,6 +39,15 @@ _PLUGIN_MANIFEST = ".agentic-stack-files.json"
 _PLUGIN_MARKER = ".agentic-stack-install.json"
 _PROJECT_ID = re.compile(r"[0-9a-f]{16}\Z")
 _MODEL_NAME = re.compile(r"[A-Za-z0-9][A-Za-z0-9._:/-]{0,127}\Z")
+MEMOS_MODEL_INVENTORY = MappingProxyType({
+    "retrieval": MappingProxyType({
+        "mode": "lexical", "engine": "sqlite_fts5", "model": None,
+    }),
+    "embedding": MappingProxyType({"enabled": False, "provider_credentials": False}),
+    "memos_llm": MappingProxyType({"mode": "disabled", "provider_credentials": False}),
+    "host_evolution": MappingProxyType({"mode": "disabled", "route": "approved_host_only"}),
+    "remote_fallback": False,
+})
 _PILOT_SCHEMA = "agentic.memory.evolution-pilot.v2"
 _PILOT_KEYS = {
     "schema", "enabled", "project_id", "repo_root", "provider", "model",
@@ -124,6 +134,7 @@ def validate_pinned_plugin(plugin_dir: str | Path) -> Path:
         "integrity": MEMOS_PLUGIN_INTEGRITY,
         "package": "@memtensor/memos-local-plugin",
         "version": MEMOS_PLUGIN_VERSION,
+        "distribution": MEMOS_DISTRIBUTION,
     }
     manifest_digest = marker.pop("files_manifest_sha256", None)
     if (marker != expected_marker
@@ -215,16 +226,19 @@ def build_memos_config(
         },
         "bridge": {"mode": "stdio"},
         "embedding": {
-            "provider": "local",
-            "model": "Xenova/all-MiniLM-L6-v2",
-            "cache": {"enabled": True, "maxItems": 20_000},
+            "enabled": False,
+            "provider": "lexical",
+            "engine": "sqlite_fts5",
         },
         "llm": {
             "provider": "host" if evolution_pilot else "local_only",
             "fallbackToHost": False,
             "maxRetries": 0,
         },
-        "algorithm": {"lightweightMemory": {"enabled": True}},
+        "algorithm": {
+            "lightweightMemory": {"enabled": True},
+            "capture": {"embedTraces": False},
+        },
         "hub": {"enabled": False, "role": "client"},
         "telemetry": {"enabled": False},
         "logging": {
@@ -250,6 +264,7 @@ def build_memos_config(
         config["algorithm"] = {
             "lightweightMemory": {"enabled": False},
             "capture": {
+                "embedTraces": False,
                 "alphaScoring": False,
                 "synthReflections": False,
                 "batchMode": "per_step",
@@ -264,7 +279,61 @@ def build_memos_config(
             "feedback": {"useLlm": False},
             "retrieval": {"llmFilterEnabled": False},
         }
+    validate_memos_model_policy(config, allow_approved_host=evolution_pilot)
     return config
+
+
+def validate_memos_model_policy(
+    config: Mapping[str, object], *, allow_approved_host: bool = False,
+) -> None:
+    """Reject every model/provider path outside the model-free MemOS profile."""
+    embedding = config.get("embedding")
+    if (not isinstance(embedding, Mapping)
+            or set(embedding) != {"enabled", "provider", "engine"}
+            or embedding.get("enabled") is not False
+            or embedding.get("provider") != "lexical"
+            or embedding.get("engine") != "sqlite_fts5"):
+        raise ValueError("MemOS embedding must be disabled with lexical sqlite_fts5 retrieval")
+    algorithm = config.get("algorithm")
+    capture = algorithm.get("capture") if isinstance(algorithm, Mapping) else None
+    if not isinstance(capture, Mapping) or capture.get("embedTraces") is not False:
+        raise ValueError("MemOS trace embedding must be disabled")
+    llm = config.get("llm")
+    local_only = (
+        isinstance(llm, Mapping)
+        and set(llm) == {"provider", "fallbackToHost", "maxRetries"}
+        and llm.get("provider") == "local_only"
+        and llm.get("fallbackToHost") is False
+        and llm.get("maxRetries") == 0
+    )
+    approved_host = (
+        allow_approved_host
+        and isinstance(llm, Mapping)
+        and set(llm) == {"provider", "model", "fallbackToHost", "maxRetries"}
+        and llm.get("provider") == "host"
+        and isinstance(llm.get("model"), str)
+        and _MODEL_NAME.fullmatch(llm["model"]) is not None
+        and llm.get("fallbackToHost") is False
+        and llm.get("maxRetries") == 0
+    )
+    if not (local_only or approved_host):
+        raise ValueError("MemOS LLM/provider fallback is not allowed")
+
+
+def memos_model_inventory(config: Mapping[str, object]) -> dict[str, object]:
+    """Return the non-sensitive model/retrieval inventory for one managed profile."""
+    llm = config.get("llm")
+    allow_host = isinstance(llm, Mapping) and llm.get("provider") == "host"
+    validate_memos_model_policy(config, allow_approved_host=allow_host)
+    return {
+        "retrieval": {"mode": "lexical", "engine": "sqlite_fts5", "model": None},
+        "embedding": {"enabled": False, "loader": None, "remote_fallback": False},
+        "llm": {
+            "route": "approved_claude_codex_host" if allow_host else "disabled",
+            "model": llm.get("model") if allow_host else None,
+            "provider_credentials": False,
+        },
+    }
 
 
 def load_evolution_pilot_config(

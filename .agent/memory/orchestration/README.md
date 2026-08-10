@@ -90,6 +90,14 @@ project ID. The default profile remains `lightweightMemory.enabled: true`.
 Recognized managed profiles can be switched back to lightweight mode without
 deleting behavioral data.
 
+The managed default is model-free: `embedding.enabled` is false and retrieval
+uses the pinned `lexical` / `sqlite_fts5` path. MemOS receives no embedding or
+LLM provider credentials, model IDs, or remote fallback. The only model-backed
+exception is the separately gated evolution pilot's approved host route; it is
+disabled by default and never supplies provider credentials to MemOS. Doctor,
+behavioral export, backup/restore validation, and qualification evidence all
+enforce or record this same model inventory.
+
 The `agentic.memory.evolution-pilot.v2` contract permits only provider
 `claude_opus` and an Opus routing label. The native reverse boundary accepts
 only exact, post-normalization MemOS 2.0.14 L2/L3/skill system contracts and

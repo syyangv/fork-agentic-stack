@@ -37,14 +37,31 @@ def package_path(plugin: Path) -> Path:
     return plugin / "node_modules/@memtensor/memos-local-plugin/package.json"
 
 
+def legacy_2010_config() -> dict:
+    value = build_memos_config(PROJECT_ID)
+    value["embedding"] = {
+        "provider": "local", "model": "Xenova/all-MiniLM-L6-v2",
+    }
+    # The immutable rollback runtime requires a schema-valid provider label,
+    # but trace embedding remains disabled so the loader is never invoked.
+    value["algorithm"]["capture"]["embedTraces"] = False
+    return value
+
+
 def open_client(plugin: Path, project: Path) -> MemOSBridgeClient:
     memos_home = project / "profiles" / PROJECT_ID / "memos-plugin"
     home = project.parent / "homes" / project.parent.name
     home.mkdir(parents=True, exist_ok=True)
     memos_home.mkdir(parents=True, exist_ok=True)
     config = memos_home / "config.yaml"
-    if not config.exists():
-        write_config_atomic(config, build_memos_config(PROJECT_ID))
+    version = json.loads(package_path(plugin).read_text())["version"]
+    # Each runtime receives the exact profile it supports. The old profile is
+    # used only to seed isolated rollback evidence; every 2.0.14-opened state
+    # is rewritten to the reviewed lexical/no-model policy before startup.
+    write_config_atomic(
+        config,
+        legacy_2010_config() if version == "2.0.10" else build_memos_config(PROJECT_ID),
+    )
     environment = {
         "HOME": str(home), "MEMOS_HOME": str(memos_home),
         "MEMOS_CONFIG_FILE": str(config), "MEMOS_TELEMETRY_ENABLED": "0",
@@ -168,11 +185,23 @@ def main() -> int:
     old_client.close()
     pre_upgrade = db_evidence(old)
 
-    backup = create_project_backup(old, args.work_root / "backups", PROJECT_ID)
     upgrade = args.work_root / "upgrade-copy" / PROJECT_ID
     rollback = args.work_root / "pristine-rollback" / PROJECT_ID
     shutil.copytree(old, upgrade)
     shutil.copytree(old, rollback)
+
+    # The managed backup must itself satisfy the current no-model policy.
+    # Preserve an untouched rollback copy, then create a pre-migration backup
+    # from the old database paired with the reviewed lexical configuration.
+    backup_source = args.work_root / "pre-migration-backup-source" / PROJECT_ID
+    shutil.copytree(old, backup_source)
+    write_config_atomic(
+        backup_source / "profiles" / PROJECT_ID / "memos-plugin" / "config.yaml",
+        build_memos_config(PROJECT_ID),
+    )
+    backup = create_project_backup(
+        backup_source, args.work_root / "backups", PROJECT_ID,
+    )
 
     upgraded_client = open_client(args.plugin_2014, upgrade)
     upgraded_health = upgraded_client.health()
@@ -198,8 +227,8 @@ def main() -> int:
     restore_parent = args.work_root / "restored-copy"
     restored = restore_parent / PROJECT_ID
     restored_rollback = restore_project_backup(backup, restored, PROJECT_ID)
-    restored_client = open_client(args.plugin_2010, restored)
-    restored_health = restored_client.call("core.health", timeout=20)
+    restored_client = open_client(args.plugin_2014, restored)
+    restored_health = restored_client.health()
     restored_client.close()
 
     rollback_client = open_client(args.plugin_2010, rollback)
@@ -207,7 +236,7 @@ def main() -> int:
     rollback_client.close()
 
     paths = {"fresh_2014": fresh, "pre_upgrade_2010": old,
-             "upgraded_copy_2014": upgrade, "backup_restored_2010": restored,
+             "upgraded_copy_2014": upgrade, "backup_restored_2014": restored,
              "upgraded_backup_restored_2014": upgraded_restored,
              "pristine_rollback_2010": rollback}
     evidence = {

@@ -1,12 +1,30 @@
 # Phase 9A MemOS 2.0.14 qualification evidence index
 
 Date: 2026-08-10
-Decision: **FAILED/BLOCKED — STOP before R8**
+Decision: **LEXICAL REMEDIATION EVIDENCE PASSED; FINAL QUALIFICATION PENDING — STOP before R8**
 
 This index binds the small, reviewable source changes to durable sanitized
 evidence in the repository and records the original isolated-run locations.
 It does not retain runtime databases. All workloads used synthetic data and
 neither R7 nor R8 material.
+
+## Lexical-only remediation rerun
+
+- Durable packet: [`phase9a-memos-2.0.14/lexical-remediation-v1/`](phase9a-memos-2.0.14/lexical-remediation-v1/README.md)
+- Supplied zero-egress source SHA-256: `a893fc6b7ef1d6c7b37298af728e56232de98267ed0077148b621aa5374a4b5d`
+- Candidate states: fresh 2.0.14, copied 2.0.10 opened by 2.0.14, and restored 2.0.10 opened by 2.0.14 all used lexical FTS5 retrieval, loaded no model, and recorded zero Node networking API attempts.
+- Benchmark: precision@5 `1.0`, usefulness `1.0`, and zero duplicate logical turns, cross-project leaks, degradation errors, or observed egress attempts.
+- Reproducible install: two real independent `install_verified_tarball` runs from the pinned 2.0.14 tarball produced identical manifest SHA-256 `dc0aae1417698ed4343895b292fb2f6ac1bcef4820eff6eb46875405b1ed73d9`; exact lexical lock/package hashes `acb61ce0d0806fae9fb155cc1fa18cccb8275ffa5f27a0857567f3973f160f92` / `1b6349dcc3fac8cbc27962a00c35b5abbab73a6166c6d28d73db6de55f97a708`; the reviewed distribution marker; no loader files or `@huggingface/transformers`; and two validated immutable installed trees. Durable artifact: `reproducible-install.json`; runner: `tests/qualification/phase9a_memos_214_reproducible_install.py`.
+- Migration/rollback: passed in isolated synthetic stores. The pristine 2.0.10 rollback's schema-valid `local` provider label with `embedTraces=false` is compatibility-only and never loads a model; every 2.0.14 candidate state is lexical/no-model.
+- Modes: deployed runtime unchanged/off; assist and evolution false; `r8_run=false`. No R7 or R8 material was used.
+
+The application-layer tripwire is not packet capture or native syscall tracing.
+Accordingly, the remediation evidence clears the previously failed model-loader
+and observable Node-API egress gates, but final qualification remains pending
+the plan-required process-level zero-egress observation and independent review.
+It authorizes neither deployment nor R8.
+
+## Historical pre-remediation qualification
 
 ## Observable egress qualification
 
