@@ -24,6 +24,13 @@ and observable Node-API egress gates, but final qualification remains pending
 the plan-required process-level zero-egress observation and independent review.
 It authorizes neither deployment nor R8.
 
+## Process-level observation attempt — blocked before workload trace
+
+- Durable packet: [`phase9a-memos-2.0.14/lexical-remediation-v1/process-trace-attempt-v1/`](phase9a-memos-2.0.14/lexical-remediation-v1/process-trace-attempt-v1/README.md)
+- The authorized macOS `dtruss` process did not start the qualification workload. SIP rejected execution of `/usr/bin/sandbox-exec` with `Operation not permitted`; SIP remained enabled.
+- The disposable Debian 12 / arm64 alternative used the pinned artifacts and reviewed lexical installer, but stopped before `strace`: its immutable manifest was `532c042b5117d0c084b108e4d20a716333b4ac674e1908bc1ad7a95831accf48`, not the reviewed Darwin manifest `dc0aae1417698ed4343895b292fb2f6ac1bcef4820eff6eb46875405b1ed73d9`. The differing runtime files were the platform-native `better_sqlite3.node` and `esbuild` executables.
+- No deny canary or workload trace was run after that prerequisite failed. Linux evidence cannot replace host-native observation of the exact Darwin runtime. Final Phase 9A qualification therefore remains pending and fail-closed.
+
 ## Historical pre-remediation qualification
 
 ## Observable egress qualification
