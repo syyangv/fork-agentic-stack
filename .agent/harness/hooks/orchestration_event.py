@@ -68,6 +68,7 @@ CAPABILITIES: dict[str, dict[str, bool]] = {
     },
     "standalone-python": dict.fromkeys(SIGNALS, False),
     "windsurf": dict.fromkeys(SIGNALS, False),
+    "zed": dict.fromkeys(SIGNALS, False),
 }
 
 

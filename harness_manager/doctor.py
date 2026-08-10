@@ -33,35 +33,88 @@ from .scheduled_review_health import default_scheduler_path, inspect_scheduler
 
 
 # Detection signals: (filename, signal_strength) tuples per adapter.
-# Strong signals = file exists AND has the expected shape.
+#
+# STRONG means: this path existing proves *we* installed this adapter here.
+# Both consumers rely on that and only that — state.legacy_unregistered_adapters()
+# gates pre-v0.9 migration on it, and cli.py pre-checks onboarding boxes with it,
+# where a false positive can install over a user's file.
+#
+# So a path may only be strong if nothing but our installer creates it. That
+# rules out three categories, all of which used to be marked strong here:
+#   - files the user or the harness vendor authors (.windsurfrules,
+#     opencode.json, .claude/settings.json, .gemini/settings.json)
+#   - anything under .agent/, which is the shared brain rather than any one
+#     adapter's footprint (codex's .agent/skills matched every brain-present
+#     project, so codex was reported as legacy-unregistered everywhere)
+#   - generic root filenames (CLAUDE.md, AGENTS.md, run.py) — already weak
+#
+# assert_signals_consistent() below enforces this; a test calls it.
 DETECT_SIGNALS = {
     "claude-code": [
         ("CLAUDE.md", "weak"),
-        (".claude/settings.json", "strong"),
+        (".claude/settings.json", "weak"),
     ],
     "cursor": [(".cursor/rules/agentic-stack.mdc", "strong")],
+    "zed": [(".rules", "weak")],  # generic root filename; ambiguous alone
     "windsurf": [
         (".windsurf/rules/agentic-stack.md", "strong"),
-        (".windsurfrules", "strong"),
+        (".windsurfrules", "weak"),
     ],
     "openclaw": [(".openclaw-system.md", "strong")],
     "pi": [(".pi/extensions/memory-hook.ts", "strong")],
-    "codex": [(".agent/skills", "strong")],
+    "codex": [(".agent/skills", "weak")],
+    # Single entry: this key was previously declared twice, and the second
+    # literal silently discarded the first, dropping .gemini/settings.json
+    # from detection entirely.
     "gemini": [
         ("GEMINI.md", "weak"),
-        (".gemini/settings.json", "strong"),
+        ("gemini.md", "weak"),
+        (".gemini/settings.json", "weak"),
         (".gemini/skills", "strong"),
     ],
     "antigravity": [("ANTIGRAVITY.md", "strong")],
-    "opencode": [("opencode.json", "strong")],
+    "opencode": [("opencode.json", "weak")],
     "hermes": [("AGENTS.md", "weak")],  # AGENTS.md alone is ambiguous
     "standalone-python": [("run.py", "weak")],
-    "gemini": [
-        ("gemini.md", "weak"),
-        (".gemini/skills", "strong"),
-    ],
     "copilot-cli": [(".github/instructions/agentic-stack.instructions.md", "strong")],
 }
+
+VALID_SIGNAL_STRENGTHS = {"strong", "weak"}
+
+
+def assert_signals_consistent() -> None:
+    """Raise if DETECT_SIGNALS violates the strong-signal contract.
+
+    Cheap to call, and the only thing standing between a copy-pasted
+    manifest and a false-positive install over someone's file.
+    """
+    from . import schema as schema_mod
+
+    for adapter, signals in DETECT_SIGNALS.items():
+        seen: set[str] = set()
+        for path, strength in signals:
+            if strength not in VALID_SIGNAL_STRENGTHS:
+                raise ValueError(
+                    f"{adapter}: signal '{path}' has strength '{strength}'; "
+                    f"expected one of {sorted(VALID_SIGNAL_STRENGTHS)}"
+                )
+            if path in seen:
+                raise ValueError(f"{adapter}: signal '{path}' listed twice")
+            seen.add(path)
+            if strength != "strong":
+                continue
+            if schema_mod.is_shared_filename(path):
+                raise ValueError(
+                    f"{adapter}: '{path}' is authored by users or other tools, "
+                    f"so its presence does not prove we installed anything; "
+                    f"mark it weak"
+                )
+            if path == ".agent" or path.startswith(".agent/"):
+                raise ValueError(
+                    f"{adapter}: '{path}' is part of the shared brain, not this "
+                    f"adapter's footprint, so it matches every brain-present "
+                    f"project; mark it weak"
+                )
 
 
 # ---- statuses ---------------------------------------------------------
