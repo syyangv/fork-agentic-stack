@@ -1,0 +1,2 @@
+[{"denied": true, "errno": 1, "kind": "connect"}, {"denied": true, "errno": 1, "kind": "sendto"}]
+parent-ok

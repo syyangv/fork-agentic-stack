@@ -31,6 +31,14 @@ It authorizes neither deployment nor R8.
 - The disposable Debian 12 / arm64 alternative used the pinned artifacts and reviewed lexical installer, but stopped before `strace`: its immutable manifest was `532c042b5117d0c084b108e4d20a716333b4ac674e1908bc1ad7a95831accf48`, not the reviewed Darwin manifest `dc0aae1417698ed4343895b292fb2f6ac1bcef4820eff6eb46875405b1ed73d9`. The differing runtime files were the platform-native `better_sqlite3.node` and `esbuild` executables.
 - No deny canary or workload trace was run after that prerequisite failed. Linux evidence cannot replace host-native observation of the exact Darwin runtime. Final Phase 9A qualification therefore remains pending and fail-closed.
 
+## Apple-supported host observability attempt — exact-runtime limitation
+
+- Durable packet: [`phase9a-memos-2.0.14/lexical-remediation-v1/apple-observability-attempt-v2/`](phase9a-memos-2.0.14/lexical-remediation-v1/apple-observability-attempt-v2/README.md)
+- Native-arm64 Xcode 16 `System Call Trace` passed a direct-target deny-network canary: it observed `socket(AF_INET)`, denied `connect`, and denied `sendto` without payload capture. A child-only canary was denied but recorded zero network syscalls, so process-scoped tracing did not cover the existing runner's Node child.
+- The exact reviewed candidate uses x86_64 Node/native artifacts through Rosetta 2. Apple's tracing backend rejected this exact execution mode before recording: `ktrace cannot trace the system under Rosetta translation`. An arm64 rebuild would have a different immutable manifest and cannot substitute.
+- Network Connections, unified sandbox logs, and sampling are non-exhaustive; `fs_usage`/`sc_usage` require broader privilege. None can prove the current zero-attempt standard.
+- No policy tradeoff was selected. Closure requires either separately approved external native-x86_64 macOS test capacity/tool entitlement for the exact runtime, or explicit human acceptance of a revised evidence standard. Until then Phase 9A remains pending and fail-closed.
+
 ## Historical pre-remediation qualification
 
 ## Observable egress qualification
