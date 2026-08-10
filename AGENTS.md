@@ -1,3 +1,6 @@
+<!-- Canonical source: ~/.agent/entrypoints/home/AGENTS.md
+     Deploy/check: python3 ~/.agent/tools/sync_home_agents.py apply|check -->
+
 # AGENTS.md — Project instructions (agentic-stack portable brain)
 
 Merged default context for pi and Codex: this file combines the instructions
@@ -47,6 +50,20 @@ The retired `~/.agents/` mirror must not be restored. Read
 `scripts/purge_paseo_duplicates.py` (launchd
 `com.syang.agentic-stack.paseo-guard`, 60s) removes duplicate Paseo copies
 that the desktop app may reinstall.
+
+## Engineering principles
+
+Load the canonical engineering guidance before coding:
+- `.agent/protocols/engineering-workflow.md` — implementation simplicity and
+  durability, compatibility scope, working-layer delivery, dependency
+  selection, verification, and final reporting
+- `.agent/protocols/coding-style.md` — modularity, separation of concerns,
+  code organization, boundaries, and surgical-change discipline
+- `.agent/protocols/patterns.md` — proven-pattern research and reusable
+  application patterns
+
+Keep detailed shared engineering doctrine in those owning protocols rather
+than duplicating it in this entrypoint.
 
 ## While working
 
