@@ -134,6 +134,99 @@ class DoctorOrchestrationHealthTest(unittest.TestCase):
             self.assertNotEqual(status, doctor.RED)
             self.assertNotIn("unexpectedly running", "\n".join(lines))
 
+    def test_memos_profile_identity_comes_from_attested_profile_topology(self):
+        project = "0123456789abcdef"
+        with tempfile.TemporaryDirectory() as tmp:
+            data = Path(tmp) / "memos"
+            pilots = data / "pilot-configs"
+            pilots.mkdir(parents=True)
+            manifest = pilots / f"{project}.json"
+            manifest.write_text(json.dumps({
+                "schema": "agentic.memory.evolution-pilot.v2", "enabled": False,
+                "project_id": project, "repo_root": tmp, "provider": "claude_opus",
+                "model": "opus", "daily_caps": {}, "min_distinct_episodes": 3,
+                "timeout_seconds": 60,
+            }))
+            manifest.chmod(0o600)
+            active = data / project / "profiles" / project / "memos-plugin" / "config.yaml"
+            rollback = (data / f".{project}.rollback-{'a' * 32}" / "profiles"
+                        / project / "memos-plugin" / "config.yaml")
+            for path in (active, rollback):
+                path.parent.mkdir(parents=True)
+                path.write_text("{}")
+                path.chmod(0o600)
+            self.assertEqual(
+                doctor._owned_memos_profile_configs(data),
+                ((active, project), (rollback, project)),
+            )
+
+    def test_memos_profile_ownership_rejects_foreign_malformed_and_symlinked_paths(self):
+        project = "0123456789abcdef"
+        with tempfile.TemporaryDirectory() as tmp:
+            data = Path(tmp) / "memos"
+            pilots = data / "pilot-configs"
+            pilots.mkdir(parents=True)
+            manifest = pilots / f"{project}.json"
+            manifest.write_text(json.dumps({
+                "schema": "agentic.memory.evolution-pilot.v2", "enabled": False,
+                "project_id": project, "repo_root": tmp, "provider": "claude_opus",
+                "model": "opus", "daily_caps": {}, "min_distinct_episodes": 3,
+                "timeout_seconds": 60,
+            }))
+            manifest.chmod(0o600)
+            active = data / project / "profiles" / project / "memos-plugin" / "config.yaml"
+            active.parent.mkdir(parents=True)
+            active.write_text("{}")
+            active.chmod(0o600)
+            foreign = data / "fedcba9876543210" / "profiles" / "fedcba9876543210" / "memos-plugin" / "config.yaml"
+            foreign.parent.mkdir(parents=True)
+            foreign.write_text("{}")
+            with self.assertRaisesRegex(ValueError, "ownership manifests"):
+                doctor._owned_memos_profile_configs(data)
+            __import__("shutil").rmtree(data / "fedcba9876543210")
+            malformed = (data / ".malformed.rollback-root" / "profiles" / project
+                         / "memos-plugin" / "config.yaml")
+            malformed.parent.mkdir(parents=True)
+            malformed.write_text("{}")
+            with self.assertRaisesRegex(ValueError, "ownership manifests"):
+                doctor._owned_memos_profile_configs(data)
+            __import__("shutil").rmtree(data / ".malformed.rollback-root")
+            target = Path(tmp) / "outside"
+            target.mkdir()
+            active.parents[3].rename(target / project)
+            (data / project).symlink_to(target / project, target_is_directory=True)
+            with self.assertRaisesRegex(ValueError, "symlink"):
+                doctor._owned_memos_profile_configs(data)
+
+    def test_memos_profile_ownership_rejects_dangling_root_and_hard_link(self):
+        project = "0123456789abcdef"
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            dangling = root / "dangling-memos"
+            dangling.symlink_to(root / "missing", target_is_directory=True)
+            with self.assertRaisesRegex(ValueError, "data root is symlinked"):
+                doctor._owned_memos_profile_configs(dangling)
+
+            data = root / "memos"
+            pilots = data / "pilot-configs"
+            pilots.mkdir(parents=True)
+            manifest = pilots / f"{project}.json"
+            manifest.write_text(json.dumps({
+                "schema": "agentic.memory.evolution-pilot.v2", "enabled": False,
+                "project_id": project, "repo_root": tmp, "provider": "claude_opus",
+                "model": "opus", "daily_caps": {}, "min_distinct_episodes": 3,
+                "timeout_seconds": 60,
+            }))
+            manifest.chmod(0o600)
+            outside = root / "foreign-config"
+            outside.write_text("{}")
+            outside.chmod(0o600)
+            config = data / project / "profiles" / project / "memos-plugin" / "config.yaml"
+            config.parent.mkdir(parents=True)
+            os.link(outside, config)
+            with self.assertRaisesRegex(ValueError, "owner-managed"):
+                doctor._owned_memos_profile_configs(data)
+
     def test_memos_process_requires_matching_bridge_and_project_attestation(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)

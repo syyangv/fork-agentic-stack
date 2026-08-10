@@ -28,8 +28,43 @@ from . import scheduled_runtime
 from . import scheduler_doctor
 from . import profiles as profiles_mod
 from . import upgrade as upgrade_mod
+from . import memos_config_migration
 from . import __version__
 from .scheduled_review_health import default_scheduler_path, inspect_scheduler
+
+
+def _owned_memos_profile_configs(data_root: Path) -> tuple[tuple[Path, str], ...]:
+    """Resolve only manifest-attested active/rollback configs and validate topology."""
+    if data_root.is_symlink():
+        raise ValueError("MemOS data root is symlinked")
+    if not data_root.exists():
+        return ()
+    expected = memos_config_migration.owned_config_paths(data_root)
+    discovered = tuple(sorted(data_root.glob("*/profiles/*/memos-plugin/config.yaml")))
+    if set(discovered) != set(expected):
+        raise ValueError("MemOS profile set is outside installer ownership manifests")
+    result: list[tuple[Path, str]] = []
+    for config_path in expected:
+        relative = config_path.relative_to(data_root)
+        if (len(relative.parts) != 5 or relative.parts[1] != "profiles"
+                or relative.parts[3:] != ("memos-plugin", "config.yaml")):
+            raise ValueError("MemOS profile topology is invalid")
+        project_id = relative.parts[2]
+        memos_config_migration.approved_config(project_id)
+        current = config_path
+        while current != data_root:
+            if current.is_symlink():
+                raise ValueError("MemOS profile topology contains a symlink")
+            current = current.parent
+        info = config_path.lstat()
+        parent = config_path.parent.stat()
+        if (not config_path.is_file() or info.st_nlink != 1 or info.st_gid != parent.st_gid
+                or (hasattr(os, "getuid") and info.st_uid != os.getuid())):
+            raise ValueError("MemOS profile is not a regular owner-managed file")
+        if info.st_mode & 0o022:
+            raise ValueError("MemOS profile mode is unsafe")
+        result.append((config_path, project_id))
+    return tuple(result)
 
 
 # Detection signals: (filename, signal_strength) tuples per adapter.
@@ -699,22 +734,26 @@ def _audit_memos_artifact(agent: Path, stack_root: Path, env: dict[str, str], ad
         else:
             add(GREEN, "MemOS pinned artifact valid and disabled; doctor did not start it")
             data_root = Path(env.get("AGENTIC_MEMOS_DATA_ROOT", str(agent / "runtime" / "memos")))
-            profiles = sorted(data_root.glob("*/profiles/*/memos-plugin/config.yaml"))
+            try:
+                managed_profiles = _owned_memos_profile_configs(data_root)
+            except (OSError, ValueError) as exc:
+                add(RED, f"MemOS profile ownership invalid: {exc}")
+                managed_profiles = ()
             invalid_profiles: list[str] = []
             inventories: list[dict[str, object]] = []
-            for config_path in profiles:
+            for config_path, project_id in managed_profiles:
                 try:
                     value = json.loads(config_path.read_text(encoding="utf-8"))
                     if not isinstance(value, dict):
                         raise ValueError("profile is not an object")
-                    if not runtime._is_managed_alternate_config(value, config_path.parts[-5]):
+                    if not runtime._is_managed_alternate_config(value, project_id):
                         raise ValueError("profile is outside exact model allowlist")
                     inventories.append(runtime.memos_model_inventory(value))
                 except (OSError, UnicodeError, json.JSONDecodeError, ValueError):
                     invalid_profiles.append(str(config_path))
             if invalid_profiles:
                 add(RED, "MemOS model policy invalid: " + ", ".join(invalid_profiles))
-            elif profiles:
+            elif managed_profiles:
                 host_models = sorted({
                     str(row["llm"]["model"])
                     for row in inventories
