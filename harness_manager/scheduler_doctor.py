@@ -221,17 +221,19 @@ def _launchd_state(runner: object, launchctl: str, uid: int, label: str) -> tupl
             return False, 0
         raise ValueError("launchctl observation failed without not-found attestation")
     text = output.decode("utf-8", "strict")
-    state_match = re.search(r"(?mi)^\s*state\s*=\s*([a-z-]+(?: [a-z-]+)?)\s*$", text)
-    match = re.search(r"(?mi)^\s*last exit (?:code|status)\s*=\s*(-?\d+)\s*$", text)
-    never_exited = re.search(
-        r"(?mi)^\s*last exit (?:code|status)\s*=\s*\(never exited\)\s*$", text,
+    states = re.findall(
+        r"(?mi)^\s*state\s*=\s*([a-z-]+(?: [a-z-]+)?)\s*$", text,
     )
-    valid_state = state_match is not None and state_match.group(1) in {
+    exits = re.findall(
+        r"(?mi)^\s*last exit (?:code|status)\s*=\s*(-?\d+|\(never exited\))\s*$",
+        text,
+    )
+    valid_state = len(states) == 1 and states[0] in {
         "running", "not running", "waiting", "exited", "spawned",
     }
-    if not valid_state or (match is None and never_exited is None):
+    if not valid_state or len(exits) != 1:
         raise ValueError("launchctl observation is malformed")
-    last_exit = 0 if match is None else int(match.group(1))
+    last_exit = 0 if exits[0] == "(never exited)" else int(exits[0])
     if not -(2 ** 31) <= last_exit < 2 ** 31:
         raise ValueError("launchctl last exit is invalid")
     return True, last_exit

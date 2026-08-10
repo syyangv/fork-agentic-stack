@@ -78,6 +78,25 @@ class SchedulerGate12Test(unittest.TestCase):
             {label: True for label in scheduler_lifecycle.LABELS},
         )
 
+    def test_launchctl_observation_rejects_conflicting_status_fields(self) -> None:
+        class ConflictingRunner:
+            def run(self, argv, *, shell):
+                return type("Result", (), {
+                    "returncode": 0,
+                    "stdout": (
+                        b"state = running\n"
+                        b"state = not running\n"
+                        b"last exit code = 0\n"
+                        b"last exit status = (never exited)\n"
+                    ),
+                    "stderr": b"",
+                })()
+
+        with self.assertRaisesRegex(ValueError, "observation is malformed"):
+            scheduler_doctor.observe_loaded_state(
+                ConflictingRunner(), launchctl="/bin/launchctl", uid=501,
+            )
+
     def _jobs(self) -> dict[str, bytes]:
         return {
             scheduler_lifecycle.AUTO_DREAM_LABEL: plistlib.dumps({
