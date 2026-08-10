@@ -4,12 +4,14 @@ from pathlib import Path
 import pytest
 import harness_manager.memos_platform_attestation as attestation
 from harness_manager.memos_platform_attestation import attest_manifest
-X86=Path('/private/tmp/phase9a-lexical-code5/memos-local-plugin/2.0.14/.agentic-stack-files.json')
-ARM=Path('/private/tmp/phase9a-arm64-code2/memos-local-plugin/2.0.14/.agentic-stack-files.json')
-@pytest.mark.skipif(not X86.exists() or not ARM.exists(),reason='local platform manifests unavailable')
+ROOT=Path(__file__).resolve().parents[1]
+EVIDENCE=ROOT/'docs/evidence/phase9a-memos-2.0.14/lexical-remediation-v1/arm64-native-v1'
+X86=EVIDENCE/'darwin-x86_64-files-manifest.json'
+ARM=EVIDENCE/'darwin-arm64-files-manifest.json'
 def test_arm_manifest_attests_against_x86():
- result=attest_manifest(ARM,'darwin-arm64',X86); assert result['common_manifest_sha256'].startswith('9f7b082d'); assert len(result['platform_variant_paths'])==2
-@pytest.mark.skipif(not X86.exists() or not ARM.exists(),reason='local platform manifests unavailable')
+ result=attest_manifest(ARM,'darwin-arm64',X86)
+ durable=json.loads((EVIDENCE/'zero-egress-summary.json').read_text())['attestation']
+ assert json.loads(json.dumps(result))==durable
 def test_common_mutation_fails(tmp_path):
  data=json.loads(ARM.read_text()); key=next(k for k in data if k not in result_paths()); data[key]={**data[key],'size':int(data[key].get('size',0))+1}; path=tmp_path/'manifest.json'; path.write_text(json.dumps(data,separators=(',',':'),sort_keys=True)+'\n')
  with pytest.raises(RuntimeError): attest_manifest(path,'darwin-arm64',X86)

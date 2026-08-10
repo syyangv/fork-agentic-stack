@@ -30,3 +30,7 @@ def test_parser_fails_candidate_child_creation_and_models_blind_spot(tmp_path):
 def test_parser_rejects_posix_spawn_variants(tmp_path):
  with pytest.raises(RuntimeError,match='untraced child boundary'):
   MODULE.parse_syscalls(xml(tmp_path,row('node (1)','posix_spawnattr_setflags')))
+
+def test_trace_launch_closes_inherited_descriptors():
+ source=(ROOT/'scripts/qualify_memos_arm64_xctrace.py').read_text()
+ assert 'close_fds=True' in source

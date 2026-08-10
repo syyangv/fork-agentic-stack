@@ -1,7 +1,7 @@
 # Phase 9A MemOS 2.0.14 qualification evidence index
 
 Date: 2026-08-10
-Decision: **LEXICAL REMEDIATION EVIDENCE PASSED; FINAL QUALIFICATION PENDING — STOP before R8**
+Decision: **PHASE 9A QUALIFIED FOR THE REVIEWED DARWIN ARM64 CANDIDATE — STOP before R8**
 
 This index binds the small, reviewable source changes to durable sanitized
 evidence in the repository and records the original isolated-run locations.
@@ -19,25 +19,32 @@ neither R7 nor R8 material.
 - Modes: deployed runtime unchanged/off; assist and evolution false; `r8_run=false`. No R7 or R8 material was used.
 
 The application-layer tripwire is not packet capture or native syscall tracing.
-Accordingly, the remediation evidence clears the previously failed model-loader
-and observable Node-API egress gates, but final qualification remains pending
-the plan-required process-level zero-egress observation and independent review.
-It authorizes neither deployment nor R8.
+The subsequent Darwin ARM64-native lane supplied that missing process-level
+observation and passed final independent review. Qualification still authorizes
+neither deployment nor R8.
 
-## Process-level observation attempt — blocked before workload trace
+## Historical process-level observation attempt — blocked before workload trace
 
 - Durable packet: [`phase9a-memos-2.0.14/lexical-remediation-v1/process-trace-attempt-v1/`](phase9a-memos-2.0.14/lexical-remediation-v1/process-trace-attempt-v1/README.md)
 - The authorized macOS `dtruss` process did not start the qualification workload. SIP rejected execution of `/usr/bin/sandbox-exec` with `Operation not permitted`; SIP remained enabled.
 - The disposable Debian 12 / arm64 alternative used the pinned artifacts and reviewed lexical installer, but stopped before `strace`: its immutable manifest was `532c042b5117d0c084b108e4d20a716333b4ac674e1908bc1ad7a95831accf48`, not the reviewed Darwin manifest `dc0aae1417698ed4343895b292fb2f6ac1bcef4820eff6eb46875405b1ed73d9`. The differing runtime files were the platform-native `better_sqlite3.node` and `esbuild` executables.
-- No deny canary or workload trace was run after that prerequisite failed. Linux evidence cannot replace host-native observation of the exact Darwin runtime. Final Phase 9A qualification therefore remains pending and fail-closed.
+- No deny canary or workload trace was run after that prerequisite failed. Linux evidence did not replace host-native observation. This blocker was later superseded by the separately attested Darwin ARM64 candidate lane.
 
-## Apple-supported host observability attempt — exact-runtime limitation
+## Historical Apple-supported host attempt — x86/Rosetta limitation
 
 - Durable packet: [`phase9a-memos-2.0.14/lexical-remediation-v1/apple-observability-attempt-v2/`](phase9a-memos-2.0.14/lexical-remediation-v1/apple-observability-attempt-v2/README.md)
 - Native-arm64 Xcode 16 `System Call Trace` passed a direct-target deny-network canary: it observed `socket(AF_INET)`, denied `connect`, and denied `sendto` without payload capture. A child-only canary was denied but recorded zero network syscalls, so process-scoped tracing did not cover the existing runner's Node child.
 - The exact reviewed candidate uses x86_64 Node/native artifacts through Rosetta 2. Apple's tracing backend rejected this exact execution mode before recording: `ktrace cannot trace the system under Rosetta translation`. An arm64 rebuild would have a different immutable manifest and cannot substitute.
 - Network Connections, unified sandbox logs, and sampling are non-exhaustive; `fs_usage`/`sc_usage` require broader privilege. None can prove the current zero-attempt standard.
-- No policy tradeoff was selected. Closure requires either separately approved external native-x86_64 macOS test capacity/tool entitlement for the exact runtime, or explicit human acceptance of a revised evidence standard. Until then Phase 9A remains pending and fail-closed.
+- No evidence-standard tradeoff was accepted. The user instead authorized a separate Darwin ARM64 artifact route; that route has its own immutable two-root attestation and closes the gate only for the ARM64 candidate.
+
+## Darwin ARM64-native qualification — passed
+
+- Durable packet: [`phase9a-memos-2.0.14/lexical-remediation-v1/arm64-native-v1/`](phase9a-memos-2.0.14/lexical-remediation-v1/arm64-native-v1/README.md)
+- Complete committed x86_64 and ARM64 manifests reproduce the two-root contract: 2,846 common paths are byte-identical and only pinned `better_sqlite3.node` and `esbuild` leaves differ.
+- Xcode System Call Trace observed direct sandboxed candidate processes. Fresh 2.0.14, copied 2.0.10 state, and restored 2.0.10 state completed with no internet socket/connect/send attempt and no child creation; the launcher closes inherited non-standard descriptors.
+- Native ABI/FTS, synthetic benchmark, migration, backup/restore, and rollback checks passed. Final senior review checked the retained raw exports against the normalized packet and reproduced the artifact attestation.
+- Scope is Darwin ARM64 only. Production stays immutable 2.0.10 and off; R8 remains unauthorized.
 
 ## Historical pre-remediation qualification
 
@@ -130,9 +137,12 @@ python3 tests/qualification/phase9a_memos_214_migration_rehearsal.py \
   --output docs/evidence/phase9a-memos-2.0.14/migration-rehearsal-run
 ```
 
-## Required remediation
+## Gate disposition
 
-Bundle and attest the exact local embedding model/tokenizer cache, enforce a
-deny-remote/offline mode that fails closed, and rerun all three qualification
-lanes. MemOS remains version 2.0.10, off, with assist and evolution disabled;
-R8 remains unauthorized.
+The earlier MiniLM remediation proposal is superseded and prohibited. The
+reviewed 2.0.14 distribution removes the loader and uses lexical SQLite FTS5.
+Darwin ARM64 native ABI, process-level zero-egress, migration/rollback, and
+synthetic benchmark lanes passed, and final independent review reproduced the
+two-root artifact attestation from committed manifests. Production remains
+version 2.0.10 and off; Phase 9A qualification authorizes neither deployment
+nor R8. R8 remains a separate, explicit decision gate.

@@ -34,7 +34,8 @@ def parse_syscalls(path:Path,expect_network:bool=False,expect_child:bool=False)-
 def trace_process(label:str,target:list[str],trace_root:Path,profile:Path,expect_network:bool=False,expect_child:bool=False)->dict[str,Any]:
  trace=trace_root/f'{label}.trace';xml=trace_root/f'{label}.syscalls.xml';output=trace_root/f'{label}.target.jsonl';home=trace_root/f'home-{label}';tmp=trace_root/f'tmp-{label}';home.mkdir();tmp.mkdir()
  cmd=['/usr/bin/arch','-arm64','/usr/bin/xcrun','xctrace','record','--instrument','System Call Trace','--time-limit','120s','--output',str(trace),'--target-stdout',str(output),'--launch','--','/usr/bin/sandbox-exec','-f',str(profile),'/usr/bin/env','-i','PATH=/opt/homebrew/opt/node@22/bin:/opt/homebrew/bin:/usr/bin:/bin',f'HOME={home}',f'TMPDIR={tmp}',*target]
- completed=subprocess.run(cmd,text=True,capture_output=True,timeout=150)
+ # Prevent a connected operator descriptor from becoming an unobserved path.
+ completed=subprocess.run(cmd,text=True,capture_output=True,timeout=150,close_fds=True)
  if completed.returncode!=0:raise RuntimeError(f'xctrace failed {label}: {completed.stdout[-500:]} {completed.stderr[-500:]}')
  export=subprocess.run(['/usr/bin/arch','-arm64','/usr/bin/xcrun','xctrace','export','--input',str(trace),'--xpath','/trace-toc/run[@number="1"]/data/table[@schema="syscall"]','--output',str(xml)],text=True,capture_output=True,check=True)
  observation=parse_syscalls(xml,expect_network=expect_network,expect_child=expect_child);lines=output.read_text().splitlines();values=[]

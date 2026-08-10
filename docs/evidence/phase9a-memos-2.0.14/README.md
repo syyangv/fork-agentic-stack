@@ -1,6 +1,6 @@
 # MemOS 2.0.14 Phase 9A durable evidence
 
-Decision: **LEXICAL REMEDIATION EVIDENCE PASSED; FINAL QUALIFICATION PENDING — STOP before R8**
+Decision: **PHASE 9A QUALIFIED FOR THE REVIEWED DARWIN ARM64 CANDIDATE — STOP before R8**
 
 This directory retains sanitized, substantive evidence summaries without raw
 databases, large ledgers, hostnames, user-home paths, secrets, or credentials.
@@ -21,10 +21,11 @@ or egress attempts; and isolated migration/restore/rollback passed. The legacy
 label with `embedTraces=false` exists solely for isolated rollback compatibility
 and never loads a model.
 
-This supersedes the failed model-backed packet for remediation assessment, but
-does not yet establish the plan-required process-level zero-egress observation.
-Independent review also remains required. STOP before R8; no deployment,
-activation, assist, or evolution is authorized.
+The subsequent Darwin ARM64-native lane establishes the plan-required
+process-level zero-egress observation for its separately attested candidate.
+Final independent review reproduced the committed two-root manifest comparison
+and checked retained raw exports against the normalized packet. STOP before R8;
+no deployment, activation, assist, or evolution is authorized.
 
 ## Historical failed packet
 
@@ -53,6 +54,8 @@ corrected v2 packet preregisters exactly five relevant traces per query and
 uses conventional fixed-denominator precision@5. STOP is solely due to the
 egress/privacy failure, not benchmark quality or latency.
 
-Required remediation is an immutable, integrity-attested local model/tokenizer
-cache plus enforced deny-remote behavior, followed by a complete qualification
-rerun. The deployed runtime remains MemOS 2.0.10 and off.
+The earlier local-model remediation is superseded and prohibited. The reviewed
+distribution removes the model loader and uses lexical SQLite FTS5. Its Darwin
+ARM64 native ABI, process-level zero-egress, migration/rollback, and synthetic
+benchmark lanes passed final independent review. Production remains MemOS
+2.0.10 and off; R8 remains a separate, unauthorized decision gate.
