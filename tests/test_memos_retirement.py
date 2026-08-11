@@ -88,6 +88,32 @@ def test_retirement_refuses_nested_runtime_symlink(tmp_path: Path) -> None:
     assert outside.read_text() == "user-owned"
 
 
+def test_retirement_allows_contained_npm_bin_links(tmp_path: Path) -> None:
+    _seed(tmp_path)
+    plugin = tmp_path / ".agent/runtime/providers/memos-local-plugin/2.0.14"
+    executable = plugin / "node_modules/tool/bin/tool.js"
+    executable.parent.mkdir(parents=True)
+    executable.write_text("safe")
+    bin_dir = plugin / "node_modules/.bin"
+    bin_dir.mkdir()
+    (bin_dir / "tool").symlink_to("../tool/bin/tool.js")
+    result = retire_memos(tmp_path, backup_root=tmp_path / "backup")
+    assert result["status"] == "retired"
+
+
+def test_retirement_rejects_escaping_npm_bin_link(tmp_path: Path) -> None:
+    _seed(tmp_path)
+    plugin = tmp_path / ".agent/runtime/providers/memos-local-plugin/2.0.14"
+    outside = tmp_path / "outside.js"
+    outside.write_text("user-owned")
+    bin_dir = plugin / "node_modules/.bin"
+    bin_dir.mkdir(parents=True)
+    (bin_dir / "tool").symlink_to(outside)
+    with pytest.raises(ValueError, match="symlink inside"):
+        retire_memos(tmp_path, backup_root=tmp_path / "backup")
+    assert outside.read_text() == "user-owned"
+
+
 def test_retirement_is_noop_after_success(tmp_path: Path) -> None:
     _seed(tmp_path)
     retire_memos(tmp_path, backup_root=tmp_path / "first")
