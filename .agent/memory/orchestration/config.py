@@ -7,7 +7,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-from ._core import SchemaValidationError, deep_freeze, thaw, validate_schema
+from ._core import deep_freeze, thaw
 
 
 class ConfigError(ValueError):
@@ -16,13 +16,12 @@ class ConfigError(ValueError):
 
 @dataclass(frozen=True)
 class MemoryOrchestrationConfig:
-    schema: str = "agentic.memory.config.v1"
-    mode: str = "off"
-    total_token_budget: int = 12_000
+    schema: str = "agentic.memory.config.v2"
+    architecture: str = "governed-memory-code-evidence"
+    total_token_budget: int = 7_800
     lane_reserves: Mapping[str, int] = field(
         default_factory=lambda: {
             "governance": 4_800,
-            "behavioral": 4_200,
             "evidence": 3_000,
         }
     )
@@ -31,15 +30,15 @@ class MemoryOrchestrationConfig:
     def __post_init__(self) -> None:
         data = {
             "schema": self.schema,
-            "mode": self.mode,
+            "architecture": self.architecture,
             "total_token_budget": self.total_token_budget,
             "lane_reserves": thaw(self.lane_reserves),
             "project_aliases": thaw(self.project_aliases),
         }
-        try:
-            validate_schema(data, "orchestration-config-v1.schema.json")
-        except (SchemaValidationError, OSError, ValueError) as exc:
-            raise ConfigError(str(exc)) from exc
+        if self.schema != "agentic.memory.config.v2" or self.architecture != "governed-memory-code-evidence":
+            raise ConfigError("unsupported governed-memory configuration")
+        if set(data["lane_reserves"]) != {"governance", "evidence"}:
+            raise ConfigError("lane reserves must define governance and evidence only")
         object.__setattr__(self, "lane_reserves", deep_freeze(self.lane_reserves))
         object.__setattr__(self, "project_aliases", deep_freeze(self.project_aliases))
         if sum(self.lane_reserves.values()) != self.total_token_budget:
@@ -48,21 +47,19 @@ class MemoryOrchestrationConfig:
     @classmethod
     def from_external(cls, data: Mapping[str, Any]) -> "MemoryOrchestrationConfig":
         merged = {
-            "schema": "agentic.memory.config.v1",
-            "mode": "off",
-            "total_token_budget": 12_000,
+            "schema": "agentic.memory.config.v2",
+            "architecture": "governed-memory-code-evidence",
+            "total_token_budget": 7_800,
             "lane_reserves": {
                 "governance": 4_800,
-                "behavioral": 4_200,
                 "evidence": 3_000,
             },
             "project_aliases": {},
             **thaw(data),
         }
         try:
-            validate_schema(merged, "orchestration-config-v1.schema.json")
             return cls(**merged)
-        except (SchemaValidationError, TypeError, ConfigError, OSError, ValueError) as exc:
+        except (TypeError, ConfigError, OSError, ValueError) as exc:
             raise ConfigError(str(exc)) from exc
 
 

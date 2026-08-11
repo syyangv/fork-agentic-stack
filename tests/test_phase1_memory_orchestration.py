@@ -264,10 +264,9 @@ class ContractSchemaTest(unittest.TestCase):
                 "schema": "agentic.memory.context.v1",
                 "intent": "review code",
                 "project_id": "0123456789abcdef",
-                "routing": {"governance": True, "behavioral": True, "evidence": True},
+                "routing": {"governance": True, "evidence": True},
                 "sections": [
                     {"lane": "governance", "items": [item.to_dict()]},
-                    {"lane": "behavioral", "items": []},
                     {"lane": "evidence", "items": []},
                 ],
                 "warnings": [],
@@ -314,17 +313,16 @@ class ProjectIdentityTest(unittest.TestCase):
 class RoutingAndBudgetTest(unittest.TestCase):
     def test_routing_table(self):
         cases = [
-            ("check permission and prior decision", "required", "default", "off"),
-            ("debug repeated test failure in repository", "required", "required", "required"),
-            ("find callers and refactor this symbol", "required", "default", "required"),
-            ("draft non-code documentation", "required", "default", "off"),
-            ("security review the authentication handler", "required", "required", "required"),
+            ("check permission and prior decision", "required", "off"),
+            ("debug repeated test failure in repository", "required", "required"),
+            ("find callers and refactor this symbol", "required", "required"),
+            ("draft non-code documentation", "required", "off"),
+            ("security review the authentication handler", "required", "required"),
         ]
-        for intent, governance, behavioral, evidence in cases:
+        for intent, governance, evidence in cases:
             with self.subTest(intent=intent):
                 route = route_intent(intent)
                 self.assertEqual(route.governance.value, governance)
-                self.assertEqual(route.behavioral.value, behavioral)
                 self.assertEqual(route.evidence.value, evidence)
 
     def test_budgets_never_exceed_total_and_off_lanes_get_zero(self):
@@ -336,7 +334,7 @@ class RoutingAndBudgetTest(unittest.TestCase):
         for route in routes:
             with self.subTest(route=route):
                 budget = allocate_lane_budgets(route)
-                self.assertLessEqual(sum(budget.values()), 12_000)
+                self.assertLessEqual(sum(budget.values()), 7_800)
                 if route.evidence is LaneRequirement.OFF:
                     self.assertEqual(budget["evidence"], 0)
         with self.assertRaises(ValueError):
@@ -348,7 +346,7 @@ class ConfigurationTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             path = Path(tmp) / "config.json"
             config = load_config(path)
-            self.assertEqual(config.mode, "off")
+            self.assertEqual(config.architecture, "governed-memory-code-evidence")
             self.assertFalse(path.exists())
 
     def test_unknown_config_fields_and_invalid_budget_are_rejected(self):
@@ -363,59 +361,16 @@ class ConfigurationTest(unittest.TestCase):
 
     def test_default_config_is_immutable_and_bounded(self):
         config = MemoryOrchestrationConfig()
-        self.assertEqual(config.schema, "agentic.memory.config.v1")
-        self.assertEqual(config.mode, "off")
+        self.assertEqual(config.schema, "agentic.memory.config.v2")
+        self.assertEqual(config.architecture, "governed-memory-code-evidence")
         self.assertEqual(sum(config.lane_reserves.values()), config.total_token_budget)
         with self.assertRaises(FrozenInstanceError):
-            config.mode = "assist"
+            config.architecture = "other"
         with self.assertRaises(TypeError):
             config.lane_reserves["governance"] = 1
         with self.assertRaises(ConfigError):
-            MemoryOrchestrationConfig(mode="enforce")
+            MemoryOrchestrationConfig(architecture="other")
 
-    def test_upgrade_installs_code_and_schemas_but_preserves_local_config(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            project = Path(tmp)
-            agent = project / ".agent"
-            agent.mkdir()
-            local_config = agent / "memory" / "orchestration" / "config.json"
-            local_config.parent.mkdir(parents=True)
-            custom = {
-                "schema": "agentic.memory.config.v1",
-                "mode": "off",
-                "total_token_budget": 12000,
-                "lane_reserves": {
-                    "governance": 5000,
-                    "behavioral": 4000,
-                    "evidence": 3000,
-                },
-                "project_aliases": {},
-            }
-            local_config.write_text(json.dumps(custom), encoding="utf-8")
-            (agent / "install.json").write_text(json.dumps({
-                "schema_version": 1, "agentic_stack_version": "test",
-                "abs_target": str(project.resolve()), "installed_at": "2026-07-28T00:00:00Z",
-                "adapters": {},
-                "orchestration": {
-                    "profile": "standard",
-                    "phase8_quality_gate": "blocked",
-                    "scheduled_runtime": select_runtime().record(),
-                },
-            }), encoding="utf-8")
-
-            self.assertEqual(upgrade(project, ROOT, yes=True, log=lambda _msg: None), 0)
-
-            self.assertEqual(json.loads(local_config.read_text(encoding="utf-8")), custom)
-            self.assertTrue((agent / "memory" / "orchestration" / "contracts.py").is_file())
-            self.assertTrue(
-                (
-                    agent
-                    / "protocols"
-                    / "tool_schemas"
-                    / "memory"
-                    / "event-envelope-v1.schema.json"
-                ).is_file()
-            )
 
 
 if __name__ == "__main__":

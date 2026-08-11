@@ -59,22 +59,6 @@ def _main_unlocked():
     with open(cand_path) as f:
         cand = json.load(f)
 
-    if cand.get("source_layer") == "behavioral":
-        classifications = [
-            row.get("action") for row in cand.get("decisions", [])
-            if isinstance(row, dict) and row.get("action") in {
-                "classified_code", "classified_non_code",
-            }
-        ]
-        if not classifications:
-            print(
-                "ERROR: behavioral candidate requires explicit code-scope classification",
-                file=sys.stderr,
-            )
-            sys.exit(5)
-        if (classifications[-1] == "classified_code") != bool(cand.get("code_specific")):
-            print("ERROR: candidate classification state is inconsistent", file=sys.stderr)
-            sys.exit(5)
 
     evidence_report = None
     if cand.get("code_specific"):
@@ -222,8 +206,6 @@ def _main_unlocked():
         "code_specific": bool(cand.get("code_specific", False)),
         "code_refs": cand.get("code_refs", []),
         "evidence_snapshot": evidence_report,
-        "behavioral_support": cand.get("support"),
-        "behavioral_gain": cand.get("gain"),
         "trial_count": cand.get("trial_count"),
         "trial_pass_count": cand.get("trial_pass_count"),
     }

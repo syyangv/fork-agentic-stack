@@ -92,7 +92,7 @@ def finalize_graduated(candidate_id: str, rationale: str, reviewer: str) -> dict
                 "code_refs": candidate.get("code_refs", []),
                 "project_scope": candidate.get("project_scope", {}),
                 "provider_ids": candidate.get("provider_ids", {}),
-                "source_layer": candidate.get("source_layer", "behavioral"),
+                "source_layer": candidate.get("source_layer", "governance"),
                 "source_kind": candidate.get("source_kind"),
                 "target_kind": candidate.get("target_kind"),
                 "code_specific": bool(candidate.get("code_specific")),
@@ -114,7 +114,7 @@ def finalize_graduated(candidate_id: str, rationale: str, reviewer: str) -> dict
             RevalidationIndex(
                 BASE / "memory/evidence/revalidation.sqlite3"
             ).clear_provider_stale(
-                "memos-local",
+                "governance-candidate",
                 list(provider_ids.values()) if isinstance(provider_ids, dict) else [],
             )
         return accepted
@@ -150,7 +150,7 @@ def classify_candidate(
             if classified:
                 return
             raise ValueError(
-                "behavioral candidates require --non-code-confirmed or --code-ref FILE::SYMBOL"
+                "candidates require --non-code-confirmed or --code-ref FILE::SYMBOL"
             )
         if code_refs and non_code:
             raise ValueError("code and non-code classification are mutually exclusive")

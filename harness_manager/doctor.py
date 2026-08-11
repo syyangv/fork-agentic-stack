@@ -28,43 +28,8 @@ from . import scheduled_runtime
 from . import scheduler_doctor
 from . import profiles as profiles_mod
 from . import upgrade as upgrade_mod
-from . import memos_config_migration
 from . import __version__
 from .scheduled_review_health import default_scheduler_path, inspect_scheduler
-
-
-def _owned_memos_profile_configs(data_root: Path) -> tuple[tuple[Path, str], ...]:
-    """Resolve only manifest-attested active/rollback configs and validate topology."""
-    if data_root.is_symlink():
-        raise ValueError("MemOS data root is symlinked")
-    if not data_root.exists():
-        return ()
-    expected = memos_config_migration.owned_config_paths(data_root)
-    discovered = tuple(sorted(data_root.glob("*/profiles/*/memos-plugin/config.yaml")))
-    if set(discovered) != set(expected):
-        raise ValueError("MemOS profile set is outside installer ownership manifests")
-    result: list[tuple[Path, str]] = []
-    for config_path in expected:
-        relative = config_path.relative_to(data_root)
-        if (len(relative.parts) != 5 or relative.parts[1] != "profiles"
-                or relative.parts[3:] != ("memos-plugin", "config.yaml")):
-            raise ValueError("MemOS profile topology is invalid")
-        project_id = relative.parts[2]
-        memos_config_migration.approved_config(project_id)
-        current = config_path
-        while current != data_root:
-            if current.is_symlink():
-                raise ValueError("MemOS profile topology contains a symlink")
-            current = current.parent
-        info = config_path.lstat()
-        parent = config_path.parent.stat()
-        if (not config_path.is_file() or info.st_nlink != 1 or info.st_gid != parent.st_gid
-                or (hasattr(os, "getuid") and info.st_uid != os.getuid())):
-            raise ValueError("MemOS profile is not a regular owner-managed file")
-        if info.st_mode & 0o022:
-            raise ValueError("MemOS profile mode is unsafe")
-        result.append((config_path, project_id))
-    return tuple(result)
 
 
 # Detection signals: (filename, signal_strength) tuples per adapter.
@@ -472,12 +437,7 @@ def _audit_orchestration(
     environ: dict[str, str] | None = None,
     scheduler_fixture: Mapping[str, object] | None = None,
 ) -> tuple[str, list[str]]:
-    """Observe Gate 2 provider/configuration state without changing it.
-
-    This intentionally has no repair/start/rebuild operation.  It only opens
-    the CRG database through the provider's read-only health path and validates
-    the pinned MemOS tree without constructing a bridge client.
-    """
+    """Observe governed-memory and CRG evidence state without changing it."""
     target_root = Path(target_root)
     agent = target_root / ".agent"
     stack_root = Path(stack_root or os.environ.get("AGENTIC_STACK_ROOT", Path(__file__).parent.parent))
@@ -511,9 +471,9 @@ def _audit_orchestration(
                 raise ValueError("installation profile is missing")
             profiles_mod.validate_profile(profile)
             profiles_mod.validate_blocked_profile_state(orchestration)
-            add(GREEN, f"profile {profile}; Phase 8 quality gate blocked")
+            add(GREEN, f"profile {profile}; Governed Memory + Code Evidence")
         except ValueError as exc:
-            add(RED, f"Phase 8/profile invariant failed: {exc}")
+            add(RED, f"architecture/profile invariant failed: {exc}")
         try:
             runtime = scheduled_runtime.runtime_from_record(
                 orchestration.get("scheduled_runtime"),
@@ -530,10 +490,7 @@ def _audit_orchestration(
     else:
         try:
             config = validate_orchestration_config_data(config_path)
-            if config["mode"] != "off":
-                add(RED, f"Phase 8 quality gate blocked: orchestration mode must remain off (found {config['mode']!r})")
-            else:
-                add(GREEN, "orchestration config schema and lane budgets valid; effective mode off")
+            add(GREEN, "governance/evidence config schema and lane budgets valid")
         except Exception as exc:
             add(RED, f"orchestration config invalid: {type(exc).__name__}: {exc}")
 
@@ -547,18 +504,15 @@ def _audit_orchestration(
     except (OSError, json.JSONDecodeError) as exc:
         add(RED, f"infrastructure inventory invalid: {type(exc).__name__}")
 
-    if profile == profiles_mod.MINIMAL:
-        incompatible = [rel for rel in sorted(profiles_mod.minimal_omitted_paths()) if (agent / rel).exists()]
-        if incompatible:
-            add(RED, "profile-incompatible MemOS capability files present: " + ", ".join(incompatible))
-        else:
-            add(GREEN, "MemOS capability absent as expected for minimal profile")
-    elif profile == profiles_mod.STANDARD:
-        factory = agent / "memory" / "orchestration" / "memos_factory.py"
-        if not factory.is_file():
-            add(RED, "standard profile MemOS capability module missing")
-        else:
-            _audit_memos_artifact(agent, stack_root, env, add)
+    retired_paths = [
+        agent / "runtime/memos",
+        agent / "runtime/providers/memos-local-plugin",
+        agent / "memory/orchestration/memos_factory.py",
+    ]
+    if any(path.exists() or path.is_symlink() for path in retired_paths):
+        add(RED, "retired MemOS runtime or provider files remain")
+    else:
+        add(GREEN, "retired behavioral provider absent")
 
     _audit_crg(target_root, agent, stack_root, env, add)
     _audit_drift(agent, stack_root / ".agent", profile, add)
@@ -649,33 +603,6 @@ def _read_process_command(pid: int) -> str | None:
     return command or None
 
 
-def _audit_owned_memos_processes(data_root: str | Path, bridge: Path, add: Callable[[str, str], None]) -> None:
-    """Recognize only attestations bound to this exact bridge and runtime root."""
-    root = Path(data_root).expanduser().resolve(strict=False)
-    if not root.is_dir():
-        return
-    observed = False
-    for attestation in sorted(root.glob("*/bridge-process.json")):
-        try:
-            record = json.loads(attestation.read_text(encoding="utf-8"))
-            pid = record["pid"]
-            recorded_bridge = Path(record["bridge"]).resolve(strict=False)
-            project_root = Path(record["project_root"]).resolve(strict=False)
-            if not isinstance(pid, int) or recorded_bridge != bridge.resolve(strict=False):
-                continue
-            if project_root != attestation.parent.resolve(strict=False):
-                continue
-            command = _read_process_command(pid)
-        except (OSError, ValueError, TypeError, KeyError, json.JSONDecodeError):
-            continue
-        observed = True
-        if command is not None and str(recorded_bridge) in command:
-            add(RED, f"MemOS bridge unexpectedly running for {project_root} (pid {pid}); doctor did not stop it")
-        else:
-            add(YELLOW, f"MemOS bridge attestation present but process observation unavailable for {project_root}")
-    if not observed:
-        # No process state is the normal disabled condition; do not invent one.
-        return
 
 
 def _trusted_source_agent(stack_root: Path) -> Path | None:
@@ -698,81 +625,23 @@ def validate_orchestration_config_data(path: Path) -> dict[str, object]:
         raise ValueError(f"cannot read orchestration config: {exc}") from exc
     if not isinstance(value, dict):
         raise ValueError("orchestration config must be an object")
-    required = {"schema", "mode", "total_token_budget", "lane_reserves", "project_aliases"}
-    if set(value) != required or value.get("schema") != "agentic.memory.config.v1":
+    required = {"schema", "architecture", "total_token_budget", "lane_reserves", "project_aliases"}
+    if set(value) != required or value.get("schema") != "agentic.memory.config.v2":
         raise ValueError("unsupported orchestration config schema or keys")
-    if value.get("mode") not in {"off", "shadow", "assist"}:
-        raise ValueError("orchestration mode is invalid")
+    if value.get("architecture") != "governed-memory-code-evidence":
+        raise ValueError("orchestration architecture is invalid")
     total = value.get("total_token_budget")
     lanes = value.get("lane_reserves")
     aliases = value.get("project_aliases")
-    if (not isinstance(total, int) or isinstance(total, bool) or not 1000 <= total <= 12000
-            or not isinstance(lanes, dict) or set(lanes) != {"governance", "behavioral", "evidence"}
-            or any(not isinstance(v, int) or isinstance(v, bool) or not 0 <= v <= 12000 for v in lanes.values())
+    if (not isinstance(total, int) or isinstance(total, bool) or not 1000 <= total <= 7800
+            or not isinstance(lanes, dict) or set(lanes) != {"governance", "evidence"}
+            or any(not isinstance(v, int) or isinstance(v, bool) or not 0 <= v <= 7800 for v in lanes.values())
             or sum(lanes.values()) != total or not isinstance(aliases, dict)
             or any(not isinstance(k, str) or not isinstance(v, str) or __import__("re").fullmatch(r"[0-9a-f]{16}", v) is None for k, v in aliases.items())):
         raise ValueError("orchestration config lane budgets or aliases are invalid")
     return value
 
 
-def _audit_memos_artifact(agent: Path, stack_root: Path, env: dict[str, str], add: Callable[[str, str], None]) -> None:
-    code_root = Path(env.get("AGENTIC_MEMOS_CODE_ROOT", agent / "runtime" / "providers"))
-    if not code_root.exists():
-        add(YELLOW, "MemOS disabled; pinned artifact unavailable (no code root configured)")
-        return
-    try:
-        source_agent = _trusted_source_agent(stack_root)
-        if source_agent is None:
-            add(YELLOW, "MemOS artifact inspection unavailable: trusted source is unavailable")
-            return
-        with _trusted_orchestration_module(source_agent, "memos_runtime") as runtime:
-            plugin = code_root / "memos-local-plugin" / runtime.MEMOS_PLUGIN_VERSION
-            if plugin.exists():
-                runtime.validate_pinned_plugin(plugin)
-        if not plugin.exists():
-            add(YELLOW, "MemOS disabled; pinned artifact invalid/unavailable")
-        else:
-            add(GREEN, "MemOS pinned artifact valid and disabled; doctor did not start it")
-            data_root = Path(env.get("AGENTIC_MEMOS_DATA_ROOT", str(agent / "runtime" / "memos")))
-            try:
-                managed_profiles = _owned_memos_profile_configs(data_root)
-            except (OSError, ValueError) as exc:
-                add(RED, f"MemOS profile ownership invalid: {exc}")
-                managed_profiles = ()
-            invalid_profiles: list[str] = []
-            inventories: list[dict[str, object]] = []
-            for config_path, project_id in managed_profiles:
-                try:
-                    value = json.loads(config_path.read_text(encoding="utf-8"))
-                    if not isinstance(value, dict):
-                        raise ValueError("profile is not an object")
-                    if not runtime._is_managed_alternate_config(value, project_id):
-                        raise ValueError("profile is outside exact model allowlist")
-                    inventories.append(runtime.memos_model_inventory(value))
-                except (OSError, UnicodeError, json.JSONDecodeError, ValueError):
-                    invalid_profiles.append(str(config_path))
-            if invalid_profiles:
-                add(RED, "MemOS model policy invalid: " + ", ".join(invalid_profiles))
-            elif managed_profiles:
-                host_models = sorted({
-                    str(row["llm"]["model"])
-                    for row in inventories
-                    if row["llm"]["route"] == "approved_claude_codex_host"
-                })
-                if host_models:
-                    add(
-                        GREEN,
-                        "MemOS model inventory: embeddings disabled; retrieval lexical/sqlite_fts5; "
-                        "approved Claude/Codex host route=" + ",".join(host_models),
-                    )
-                else:
-                    add(GREEN, "MemOS model inventory is model-free lexical/sqlite_fts5; LLM disabled")
-            _audit_owned_memos_processes(
-                data_root,
-                plugin / "node_modules/@memtensor/memos-local-plugin/dist/bridge.cjs", add,
-            )
-    except Exception as exc:
-        add(YELLOW, f"MemOS pinned artifact invalid: {type(exc).__name__}: {exc}")
 
 
 def _audit_crg(target_root: Path, agent: Path, stack_root: Path, env: dict[str, str], add: Callable[[str, str], None]) -> None:

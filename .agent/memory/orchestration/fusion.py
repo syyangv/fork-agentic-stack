@@ -11,7 +11,7 @@ from .contracts import ContextPacket, RetrievalItem
 from .router import RoutingDecision
 
 
-LANES = ("governance", "behavioral", "evidence")
+LANES = ("governance", "evidence")
 PREVIEW_CATEGORIES = ("selected", "rejected", "deduplicated", "stale", "over_budget")
 MAX_PREVIEW_ITEMS = 100
 _STATUS_PRIORITY = {
@@ -87,7 +87,6 @@ def fuse_retrieval(
         schema="agentic.memory.context.v1", intent=intent, project_id=project_id,
         routing={
             "governance": route.governance.value != "off",
-            "behavioral": route.behavioral.value != "off",
             "evidence": route.evidence.value != "off",
         },
         sections=tuple({

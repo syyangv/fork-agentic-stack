@@ -335,14 +335,10 @@ def _validate_profile_record(record: dict[str, object]) -> None:
     profile = record.get("profile")
     if not isinstance(profile, str):
         raise ValueError("installation profile record must contain a profile name")
-    if record.get("phase8_quality_gate") != "blocked":
-        raise ValueError("Phase 8 quality gate must be recorded as 'blocked'")
-    if record.get("memos_mode") in {"shadow", "assist"}:
-        raise ValueError("Phase 8 quality gate is blocked: recorded behavioral mode is active")
-    if record.get("evolution_enabled") is True:
-        raise ValueError("Phase 8 quality gate is blocked: evolution is enabled")
-    if record.get("r7_skill_promoted") is True:
-        raise ValueError("Phase 8 quality gate is blocked: the R7 skill is promoted")
+    if record.get("architecture") != "governed-memory-code-evidence":
+        raise ValueError("installation must use Governed Memory + Code Evidence")
+    if record.get("providers") != ["governance", "crg-evidence"]:
+        raise ValueError("installation must use governance and CRG evidence providers only")
     from . import scheduled_runtime
     scheduled_runtime.validate_record_data(record.get("scheduled_runtime"))
 
@@ -356,14 +352,9 @@ def _validate_existing_profile(existing: object, profile: object) -> None:
             "cannot change installation profile in place; "
             "use a fresh project installation"
         )
-    if prior is not None and existing.get("phase8_quality_gate") != "blocked":
-        raise ValueError("Phase 8 quality gate must be recorded as 'blocked'")
-    if existing.get("memos_mode") in {"shadow", "assist"}:
-        raise ValueError("Phase 8 quality gate is blocked: recorded behavioral mode is active")
-    if existing.get("evolution_enabled") is True:
-        raise ValueError("Phase 8 quality gate is blocked: evolution is enabled")
-    if existing.get("r7_skill_promoted") is True:
-        raise ValueError("Phase 8 quality gate is blocked: the R7 skill is promoted")
+    architecture = existing.get("architecture")
+    if architecture is not None and architecture != "governed-memory-code-evidence":
+        raise ValueError("installation architecture is invalid")
     if prior is not None:
         from . import scheduled_runtime
         scheduled_runtime.validate_record_data(existing.get("scheduled_runtime"))

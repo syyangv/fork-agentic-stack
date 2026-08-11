@@ -6,8 +6,8 @@
   "required": ["item_id", "lane", "type", "summary", "scope", "status", "provider_score", "selection_reason", "provenance", "token_estimate", "expires_at"],
   "properties": {
     "item_id": {"type": "string", "minLength": 1, "maxLength": 512},
-    "lane": {"type": "string", "enum": ["governance", "behavioral", "evidence"]},
-    "type": {"type": "string", "enum": ["lesson", "preference", "permission", "decision", "review_queue", "skill", "trace", "policy", "world_model", "crg_node", "crg_flow", "test_run"]},
+    "lane": {"type": "string", "enum": ["governance", "evidence"]},
+    "type": {"type": "string", "enum": ["lesson", "preference", "permission", "decision", "review_queue", "crg_node", "crg_flow", "test_run"]},
     "summary": {"type": "string", "minLength": 1, "maxLength": 2000},
     "scope": {
       "type": "object",
