@@ -232,13 +232,15 @@ category: visualization
                 "post_install_results": [],
             }
 
-            status, lines = doctor._audit_adapter(project, "claude-code", entry)
+            adapter_status, _ = doctor._audit_adapter(project, "claude-code", entry)
+            status, lines = doctor._audit_harness_hook_wiring(project)
 
+            self.assertEqual(adapter_status, doctor.GREEN)
             self.assertEqual(status, doctor.YELLOW)
             detail = "\n".join(lines)
             self.assertIn("missing hook command file", detail)
             self.assertIn(".agent/harness/hooks/missing.py", detail)
-            self.assertIn("orphaned hook files", detail)
+            self.assertIn("unreferenced harness hook entrypoints", detail)
             self.assertIn(".agent/harness/hooks/orphan.py", detail)
 
 

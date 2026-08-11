@@ -1,6 +1,6 @@
 {
   "name": "claude-code",
-  "description": "Claude Code (Anthropic) — CLAUDE.md instructions + .claude/settings.json PostToolUse + Stop hooks. Hook commands use $CLAUDE_PROJECT_DIR for cwd-stable resolution (closes #18).",
+  "description": "Claude Code (Anthropic) — CLAUDE.md instructions + governed episodic PostToolUse and metadata-only Stop hooks. Hook commands use $CLAUDE_PROJECT_DIR for cwd-stable resolution (closes #18).",
   "brain_root_primitive": "$CLAUDE_PROJECT_DIR",
   "files": [
     {

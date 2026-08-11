@@ -112,6 +112,14 @@ def audit(target_root: Path | str, log: Callable[[str], None] | None = None) -> 
         if status == RED:
             any_red = True
 
+    hook_status, hook_lines = _audit_harness_hook_wiring(target_root)
+    glyph = {GREEN: "✓", YELLOW: "⚠", RED: "✗"}[hook_status]
+    log(f"{glyph} hook-wiring         {hook_status}")
+    for line in hook_lines:
+        log(f"    {line}")
+    if hook_status == RED:
+        any_red = True
+
     orchestration_status, orchestration_lines = _audit_orchestration(target_root)
     glyph = {GREEN: "✓", YELLOW: "⚠", RED: "✗"}[orchestration_status]
     log(f"{glyph} orchestration       {orchestration_status}")
@@ -291,12 +299,6 @@ def _audit_adapter(
             # Unknown post_install action — just record
             lines.append(f"post_install {action}: {st}")
 
-    if adapter_name == "claude-code":
-        hook_status, hook_lines = _audit_claude_hook_wiring(target_root)
-        if hook_lines:
-            lines.extend(hook_lines)
-            status_overall = max(status_overall, hook_status, key=_status_rank)
-
     # .agent/ brain still intact?
     if not (target_root / ".agent" / "AGENTS.md").is_file():
         lines.append(".agent/AGENTS.md missing — brain not present")
@@ -338,17 +340,26 @@ def _status_rank(s: str) -> int:
     return {GREEN: 0, YELLOW: 1, RED: 2}[s]
 
 
-def _audit_claude_hook_wiring(target_root: Path) -> tuple[str, list[str]]:
-    settings = target_root / ".claude" / "settings.json"
-    if not settings.is_file():
-        return GREEN, []
-    try:
-        data = json.loads(settings.read_text(encoding="utf-8"))
-    except json.JSONDecodeError as e:
-        return YELLOW, [f".claude/settings.json unreadable JSON: {e}"]
-
-    referenced = _claude_hook_references(data)
+def _audit_harness_hook_wiring(target_root: Path) -> tuple[str, list[str]]:
+    """Audit hook entrypoints against all harness configs, not Claude alone."""
+    config_paths = {
+        "claude": target_root / ".claude" / "settings.json",
+        "codex": target_root / ".codex" / "hooks.json",
+        "gemini": target_root / ".gemini" / "settings.json",
+    }
+    references_by_harness: dict[str, set[str]] = {}
     lines: list[str] = []
+    for harness, settings in config_paths.items():
+        if not settings.is_file():
+            continue
+        try:
+            data = json.loads(settings.read_text(encoding="utf-8"))
+        except json.JSONDecodeError as e:
+            lines.append(f"{settings.relative_to(target_root)} unreadable JSON: {e}")
+            continue
+        references_by_harness[harness] = _hook_references(data)
+
+    referenced = set().union(*references_by_harness.values()) if references_by_harness else set()
     missing = [
         rel
         for rel in sorted(referenced)
@@ -362,20 +373,30 @@ def _audit_claude_hook_wiring(target_root: Path) -> tuple[str, list[str]]:
         wired = {rel for rel in referenced if rel.startswith(".agent/harness/hooks/")}
         orphaned = []
         for path in sorted(hooks_dir.glob("*.py")):
-            if _ignore_claude_orphan_candidate(path.name):
+            if _ignore_hook_inventory_candidate(path.name):
                 continue
             rel = path.relative_to(target_root).as_posix()
             if rel not in wired:
                 orphaned.append(rel)
         if orphaned:
             lines.append(
-                "orphaned hook files not referenced by .claude/settings.json: "
+                "unreferenced harness hook entrypoints across Claude/Codex/Gemini: "
                 + ", ".join(orphaned)
             )
+        stale = sorted(
+            p.relative_to(target_root).as_posix()
+            for p in hooks_dir.rglob("*")
+            if p.is_file() and (
+                p.name.endswith(".bak") or p.name.startswith("test_")
+                or "__pycache__" in p.parts or p.suffix == ".pyc"
+            )
+        )
+        if stale:
+            lines.append("stale deployed hook artifacts: " + ", ".join(stale))
     return (YELLOW if lines else GREEN), lines
 
 
-def _claude_hook_references(settings: dict) -> set[str]:
+def _hook_references(settings: dict) -> set[str]:
     refs: set[str] = set()
     hooks = settings.get("hooks") or {}
     if not isinstance(hooks, dict):
@@ -410,7 +431,7 @@ def _agent_paths_from_command(command: str) -> set[str]:
     return refs
 
 
-def _ignore_claude_orphan_candidate(filename: str) -> bool:
+def _ignore_hook_inventory_candidate(filename: str) -> bool:
     if filename == "__init__.py" or filename.startswith("_"):
         return True
     if filename in {
@@ -418,6 +439,7 @@ def _ignore_claude_orphan_candidate(filename: str) -> bool:
         "post_execution.py",
         "pre_tool_call.py",
         "pi_post_tool.py",
+        "copilot_cli_post_tool.py",
     }:
         return True
     return False
