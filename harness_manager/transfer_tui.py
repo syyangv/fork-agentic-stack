@@ -86,14 +86,10 @@ The default bundle contains only preferences, decisions, accepted lessons,
 and the validated bounded evidence ledger. Runtime files, databases, caches,
 permissions, skills, and all CRG graph databases/registries/snapshots are
 excluded from the default data transfer; rebuild CRG locally after import.
-Behavioral MemOS data is never included by a scope: it requires the explicit
-`--behavioral-export` flag plus a project ID, provenance, and output path.
 
 Usage:
   agentic-stack transfer
   agentic-stack transfer export --target codex --print-curl
-  agentic-stack transfer export --behavioral-export --project-id <16-hex> \\
-      --project-provenance <repo> --behavioral-output <directory>
   agentic-stack transfer import --payload <payload> --sha256 <digest> --target codex
 
 Commands:
@@ -111,62 +107,7 @@ def cmd_export(argv: list[str], target_root: Path, stack_root: Path) -> int:
     parser.add_argument("--print-curl", action="store_true")
     parser.add_argument("--json", action="store_true")
     parser.add_argument("--payload-file")
-    parser.add_argument("--behavioral-export", action="store_true")
-    parser.add_argument("--project-id")
-    parser.add_argument("--project-provenance")
-    parser.add_argument("--behavioral-output")
-    parser.add_argument("--behavioral-data-root")
-    parser.add_argument("--repository-root")
     args = parser.parse_args(argv)
-
-    behavioral_scope_tokens = {"behavioral", "behavioral_db", "behavioral_skills", "memos"}
-    if any(
-        isinstance(scope, str) and scope.casefold().strip().replace("-", "_") in behavioral_scope_tokens
-        for scope in (args.scope or [])
-    ) and not args.behavioral_export:
-        print(
-            "error: behavioral data requires --behavioral-export; --scope cannot select it",
-            file=sys.stderr,
-        )
-        return 2
-
-    if args.behavioral_export:
-        if args.scope or args.target or args.print_curl or args.payload_file:
-            print(
-                "error: --behavioral-export is a separate non-authoritative export and cannot use transfer scopes/targets",
-                file=sys.stderr,
-            )
-            return 2
-        missing = [
-            name for name, value in (
-                ("--project-id", args.project_id),
-                ("--project-provenance", args.project_provenance),
-                ("--behavioral-output", args.behavioral_output),
-            ) if not value
-        ]
-        if missing:
-            print(
-                "error: --behavioral-export requires " + ", ".join(missing),
-                file=sys.stderr,
-            )
-            return 2
-        from .behavioral_export import BehavioralExportError, export_behavioral_artifact
-
-        data_root = Path(args.behavioral_data_root or (target_root / ".agent" / "runtime" / "memos"))
-        try:
-            artifact = export_behavioral_artifact(
-                data_root / str(args.project_id),
-                Path(str(args.behavioral_output)),
-                str(args.project_id),
-                provenance=str(args.project_provenance),
-                repo_root=Path(args.repository_root) if args.repository_root else target_root,
-                code_root=target_root / ".agent" / "runtime" / "providers",
-            )
-        except (BehavioralExportError, OSError, ValueError) as exc:
-            print(f"error: {exc}", file=sys.stderr)
-            return 1
-        print(f"exported non-authoritative behavioral artifact: {artifact}")
-        return 0
 
     agent_root = target_root / ".agent"
     if not agent_root.is_dir():
@@ -657,40 +598,6 @@ def run_wizard(target_root: Path, stack_root: Path) -> int:
             "Generates a curl or PowerShell command for another project.",
         ],
     )
-
-    # Behavioral state is intentionally outside all ordinary scope choices.
-    # A TTY operator must make two explicit choices and supply a concrete
-    # project identity; no natural-language planning route can reach it.
-    if widgets.ask_confirm(
-        "Export one non-authoritative MemOS behavioral DB/skills artifact? "
-        "It may contain derived behavior and is never imported or activated automatically.",
-        default=False,
-    ):
-        project_id = widgets.ask_text("Exact 16-character MemOS project ID", default="")
-        provenance = widgets.ask_text("Human-readable project/repository provenance", default="")
-        default_output = str(target_root / f"behavioral-export-{project_id or 'project'}")
-        output = widgets.ask_text("New artifact directory", default=default_output)
-        if not widgets.ask_confirm(
-            "Final confirmation: export only data/memos.db and behavioral skills; "
-            "the result remains non-authoritative and does not enable MemOS.",
-            default=False,
-        ):
-            outro(["Behavioral export cancelled before inspection."])
-            return 1
-        from .behavioral_export import BehavioralExportError, export_behavioral_artifact
-
-        try:
-            artifact = export_behavioral_artifact(
-                target_root / ".agent" / "runtime" / "memos" / project_id,
-                Path(output), project_id, provenance=provenance,
-                repo_root=target_root,
-                code_root=target_root / ".agent" / "runtime" / "providers",
-            )
-        except (BehavioralExportError, OSError, ValueError) as exc:
-            outro([f"Behavioral export failed safely: {exc}"])
-            return 1
-        outro([f"Exported non-authoritative behavioral artifact: {artifact}"])
-        return 0
 
     intent = widgets.ask_text(
         "What do you want to transfer?",

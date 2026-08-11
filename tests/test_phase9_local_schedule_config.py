@@ -182,46 +182,6 @@ class LocalScheduleConfigTest(unittest.TestCase):
                 self.assertEqual(after, before)
                 self.assertFalse((agent / "install.json.lock").exists())
 
-    def test_invalid_profile_state_without_lock_is_rejected_without_mutation(self) -> None:
-        from harness_manager.scheduled_runtime import select_runtime
-
-        for invalid in ("profile", "gate"):
-            with self.subTest(invalid=invalid), tempfile.TemporaryDirectory(dir=ROOT) as tmp:
-                target = Path(tmp)
-                agent = target / ".agent"
-                profiles.copy_brain(ROOT / ".agent", agent, profile=profiles.STANDARD)
-                orchestration = {
-                    "profile": "standard",
-                    "phase8_quality_gate": "blocked",
-                    "scheduled_runtime": select_runtime().record(),
-                }
-                orchestration["profile" if invalid == "profile" else "phase8_quality_gate"] = (
-                    "unknown" if invalid == "profile" else "allowed"
-                )
-                state = {
-                    "schema_version": 1,
-                    "agentic_stack_version": "test",
-                    "abs_target": str(target.resolve()),
-                    "installed_at": "2026-07-29T00:00:00Z",
-                    "adapters": {},
-                    "orchestration": orchestration,
-                }
-                (agent / "install.json").write_text(json.dumps(state), encoding="utf-8")
-                before = {
-                    path.relative_to(agent).as_posix(): path.lstat().st_mtime_ns
-                    for path in agent.rglob("*")
-                }
-
-                self.assertEqual(
-                    upgrade.upgrade(target, ROOT, yes=True, log=lambda _line: None),
-                    2,
-                )
-                after = {
-                    path.relative_to(agent).as_posix(): path.lstat().st_mtime_ns
-                    for path in agent.rglob("*")
-                }
-                self.assertEqual(after, before)
-                self.assertFalse((agent / "install.json.lock").exists())
 
     def test_final_lock_recovers_journal_created_after_preflight(self) -> None:
         from harness_manager import install as install_mod, schema

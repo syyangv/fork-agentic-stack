@@ -15,7 +15,6 @@ class LaneRequirement(Enum):
 @dataclass(frozen=True)
 class RoutingDecision:
     governance: LaneRequirement
-    behavioral: LaneRequirement
     evidence: LaneRequirement
     reasons: tuple[str, ...]
 
@@ -36,24 +35,22 @@ def route_intent(intent: str, *, repo_backed: bool = True) -> RoutingDecision:
     non_code = bool(_NON_CODE.search(intent)) and not code
 
     if security:
-        reasons.append("security-sensitive work requires behavioral and code evidence")
+        reasons.append("security-sensitive work requires current code evidence")
         return RoutingDecision(
-            LaneRequirement.REQUIRED,
             LaneRequirement.REQUIRED,
             LaneRequirement.REQUIRED if repo_backed else LaneRequirement.OFF,
             tuple(reasons),
         )
     if failure:
-        reasons.append("failure recovery requires behavioral history")
+        reasons.append("failure recovery requires current code evidence")
         evidence = LaneRequirement.REQUIRED if repo_backed else LaneRequirement.OFF
         return RoutingDecision(
-            LaneRequirement.REQUIRED, LaneRequirement.REQUIRED, evidence, tuple(reasons)
+            LaneRequirement.REQUIRED, evidence, tuple(reasons)
         )
     if code:
         reasons.append("code-structural intent requires current evidence")
         return RoutingDecision(
             LaneRequirement.REQUIRED,
-            LaneRequirement.DEFAULT,
             LaneRequirement.REQUIRED,
             tuple(reasons),
         )
@@ -65,7 +62,6 @@ def route_intent(intent: str, *, repo_backed: bool = True) -> RoutingDecision:
         reasons.append("no structural code signal detected")
     return RoutingDecision(
         LaneRequirement.REQUIRED,
-        LaneRequirement.DEFAULT,
         LaneRequirement.OFF,
         tuple(reasons),
     )
@@ -74,15 +70,15 @@ def route_intent(intent: str, *, repo_backed: bool = True) -> RoutingDecision:
 def allocate_lane_budgets(
     route: RoutingDecision,
     *,
-    total: int = 12_000,
+    total: int = 7_800,
     reserves: dict[str, int] | None = None,
 ) -> dict[str, int]:
-    if total <= 0 or total > 12_000:
-        raise ValueError("total token budget must be between 1 and 12,000")
-    defaults = {"governance": 4_800, "behavioral": 4_200, "evidence": 3_000}
+    if total <= 0 or total > 7_800:
+        raise ValueError("total token budget must be between 1 and 7,800")
+    defaults = {"governance": 4_800, "evidence": 3_000}
     requested = dict(reserves or defaults)
     if set(requested) != set(defaults) or any(value < 0 for value in requested.values()):
-        raise ValueError("reserves must define non-negative governance, behavioral, and evidence budgets")
+        raise ValueError("reserves must define non-negative governance and evidence budgets")
     reserve_total = sum(requested.values())
     if reserve_total <= 0:
         raise ValueError("at least one lane reserve must be positive")
@@ -92,12 +88,11 @@ def allocate_lane_budgets(
 
     active = {
         "governance": route.governance is not LaneRequirement.OFF,
-        "behavioral": route.behavioral is not LaneRequirement.OFF,
         "evidence": route.evidence is not LaneRequirement.OFF,
     }
     allocated = {lane: value if active[lane] else 0 for lane, value in requested.items()}
     unused = total - sum(allocated.values())
-    for lane in ("governance", "behavioral", "evidence"):
+    for lane in ("governance", "evidence"):
         if active[lane] and unused:
             allocated[lane] += unused
             unused = 0

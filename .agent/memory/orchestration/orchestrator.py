@@ -1,4 +1,4 @@
-"""Authority-first federated memory orchestration."""
+"""Authority-first governed memory and code evidence orchestration."""
 from __future__ import annotations
 
 from .contracts import ContextPacket
@@ -35,53 +35,20 @@ def build_governance_packet(provider, intent: str, top_k: int = 3) -> ContextPac
     return ContextPacket(
         schema="agentic.memory.context.v1", intent=intent,
         project_id=provider.project_id,
-        routing={"governance": True, "behavioral": False, "evidence": False},
+        routing={"governance": True, "evidence": False},
         sections=(
             {"lane": "governance", "items": [item.to_dict() for item in items]},
-            {"lane": "behavioral", "items": []},
             {"lane": "evidence", "items": []},
         ), warnings=tuple(warnings), health={"governance": health}, token_estimate=total,
     )
 
 
-def build_shadow_packet(governance_provider, behavioral_provider, intent: str,
-                        top_k: int = 3) -> ContextPacket:
-    """Add observable behavioral health while suppressing prompt injection."""
-    governance = build_governance_packet(governance_provider, intent, top_k=top_k)
-    behavioral_items, behavioral_health = behavioral_provider.retrieve(
-        intent, top_k=top_k
-    )
-    warnings = list(governance.warnings)
-    for warning in behavioral_health.get("warnings", []):
-        if warning not in warnings:
-            warnings.append(warning)
-    if behavioral_items:
-        warnings.append("behavioral_shadow_items_suppressed")
-    return ContextPacket(
-        schema=governance.schema, intent=governance.intent,
-        project_id=governance.project_id,
-        routing={"governance": True, "behavioral": True, "evidence": False},
-        sections=(
-            governance.sections[0],
-            {"lane": "behavioral", "items": []},
-            governance.sections[2],
-        ),
-        warnings=tuple(warnings),
-        health={
-            "governance": governance.health["governance"],
-            "behavioral": behavioral_health,
-        },
-        token_estimate=governance.token_estimate,
-    )
-
-
-def build_assist_packet(
-    governance_provider, behavioral_provider, evidence_provider, intent: str,
-    *, top_k: int = 5, total_budget: int = 12_000,
+def build_context_packet(
+    governance_provider, evidence_provider, intent: str,
+    *, top_k: int = 5, total_budget: int = 7_800,
     lane_reserves: dict[str, int] | None = None,
-    run_id: str | None = None, reason: str = "task_start",
 ) -> tuple[ContextPacket, dict]:
-    """Retrieve every routed lane while preserving governance on failures."""
+    """Retrieve governed memory and optional current code evidence."""
     route = route_intent(intent)
     budgets = allocate_lane_budgets(
         route, total=total_budget, reserves=lane_reserves,
@@ -90,7 +57,6 @@ def build_assist_packet(
     health = {}
     for lane, provider in (
         ("governance", governance_provider),
-        ("behavioral", behavioral_provider),
         ("evidence", evidence_provider),
     ):
         if getattr(route, lane) is LaneRequirement.OFF:
@@ -98,12 +64,7 @@ def build_assist_packet(
             health[lane] = {"status": "disabled", "warnings": []}
             continue
         try:
-            if lane == "behavioral":
-                lane_items, lane_health = provider.retrieve(
-                    intent, top_k=top_k, reason=reason, run_id=run_id,
-                )
-            else:
-                lane_items, lane_health = provider.retrieve(intent, top_k=top_k)
+            lane_items, lane_health = provider.retrieve(intent, top_k=top_k)
         except Exception as exc:
             lane_items = []
             lane_health = {
@@ -116,35 +77,11 @@ def build_assist_packet(
         intent=intent, project_id=governance_provider.project_id,
         route=route, items=items, health=health, budgets=budgets,
     )
-    if run_id and hasattr(behavioral_provider, "record_injected"):
-        behavioral_provider.record_injected(
-            run_id,
-            [row["item_id"] for row in preview["selected"]],
-            reason=reason,
-        )
     return packet, preview
 
 
-def mark_assist_blocked(packet: ContextPacket, gate_health: dict) -> ContextPacket:
-    """Keep governance usable while making an unmet rollout gate visible."""
-    warnings = list(packet.warnings)
-    warnings.append("assist_quality_gate_blocked")
-    warnings.extend(
-        warning for warning in gate_health.get("warnings", [])
-        if warning not in warnings
-    )
-    health = dict(packet.health)
-    health["assist_gate"] = gate_health
-    return ContextPacket(
-        schema=packet.schema, intent=packet.intent, project_id=packet.project_id,
-        routing=packet.routing, sections=packet.sections,
-        warnings=tuple(warnings), health=health,
-        token_estimate=packet.token_estimate,
-    )
-
-
 def format_packet_text(packet: ContextPacket) -> str:
-    lines = ["Federated memory context", f"Intent: {packet.intent!r}"]
+    lines = ["Governed memory and code evidence", f"Intent: {packet.intent!r}"]
     for section in packet.sections:
         lane = section["lane"]
         lines.append(f"\n# {lane.title()} lane")

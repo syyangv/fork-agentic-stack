@@ -734,12 +734,12 @@ class Phase9GovernanceTransferTest(unittest.TestCase):
             state = json.loads((agent / "install.json").read_text())
             self.assertEqual(state["orchestration"]["profile"], "standard")
             self.assertEqual(
-                state["orchestration"]["phase8_quality_gate"], "blocked"
+                state["orchestration"]["architecture"], "governed-memory-code-evidence"
             )
             config = json.loads(
                 (agent / "memory" / "orchestration" / "config.json").read_text()
             )
-            self.assertEqual(config["mode"], "off")
+            self.assertEqual(config["architecture"], "governed-memory-code-evidence")
 
     def test_evidence_only_fresh_bootstrap_has_canonical_empty_governance_scaffolding(self):
         with tempfile.TemporaryDirectory() as src_tmp, tempfile.TemporaryDirectory() as dst_tmp:

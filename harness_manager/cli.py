@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import argparse
 import datetime as dt
+import json
 import os
 import subprocess
 import sys
@@ -16,6 +17,7 @@ from pathlib import Path
 
 from . import doctor as doctor_mod
 from . import install as install_mod
+from . import memos_retirement as memos_retirement_mod
 from . import profiles as profiles_mod
 from . import remove as remove_mod
 from . import schema as schema_mod
@@ -42,6 +44,7 @@ VERBS = {
     "upgrade",
     "sync-manifest",
     "scheduler",
+    "retire-memos",
 }
 
 
@@ -424,6 +427,25 @@ def cmd_upgrade(args: list[str], yes: bool) -> int:
     )
 
 
+def cmd_retire_memos(args: list[str], yes: bool) -> int:
+    if not yes:
+        print("error: retire-memos requires --yes after reviewing its backup scope", file=sys.stderr)
+        return 2
+    if len(args) > 1:
+        print("usage: ./install.sh retire-memos [target-dir] --yes", file=sys.stderr)
+        return 2
+    target = Path(args[0]) if args else Path.cwd()
+    stamp = dt.datetime.now(dt.timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+    backup = target.resolve() / ".agent" / "backups" / f"memos-retirement-{stamp}"
+    try:
+        result = memos_retirement_mod.retire_memos(target, backup_root=backup)
+    except (OSError, ValueError) as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 2
+    print(json.dumps({**result, "backup": str(backup)}, indent=2))
+    return 0
+
+
 def cmd_bare(target: Path, wizard_flags: list[str], profile: str | None = None) -> int:
     """`./install.sh` with no args.
 
@@ -727,6 +749,8 @@ def main(argv: list[str] | None = None) -> int:
             return cmd_transfer(rest[1:], Path.cwd())
         if verb == "upgrade":
             return cmd_upgrade(rest[1:], yes=yes)
+        if verb == "retire-memos":
+            return cmd_retire_memos(rest[1:], yes=yes)
         if verb == "sync-manifest":
             target = Path(rest[1]) if len(rest) >= 2 else Path.cwd()
             return cmd_sync_manifest(target)

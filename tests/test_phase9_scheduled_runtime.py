@@ -343,7 +343,7 @@ class ScheduledRuntimeTest(unittest.TestCase):
                 config_before,
             )
             self.assertEqual(
-                json.loads(config_before.decode("utf-8"))["mode"], "off",
+                json.loads(config_before.decode("utf-8"))["architecture"], "governed-memory-code-evidence",
             )
             self.assertEqual(lessons.read_bytes(), lessons_before)
 

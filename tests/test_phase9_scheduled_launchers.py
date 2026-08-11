@@ -63,7 +63,7 @@ class ScheduledLaunchersTest(unittest.TestCase):
             if label == REVIEW_NOTIFY_LABEL:
                 self.assertEqual(plist["ProgramArguments"][-2:], ["--scheduled", "--notify"])
             text = raw.decode("utf-8").lower()
-            for forbidden in ("graduate.py", "accept", "evolution", "memos", "kill", "|", "python -c"):
+            for forbidden in ("graduate.py", "accept", "evolution", "kill", "|", "python -c"):
                 self.assertNotIn(forbidden, text)
 
     def test_fixture_write_is_owner_safe_and_never_touches_real_home(self) -> None:
@@ -494,7 +494,7 @@ class ScheduledCommandsTest(unittest.TestCase):
         argv = run.call_args.args[0]
         self.assertEqual(argv, [sys.executable, str(module.AGENT_ROOT / "memory" / "auto_dream.py")])
         self.assertFalse(any(any(word in part.lower() for word in (
-            "graduate", "accept", "evolution", "memos", "r7", "crg", "kill")) for part in argv))
+            "graduate", "accept", "evolution", "r7", "crg", "kill")) for part in argv))
         self.assertFalse(any("orchestration" in str(call.args[0]) for call in imports.call_args_list))
         value = module.scheduled_review_prepare_command()
         self.assertEqual(value["authority"], "no_auto_accept")

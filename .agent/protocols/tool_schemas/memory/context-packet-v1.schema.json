@@ -11,10 +11,9 @@
     "routing": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["governance", "behavioral", "evidence"],
+      "required": ["governance", "evidence"],
       "properties": {
         "governance": {"type": "boolean"},
-        "behavioral": {"type": "boolean"},
         "evidence": {"type": "boolean"}
       }
     },
@@ -25,7 +24,7 @@
         "additionalProperties": false,
         "required": ["lane", "items"],
         "properties": {
-          "lane": {"type": "string", "enum": ["governance", "behavioral", "evidence"]},
+          "lane": {"type": "string", "enum": ["governance", "evidence"]},
           "items": {"type": "array", "items": {"type": "object"}}
         }
       }

@@ -1,9 +1,0 @@
-Starting recording with the Blank template and System Call Trace Instrument. Launching process: sandbox-exec. Time limit: 8.0 s
-Ctrl-C to stop the recording
-Run issues were detected (trace is still ready to be viewed):
-* [Error] Unexpected failure: Couriers have returned unexpectedly.
-
-* [Error] Failed to start the recording: ktrace cannot trace the system under Rosetta translation
-
-Recording failed with errors. Saving output file...
-Output file saved as: syscall-rosetta-evidence.trace

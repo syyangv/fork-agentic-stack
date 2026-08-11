@@ -111,7 +111,7 @@ class RevalidationIndex:
                 for evidence_id in evidence_ids or [""]:
                     connection.execute(
                         "insert or ignore into links values (?,?,?,?,?)",
-                        ("candidate", str(candidate.get("id"))[:512], "memos-local",
+                        ("candidate", str(candidate.get("id"))[:512], "governance-candidate",
                         provider_id[:512], evidence_id),
                     )
 
@@ -147,7 +147,7 @@ class RevalidationIndex:
             connection.execute("delete from links")
             connection.executemany(
                 "insert or ignore into links values (?,?,?,?,?)",
-                [("candidate", candidate_id, "memos-local", provider_id, evidence_id)
+                [("candidate", candidate_id, "governance-candidate", provider_id, evidence_id)
                  for candidate_id, provider_id, evidence_id in rows],
             )
         return len(rows)
@@ -479,62 +479,6 @@ def revalidate_lessons(
     return changed
 
 
-def record_retrieval_outcome(agent_root: str | Path, event: Any) -> list[str]:
-    """Map only memos:* observations to candidates/lessons, idempotently."""
-    if getattr(event, "event_type", None) != "retrieval.used":
-        return []
-    payload = event.payload
-    outcome = str(payload.get("outcome", "used"))
-    if outcome not in {"used", "contradicted", "ignored"}:
-        return []
-    raw_ids = payload.get("item_ids", [])
-    provider_ids = {
-        value.split(":", 1)[1] for value in raw_ids
-        if isinstance(value, str) and value.startswith("memos:") and ":" in value
-    } if isinstance(raw_ids, (list, tuple)) else set()
-    if not provider_ids:
-        return []
-    root = Path(agent_root)
-    candidates = root / "memory/candidates"
-    updated_ids: list[str] = []
-    with candidate_lifecycle_lock(str(candidates)):
-        for subdir in (Path("."), Path("graduated")):
-            directory = candidates / subdir
-            if not directory.is_dir():
-                continue
-            for path in directory.glob("*.json"):
-                try:
-                    candidate = __import__("json").loads(path.read_text(encoding="utf-8"))
-                except (OSError, ValueError):
-                    continue
-                ids = candidate.get("provider_ids", {})
-                if not isinstance(ids, Mapping) or not provider_ids.intersection(ids.values()):
-                    continue
-                revised = apply_outcome(candidate, outcome, event.event_id)
-                if revised != candidate:
-                    atomic_write_json(str(path), revised)
-                    updated_ids.append(str(candidate.get("id")))
-    if updated_ids:
-        semantic = root / "memory/semantic"
-        def build_updates(rows: Sequence[Mapping[str, Any]]) -> list[dict[str, Any]]:
-            latest: dict[str, Mapping[str, Any]] = {}
-            for lesson in rows:
-                source = lesson.get("source_candidate")
-                if source in updated_ids:
-                    latest[str(source)] = lesson
-            updates = []
-            for lesson in latest.values():
-                if lesson.get("status") not in {"accepted", "provisional"}:
-                    continue
-                revised = apply_outcome(lesson, outcome, event.event_id)
-                if revised != lesson:
-                    updates.append(revised)
-            return updates
-
-        updates = append_lesson_updates(str(semantic), build_updates)
-        if updates:
-            render_lessons(str(semantic))
-    return updated_ids
 
 
 def _now() -> str:
