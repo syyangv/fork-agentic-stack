@@ -109,10 +109,30 @@ def _validate_owned_tree(path: Path, relative: str) -> None:
             for name in (*dirs, *files):
                 child = Path(root) / name
                 if child.is_symlink():
+                    if _approved_npm_bin_link(path, child, relative):
+                        continue
                     raise ValueError(f"refusing symlink inside MemOS-owned path: {relative}")
                 mode = child.lstat().st_mode
                 if not (stat.S_ISREG(mode) or stat.S_ISDIR(mode)):
                     raise ValueError(f"refusing special file inside MemOS-owned path: {relative}")
+
+
+def _approved_npm_bin_link(root: Path, child: Path, relative: str) -> bool:
+    if relative != "runtime/providers/memos-local-plugin":
+        return False
+    parts = child.relative_to(root).parts
+    if len(parts) != 4 or parts[1:3] != ("node_modules", ".bin"):
+        return False
+    try:
+        raw_target = os.readlink(child)
+        if os.path.isabs(raw_target):
+            return False
+        resolved_root = root.resolve(strict=True)
+        resolved_target = child.resolve(strict=True)
+        resolved_target.relative_to(resolved_root)
+        return resolved_target.is_file() and not resolved_target.is_symlink()
+    except (OSError, ValueError):
+        return False
 
 
 def _write_retired_state(target: Path, document: object) -> None:
