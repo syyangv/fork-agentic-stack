@@ -93,3 +93,19 @@ def test_source_hooks_have_no_retired_provider_terms():
     assert "memos" not in text
     assert "memtensor" not in text
     assert "behavioral provider" not in text
+
+
+def test_durable_capture_redacts_common_credentials(monkeypatch):
+    sys.path.insert(0, str(ROOT / ".agent" / "harness"))
+    from hooks import post_execution as module
+    written = []
+    monkeypatch.setattr(module, "append_jsonl", lambda _path, entry: written.append(entry) or entry)
+    module.log_execution(
+        "codex", "bash: TOKEN=abc123secret pytest", "Authorization: BearerValue",
+        True, reflection="used sk-proj_abcdefghijklmnop", importance=3,
+    )
+    serialized = json.dumps(written[0])
+    assert "abc123secret" not in serialized
+    assert "BearerValue" not in serialized
+    assert "abcdefghijklmnop" not in serialized
+    assert "[REDACTED]" in serialized
