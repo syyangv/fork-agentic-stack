@@ -27,13 +27,13 @@ Or let the top-level install script do it:
   | Hook | Trigger | Script |
   |---|---|---|
   | `PostToolUse` | selected tools | `.agent/harness/hooks/claude_code_post_tool.py` |
-  | `Stop` | session end | `.agent/memory/auto_dream.py` |
+  | `Stop` | session end | `.agent/harness/hooks/session_complete.py` |
 
 ### Why `claude_code_post_tool.py` and not `memory_reflect.py`
 
 The old hook called `memory_reflect.py claude-code post-tool ok` — every
 entry was identical (action="post-tool", detail="ok", reflection=""). The
-dream cycle clusters on the `reflection` field; an empty reflection means
+candidate staging clusters on the `reflection` field; an empty reflection means
 zero candidates staged regardless of how many tool calls fire.
 
 `claude_code_post_tool.py` reads the JSON payload Claude Code sends via
@@ -51,9 +51,10 @@ It then:
 - Maps `tool_name` + `tool_input` to a meaningful action label
 - Scores `importance` by domain (deploy/migrate/supabase/edge-function = 9)
 - Detects failures from `exit_code`, `error` stream, and `is_error`
-- Generates a non-empty `reflection` the dream cycle can cluster on
-- Sets `pain_score=5` for high-importance successes so recurring patterns
-  cross the promotion threshold (7.0); routine ops stay at `pain_score=2`
+- Generates a non-empty `reflection` candidate staging can cluster on
+- Sets `pain_score=5` for high-importance successes so recurring patterns can
+  reach the staging threshold; routine ops stay at `pain_score=2`. Only a
+  human reviewer can accept a staged candidate as a lesson.
 
 ## Verify
 
@@ -88,7 +89,7 @@ python3 .agent/tools/show.py
 - **`python3` not found:** add `AGENT_PYTHON=python` to your shell profile
   and edit the hook commands in `.claude/settings.json` accordingly.
 
-- **Dream cycle stages nothing:** after a session, run
+- **Candidate maintenance stages nothing:** run
   `python3 .agent/memory/auto_dream.py` manually and check the output line.
   If `patterns=0`, the episodic log is either empty or all entries have
   empty reflections (old hook). If `patterns=N staged=0`, salience is too

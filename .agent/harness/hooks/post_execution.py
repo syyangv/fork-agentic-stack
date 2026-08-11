@@ -12,9 +12,9 @@ def log_execution(skill_name, action, result, success, reflection="",
                   pain_score=None):
     """Log a structured episodic entry.
 
-    pain_score: override the default (2 for success, 7 for failure). Pass
-    a higher value (e.g. 5) for high-importance successful operations so
-    recurring patterns cross the dream-cycle promotion threshold (7.0).
+    pain_score: override the default (2 for success, 7 for failure). Higher
+    values help recurring observations become review candidates. Candidate
+    acceptance remains an explicit human decision.
     """
     if pain_score is None:
         pain_score = 2 if success else 7

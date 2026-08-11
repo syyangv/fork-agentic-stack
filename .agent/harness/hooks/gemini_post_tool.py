@@ -14,16 +14,7 @@ AGENT_ROOT = os.path.abspath(os.path.join(HERE, "..", ".."))
 sys.path.insert(0, os.path.join(AGENT_ROOT, "harness"))
 sys.path.insert(0, os.path.join(AGENT_ROOT, "tools"))
 
-from hooks.claude_code_post_tool import (  # noqa: E402
-    _action_label,
-    _detail,
-    _importance,
-    _is_success,
-    _pain_score,
-    _reflection,
-)
-from hooks.on_failure import on_failure  # noqa: E402
-from hooks.post_execution import log_execution  # noqa: E402
+from hooks._governed_capture import record_tool_event  # noqa: E402
 
 
 TOOL_NAME_MAP = {
@@ -157,34 +148,7 @@ def main() -> None:
     tool_input = _normalize_tool_input(raw_tool_name, payload.get("tool_input") or {})
     tool_response = _normalize_tool_response(raw_tool_name, payload.get("tool_response") or {})
 
-    success = _is_success(tool_name, tool_input, tool_response)
-    importance = _importance(tool_name, json.dumps(tool_input, ensure_ascii=True))
-    action = _action_label(tool_name, tool_input)
-    reflection = _reflection(tool_name, tool_input, tool_response, success)
-    detail = _detail(tool_name, tool_input, tool_response, success)
-    pain_score = _pain_score(importance, success)
-    if success:
-        log_execution(
-            skill_name="gemini",
-            action=action,
-            result=detail,
-            success=True,
-            reflection=reflection,
-            importance=importance,
-            confidence=0.7,
-            pain_score=pain_score,
-        )
-        return
-
-    on_failure(
-        skill_name="gemini",
-        action=action,
-        error=reflection,
-        context=detail,
-        confidence=0.7,
-        importance=importance,
-        pain_score=pain_score,
-    )
+    record_tool_event("gemini", tool_name, tool_input, tool_response)
 
 
 if __name__ == "__main__":

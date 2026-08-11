@@ -56,7 +56,8 @@ python3 .agent/tools/learn.py "<the rule, phrased as a principle>" \
 Project-level hooks in `.gemini/settings.json` automatically:
 - Log significant `run_shell_command`, `replace`, `write_file`, and
   `write_todos` results into `.agent/memory/episodic/AGENT_LEARNINGS.jsonl`
-- Run `python3 .agent/memory/auto_dream.py` when the Gemini session ends
+- Append a bounded, metadata-only governed episodic record when the Gemini
+  session ends; scheduled maintenance stages candidates for human review
 
 Manual `memory_reflect.py` calls are still required for major decisions,
 incidents, migrations, and other events where the plain tool payload is not

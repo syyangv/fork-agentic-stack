@@ -176,7 +176,7 @@ def _importance(tool_name: str, tool_input_str: str) -> int:
 
 def _pain_score(importance: int, success: bool) -> int:
     """Pain score calibrated so high-importance recurring successes cross
-    the dream-cycle promotion threshold (7.0).
+    the candidate-staging threshold. Staging never accepts a lesson.
 
     For a cluster of 3 high-importance successes:
       salience = recency(10) × pain(0.5) × importance(0.9) × recurrence(3) = 13.5
@@ -188,7 +188,7 @@ def _pain_score(importance: int, success: bool) -> int:
     if not success:
         return 8 if importance < 9 else 10
     if importance >= 8:
-        return 5  # significant success — recurring pattern should promote
+        return 5  # significant success — recurring pattern may be staged
     if importance >= 6:
         return 3
     return 2

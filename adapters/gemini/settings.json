@@ -27,11 +27,11 @@
       {
         "hooks": [
           {
-            "name": "agentic-stack-auto-dream",
+            "name": "agentic-stack-session-complete",
             "type": "command",
-            "command": "python3 \"$GEMINI_PROJECT_DIR/.agent/memory/auto_dream.py\"",
-            "description": "Stage recurring patterns into reviewable memory candidates",
-            "timeout": 60000
+            "command": "python3 \"$GEMINI_PROJECT_DIR/.agent/harness/hooks/session_complete.py\" gemini",
+            "description": "Append a bounded session-completion observation for human-governed review",
+            "timeout": 10000
           }
         ]
       }
