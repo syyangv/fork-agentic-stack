@@ -76,7 +76,7 @@ def _retire_memos_locked(target: Path, agent: Path, backup: Path) -> dict[str, o
 
         for _, path in sorted(present, key=lambda item: len(item[1].parts), reverse=True):
             if path.is_dir():
-                shutil.rmtree(path)
+                _remove_tree(path)
             else:
                 path.unlink()
         _write_retired_state(target, document)
@@ -208,7 +208,7 @@ def _restore_payload(agent: Path, payload: Path, copied: list[str]) -> None:
         destination.parent.mkdir(parents=True, exist_ok=True)
         if destination.exists():
             if destination.is_dir():
-                shutil.rmtree(destination)
+                _remove_tree(destination)
             else:
                 destination.unlink()
         if source.is_dir():
@@ -221,3 +221,13 @@ def _make_read_only(root: Path) -> None:
     for path in sorted(root.rglob("*"), key=lambda p: len(p.parts), reverse=True):
         path.chmod(0o500 if path.is_dir() else 0o400)
     root.chmod(0o500)
+
+
+def _remove_tree(path: Path) -> None:
+    for current, directories, _files in os.walk(path, topdown=True, followlinks=False):
+        Path(current).chmod(0o700)
+        for name in directories:
+            child = Path(current) / name
+            if not child.is_symlink():
+                child.chmod(0o700)
+    shutil.rmtree(path)

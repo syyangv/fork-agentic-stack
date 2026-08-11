@@ -101,6 +101,19 @@ def test_retirement_allows_contained_npm_bin_links(tmp_path: Path) -> None:
     assert result["status"] == "retired"
 
 
+def test_retirement_removes_immutable_provider_directories(tmp_path: Path) -> None:
+    _seed(tmp_path)
+    plugin = tmp_path / ".agent/runtime/providers/memos-local-plugin/2.0.14"
+    nested = plugin / "node_modules/tool"
+    nested.mkdir(parents=True)
+    (nested / "index.js").write_text("safe")
+    nested.chmod(0o500)
+    plugin.chmod(0o500)
+    result = retire_memos(tmp_path, backup_root=tmp_path / "backup")
+    assert result["status"] == "retired"
+    assert not (tmp_path / ".agent/runtime/providers/memos-local-plugin").exists()
+
+
 def test_retirement_rejects_escaping_npm_bin_link(tmp_path: Path) -> None:
     _seed(tmp_path)
     plugin = tmp_path / ".agent/runtime/providers/memos-local-plugin/2.0.14"
