@@ -84,7 +84,12 @@
     "connector-router": "custom",
     "port-manager": "custom",
     "skill-inventory": "custom",
-    "to-questionnaire": "revised"
+    "to-questionnaire": "revised",
+    "idea-to-ship": "revised",
+    "pwa": "custom",
+    "pwa-ux": "revised",
+    "wait-what": "revised",
+    "writing-for-agents": "revised"
   },
   "claude": {
     "agent-reach": "revised",
@@ -241,7 +246,8 @@
     "paseo-committee": "custom",
     "paseo-handoff": "custom",
     "paseo-loop": "custom",
-    "external-keyboard-remap": "custom"
+    "external-keyboard-remap": "custom",
+    "gws-workflow": "revised"
   },
   "codex": {
     "ask-claude": "custom",

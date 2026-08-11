@@ -85,9 +85,14 @@
     "connector-router": "Expected shared-brain skill in ~/.agent/skills; retained at its canonical secondary registry. Reviewed 2026-07-28.",
     "port-manager": "Expected shared-brain skill in ~/.agent/skills; retained at its canonical secondary registry. Reviewed 2026-07-28.",
     "skill-inventory": "Expected shared-brain skill in ~/.agent/skills; retained at its canonical secondary registry. Reviewed 2026-07-28.",
-    "to-questionnaire": "Expected shared-brain skill in ~/.agent/skills; retained at its canonical secondary registry. Reviewed 2026-07-28."
+    "to-questionnaire": "Expected shared-brain skill in ~/.agent/skills; retained at its canonical secondary registry. Reviewed 2026-07-28.",
+    "idea-to-ship": "Expected ~/.agent/skills/ shared-brain skill; canonical in the secondary registry and not mirrored across harness roots. Reviewed 2026-08-10.",
+    "pwa": "Expected ~/.agent/skills/ shared-brain skill; canonical in the secondary registry and not mirrored across harness roots. Reviewed 2026-08-10.",
+    "pwa-ux": "Expected ~/.agent/skills/ shared-brain skill; canonical in the secondary registry and not mirrored across harness roots. Reviewed 2026-08-10.",
+    "wait-what": "Expected ~/.agent/skills/ shared-brain skill; canonical in the secondary registry and not mirrored across harness roots. Reviewed 2026-08-10.",
+    "writing-for-agents": "Expected ~/.agent/skills/ shared-brain skill; canonical in the secondary registry and not mirrored across harness roots. Reviewed 2026-08-10."
   },
-  "reviewed_at": "2026-08-04",
+  "reviewed_at": "2026-08-10",
   "reviewed_claude_only": {
     "amazon-orders": "Expected Claude Code personal/Plugin skill; lives in ~/.claude/skills and is not mirrored to Codex/agentic-stack by design. Baselined 2026-06-03.",
     "browser-use": "Expected Claude Code personal/Plugin skill; lives in ~/.claude/skills and is not mirrored to Codex/agentic-stack by design. Baselined 2026-06-03.",
@@ -262,7 +267,8 @@
     "gsd-ultraplan-phase": "Expected Claude Code GSD plugin skill; lives in ~/.claude/skills and is not mirrored to Codex/agentic-stack by design. Baselined 2026-06-22.",
     "gsd-workspace": "Expected Claude Code GSD plugin skill; lives in ~/.claude/skills and is not mirrored to Codex/agentic-stack by design. Baselined 2026-06-22.",
     "codex-log-guard": "Expected Claude-local personal operations skill for this Mac; not mirrored across harness roots. Reviewed 2026-07-28.",
-    "external-keyboard-remap": "Expected Claude Code personal skill for external keyboard remapping (WAVE75, Karabiner-Elements, QMK/VIA); lives in ~/.claude/skills and is not mirrored across harness roots. Reviewed 2026-08-04."
+    "external-keyboard-remap": "Expected Claude Code personal skill for external keyboard remapping (WAVE75, Karabiner-Elements, QMK/VIA); lives in ~/.claude/skills and is not mirrored across harness roots. Reviewed 2026-08-04.",
+    "gws-workflow": "Expected Claude-local Google Workspace orchestration skill; canonical in ~/.claude/skills and not mirrored across harness roots. Reviewed 2026-08-10."
   },
   "reviewed_codex_only": {
     "ask-claude": "Codex local helper to ask Claude CLI and save OMX artifact.",
