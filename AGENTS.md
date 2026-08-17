@@ -156,3 +156,4 @@ python3 .agent/tools/memory_reflect.py \
 
 ## Session Learnings (Paseo)
 - **Paseo daemon PATH:** The launchd daemon (`com.syang.paseo.daemon`) has a restricted PATH: `~/.local/bin:~/projects/codex-hooks/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin`. It does NOT include `~/.npm-global/bin`. Any npm-global-installed provider binary (like `pi`) needs a wrapper script in `~/.local/bin/<name>` that execs `node@22` on the real entrypoint. A daemon restart (`paseo restart`) is required after adding the wrapper for provider re-discovery.
+- **Launchd keepalive trap:** Jobs submitted via `launchctl submit` inherit the keepalive property and restart indefinitely. A bounded monitor (e.g., a 24h soak) will re-run forever, appending every cycle to the same output file. Verify the job exits at its duration, use a fresh output file per cycle, and `launchctl remove` the job once its purpose is served.
