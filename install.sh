@@ -17,13 +17,15 @@
 #   ./install.sh transfer                        # memory transfer wizard
 #   ./install.sh upgrade [target-dir] [--dry-run|--yes]
 #                                                # safely refresh .agent infra
+#   ./install.sh loop <init|validate|run|resume|status|stop|cleanup|audit>
+#                                                # manage bounded agentic loops
 #   ./install.sh sync-manifest [target-dir]       # repair skills manifest
 #   ./install.sh                                 # bare: install wizard for fresh
 #                                                # projects, dashboard for already
 #                                                # installed interactive projects
 #
 # adapter-name: claude-code | copilot-cli | cursor | gemini | windsurf |
-#               opencode | openclaw | hermes | pi | codex |
+#               opencode | openclaw | hermes | pi | codex | autohand-code |
 #               standalone-python | antigravity
 #
 # All real logic lives in harness_manager/ (Python). This script is a

@@ -1,8 +1,8 @@
 class AgenticStack < Formula
   desc "One brain, many harnesses — portable .agent/ folder for AI coding agents"
   homepage "https://github.com/codejunkie99/agentic-stack"
-  url "https://github.com/codejunkie99/agentic-stack/archive/refs/tags/v0.18.0.tar.gz"
-  sha256 "ef2d9d9209755e3dd1888064eae48a78add44b2140a78b7952664d7c4945ba85"
+  url "https://github.com/codejunkie99/agentic-stack/archive/refs/tags/v0.19.1.tar.gz"
+  sha256 "a128f83f9734dd4341e9b9b22084944ab791b1d1321c4d0e5e3d60cbbc30e22c"
   license "Apache-2.0"
 
   def install
@@ -31,6 +31,9 @@ class AgenticStack < Formula
     assert_path_exists testpath/".agent/memory/personal/PREFERENCES.md"
     assert_path_exists testpath/".agent/memory/.features.json"
     assert_match "agentic-stack dashboard", shell_output("#{agentic_stack} dashboard #{testpath} --plain")
+    assert_match "loop", shell_output("#{agentic_stack} loop --help")
+    system agentic_stack, "loop", "init", testpath.to_s
+    system agentic_stack, "loop", "validate", "--target", testpath.to_s
     system agentic_stack, "mission-control", testpath.to_s,
            "--snapshot", (testpath/"mission-control.html").to_s, "--no-open"
     assert_path_exists testpath/"mission-control.html"

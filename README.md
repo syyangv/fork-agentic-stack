@@ -2,7 +2,7 @@
 
 **Keep one portable memory-and-skills layer across coding-agent harnesses, so switching tools doesn't reset how your agent works.**
 
-A portable `.agent/` folder (memory + skills + protocols) that plugs into Claude Code, Cursor, Windsurf, OpenCode, OpenClaw, GitHub Copilot CLI, Google Gemini CLI, Hermes, Pi Coding Agent, Codex, Antigravity, or a DIY Python loop — and keeps its knowledge when you switch.
+A portable `.agent/` folder (memory + skills + protocols) that plugs into Claude Code, Cursor, Windsurf, OpenCode, OpenClaw, GitHub Copilot CLI, Google Gemini CLI, Hermes, Pi Coding Agent, Codex, Autohand Code CLI, Antigravity, or a DIY Python loop — and keeps its knowledge when you switch.
 
 It also includes a local data layer so you can monitor the whole suite of
 agents from one place: harness activity, cron runs, active agents, token/cost
@@ -25,106 +25,40 @@ metrics without training a model or sending telemetry.
   <img src="docs/diagram.svg" alt="agentic-stack architecture" width="880"/>
 </p>
 
-### New in v0.18.0 — external Brain memory integration
+### New in v0.19.1 — memory and upgrade fixes
 
-Minor release. Adds an optional bridge to
-[`codejunkie99/brain`](https://github.com/codejunkie99/brain), the external
-git-backed long-term memory CLI/TUI/MCP server, without vendoring Brain's Rust
-workspace into agentic-stack.
+Patch release. Four correctness fixes:
 
-- **`agentic-stack brain ...`.** Check Brain status, onboard a project, search
-  global memory, write durable notes, run Brain doctor/TUI, or print the MCP
-  stdio command from the normal agentic-stack CLI.
-- **Project bridge.** Installed `.agent/` projects now include
-  `.agent/tools/brain_bridge.py`, so host agents can call Brain explicitly when
-  a task needs cross-project recall.
-- **Brain seed skill.** A new `brain` skill teaches agents when to query or
-  write Brain memory, and keeps secret handling explicit.
+- **Recall skips superseded lessons.** Retrieval and rendering now share one
+  `superseded_by_map`, so recall no longer returns stale guidance next to its
+  replacement.
+- **`upgrade` copies loop skills to the right path.** New `loop-*` skills landed
+  at `.agent/skills/skills/loop-x/`; they now land at `.agent/skills/loop-x/`.
+- **UTF-8 everywhere in `learn.py`.** Non-ASCII claims print and persist
+  correctly regardless of host locale.
+- **No leaked file handle** when checking whether a lesson was already appended.
 
-See [CHANGELOG.md](CHANGELOG.md) for the full list.
+### Bounded agentic loops (v0.19.0)
 
-### v0.17.0 — adapters, Mission Control, and lesson retraction
+Portable loop contracts live under `.agent/loops` and use a maker →
+deterministic verifier → independent checker lifecycle:
 
-Minor release. Clears the open PR queue and ships the combined production
-surface from Copilot CLI, Gemini, Mission Control, and semantic lesson
-retraction work.
+```bash
+agentic-stack loop init /path/to/your-project
+agentic-stack loop validate /path/to/your-project
+agentic-stack loop run ci-sweeper "make the failing test green" /path/to/your-project --yes
+agentic-stack loop status /path/to/your-project
+```
 
-### v0.16.1 — getting-started refresh
+L2/L3 action loops use owned Git worktrees, finite attempts/runtime/output/token
+budgets, deny-path gates, resumable checkpoints, and privacy-safe local events.
+The supervisor bounds and audits child processes; it is not an operating-system sandbox. Use harness-native sandboxes and approvals for stronger isolation.
+Schedulers should invoke one bounded `loop run` command at a time and inspect
+its exit status before starting another run.
 
-Patch release. Ships the production-ready getting-started guide from PR #49
-and fixes onboarding version drift in the first-run banner.
-
-### v0.16.0 — safe project upgrades
-
-Minor release. Adds `agentic-stack upgrade` and `agentic-stack sync-manifest`
-so installed projects can pick up new `.agent` infrastructure and skill
-metadata without clobbering adapter settings or user memory.
-
-- **Safe upgrade command.** Run `agentic-stack upgrade --dry-run` to preview
-  skeleton-owned `.agent` file updates, then `agentic-stack upgrade --yes` to
-  apply them.
-- **Manifest repair.** Run `agentic-stack sync-manifest` to rebuild
-  `.agent/skills/_manifest.jsonl` from installed `SKILL.md` frontmatter.
-- **No config overwrite.** Upgrade leaves `CLAUDE.md`, `.claude/settings.json`,
-  personal/semantic/episodic/working memory, candidates, and existing skill
-  directories untouched.
-- **Stricter doctor.** `agentic-stack doctor` now warns when Claude Code hook
-  commands point to missing `.agent` files or hook scripts are present but
-  unwired.
-
-### v0.12.0 — tldraw visual canvas
-
-Minor release. Adds an opt-in `tldraw` seed skill for live canvas diagrams and
-a skill-local snapshot store. It is beta and off by default.
-
-- **`tldraw` seed skill.** Draw, diagram, sketch, wireframe, flowchart, and
-  whiteboard on a live canvas at `http://localhost:3030` through an MCP server.
-- **Skill-local snapshots.** Save worthwhile canvases with
-  `.agent/skills/tldraw/store.py snapshot`; list, load, and archive them later
-  without treating them as a fifth memory layer.
-- **Opt-in beta.** Onboarding writes `tldraw.enabled: false` by default. After
-  enabling it, users manually merge `adapters/_shared/tldraw-mcp.json` into
-  their harness MCP config.
-
-### v0.11.0 — data layer + data flywheel
-
-Added two local-first data capabilities for teams running multiple agent
-harnesses against the same `.agent/` brain.
-
-- **`data-layer` seed skill.** Generate local dashboard exports across Claude
-  Code, Hermes, OpenClaw, Codex, Cursor, OpenCode, and custom loops:
-  harness events, cron timelines, KPI summaries, token/cost estimates,
-  categories, `dashboard.html`, and `daily-report.md`. The skill also acts as
-  the injected natural-language surface for showing the terminal dashboard.
-- **`data-flywheel` seed skill.** Export approved, redacted runs into trace
-  records, context cards, eval cases, training-ready JSONL, and flywheel
-  metrics. It is local-only and model-agnostic; it prepares artifacts but
-  does not train models or call external APIs.
-
-### v0.10.0 — design-md skill + Python 3.9 fix
-
-Added the `design-md` seed skill for root `DESIGN.md` / Google Stitch
-workflows, and fixed the Python 3.9 crash that hit macOS-default brew users
-on first run.
-
-### v0.9.1 — pi adapter fixes + tz correctness
-
-Closed the gap between v0.9.0 and a working pi adapter, plus a timezone
-sweep across every Python writer/reader so the dream cycle stops drifting
-against the UTC decay window.
-
-### v0.9.0 — harness manager
-
-<p align="center">
-  <img src="docs/harness-manager.svg" alt="harness manager v0.9.0" width="880"/>
-</p>
-
-Manifest-driven adapter system: every harness is now declared by an
-`adapter.json`, applied by a shared Python backend, and managed via
-verb subcommands or an interactive TUI. Cross-platform (POSIX +
-Windows) with concurrent-write protection, pre-v0.9 migration via
-`./install.sh doctor`, and shared-file ownership tracking so removing
-one adapter never orphans another.
+Earlier releases — Brain memory bridge (v0.18.0), Mission Control and lesson
+retraction (v0.17.0), safe project upgrades (v0.16.0), data layer and flywheel
+(v0.11.0), harness manager (v0.9.0) — are in [CHANGELOG.md](CHANGELOG.md).
 
 [![GitHub release](https://img.shields.io/github/v/release/codejunkie99/agentic-stack)](https://github.com/codejunkie99/agentic-stack/releases)
 [![License: Apache 2.0](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
@@ -142,7 +76,7 @@ brew install agentic-stack
 # drop the brain into any project — the onboarding wizard runs automatically
 cd your-project
 agentic-stack claude-code
-# or: cursor | windsurf | opencode | openclaw | copilot-cli | gemini | hermes | pi | codex | standalone-python | antigravity
+# or: cursor | windsurf | opencode | openclaw | copilot-cli | gemini | hermes | pi | codex | autohand-code | standalone-python | antigravity
 ```
 
 ### Windows (PowerShell)
@@ -167,7 +101,7 @@ agentic-stack dashboard
 git clone https://github.com/codejunkie99/agentic-stack.git
 cd agentic-stack && ./install.sh claude-code         # mac / linux / git-bash
 # or on Windows PowerShell: .\install.ps1 claude-code
-# adapters: claude-code | cursor | windsurf | opencode | openclaw | copilot-cli | gemini | hermes | pi | codex | standalone-python | antigravity
+# adapters: claude-code | cursor | windsurf | opencode | openclaw | copilot-cli | gemini | hermes | pi | codex | autohand-code | standalone-python | antigravity
 ```
 
 ### Once installed: manage what's wired
@@ -244,7 +178,7 @@ from installed `SKILL.md` files.
 ## Onboarding wizard
 
 If you ran bare `./install.sh` (no adapter name), the wizard starts
-with a **multi-select harness step**: it lists all 12 adapters, pre-
+with a **multi-select harness step**: it lists all 13 adapters, pre-
 checks any it detects on disk, and installs each one you confirm with
 space + enter. After the install(s), the preferences flow runs.
 
@@ -440,6 +374,7 @@ adapters/                       # one small shim per harness, each with adapter.
 ├── hermes/        (AGENTS.md)
 ├── pi/            (AGENTS.md + .pi/skills symlink)
 ├── codex/         (AGENTS.md + .agent/skills symlink)
+├── autohand-code/ (AGENTS.md + .autohand/skills symlink)
 ├── standalone-python/  (DIY conductor entrypoint)
 └── antigravity/   (ANTIGRAVITY.md)
 
@@ -498,6 +433,7 @@ verify_codex_fixes.py           # v0.8.0 regression checks (33 checks)
 | **Hermes Agent** | `AGENTS.md` (agentskills.io compatible) | partial (own memory) |
 | **Pi Coding Agent** | `AGENTS.md` + `.pi/skills/` + `.pi/extensions/` | yes (`tool_result` event) |
 | **Codex** | `AGENTS.md` + `.agent/skills/` | no (manual reflect calls) |
+| **Autohand Code CLI** | `AGENTS.md` + `.autohand/skills/` | no (manual reflect calls) |
 | **Standalone Python** | `run.py` (any LLM) | yes (full control) |
 | **Antigravity** | `ANTIGRAVITY.md` | yes (system context) |
 

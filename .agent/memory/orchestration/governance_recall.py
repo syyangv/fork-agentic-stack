@@ -6,6 +6,8 @@ import re
 from pathlib import Path
 from typing import Callable
 
+from render_lessons import superseded_by_map
+
 
 _STATUS_RE = re.compile(r"status=(\w+)")
 
@@ -38,8 +40,12 @@ def load_structured_state(path: str | Path) -> list[dict]:
 
 
 def load_structured(path: str | Path) -> list[dict]:
+    state = load_structured_state(path)
+    retired = superseded_by_map(state)
     out = []
-    for lesson in load_structured_state(path):
+    for lesson in state:
+        if lesson.get("id") in retired:
+            continue
         if lesson.get("status") == "accepted":
             lesson.setdefault("_source", "lessons.jsonl")
             out.append(lesson)
@@ -78,8 +84,11 @@ def normalize_claim(value: str) -> str:
 
 def merge_sources(structured_path: str | Path, markdown_path: str | Path) -> tuple[list[dict], bool]:
     latest = load_structured_state(structured_path)
+    retired = superseded_by_map(latest)
     structured = []
     for item in latest:
+        if item.get("id") in retired:
+            continue
         if item.get("status") == "accepted":
             item.setdefault("_source", "lessons.jsonl")
             structured.append(item)

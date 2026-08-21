@@ -16,13 +16,15 @@
 #   .\install.ps1 manage [target-dir]          # interactive adapter TUI
 #   .\install.ps1 transfer                     # memory transfer wizard
 #   .\install.ps1 upgrade [target-dir] [-Yes]  # safely refresh .agent infra
+#   .\install.ps1 loop <init|validate|run|resume|status|stop|cleanup|audit>
+#                                              # manage bounded agentic loops
 #   .\install.ps1 sync-manifest [target-dir]   # repair skills manifest
 #   .\install.ps1                              # bare: install wizard for fresh
 #                                              # projects, dashboard for already
 #                                              # installed interactive projects
 #
 # adapter-name: claude-code | copilot-cli | cursor | gemini | windsurf |
-#               opencode | openclaw | hermes | pi | codex |
+#               opencode | openclaw | hermes | pi | codex | autohand-code |
 #               standalone-python | antigravity
 #
 # All real logic lives in harness_manager/ (Python). This script is a

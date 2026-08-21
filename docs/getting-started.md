@@ -40,7 +40,7 @@ If you installed with Homebrew, run the CLI from your project root:
 ```bash
 cd your-project
 agentic-stack claude-code
-# or: cursor | windsurf | opencode | openclaw | copilot-cli | gemini | hermes | pi | codex | standalone-python | antigravity
+# or: cursor | windsurf | opencode | openclaw | copilot-cli | gemini | hermes | pi | codex | autohand-code | standalone-python | antigravity
 ```
 
 If you are using a source checkout, the install command above already picked
@@ -88,6 +88,26 @@ agentic-stack upgrade --dry-run   # preview safe .agent infrastructure refresh
 agentic-stack upgrade --yes       # apply latest harness/memory/tools + new skills
 agentic-stack sync-manifest       # rebuild .agent/skills/_manifest.jsonl from SKILL.md
 ```
+
+### Bounded agentic loops
+
+Initialize and inspect the portable loop contracts before running an action loop:
+
+```bash
+agentic-stack loop init /path/to/your-project
+agentic-stack loop validate /path/to/your-project
+agentic-stack loop run ci-sweeper "make the failing test green" /path/to/your-project --yes
+agentic-stack loop status /path/to/your-project
+```
+
+The lifecycle is maker → deterministic verifier → independent checker. L1
+loops report in the current workspace; bundled L2/L3 action loops use owned
+worktrees, approvals, finite budgets, deny-path gates, and resumable local
+checkpoints. Events contain only allowlisted metadata and hashed identifiers.
+The loop supervisor is **not an operating-system sandbox**; pair it with a
+harness-native sandbox when hostile or high-impact child code is in scope.
+Schedulers should run one bounded command, inspect its exit code, and only then
+schedule the next run.
 
 Source checkout users can run the same verbs through the clone:
 

@@ -26,6 +26,7 @@ from . import profiles as profiles_mod
 from . import schema as schema_mod
 from . import state as state_mod
 from . import status as status_mod
+from .loops.storage import collect_summary
 
 
 SECTIONS = (
@@ -38,6 +39,7 @@ SECTIONS = (
     "Team Brain",
     "Skills",
     "Instances",
+    "Loops",
     "Transfer",
     "Data",
 )
@@ -450,6 +452,7 @@ def collect_dashboard(
     team = _team_status(agent)
     instances = _instances_status(agent)
     orchestration = _orchestration_observability(agent, doc, target, stack)
+    loops = collect_summary(target)
 
     checks = [
         _check("pass" if agent.is_dir() else "fail", ".agent directory", "present" if agent.is_dir() else "missing"),
@@ -517,6 +520,7 @@ def collect_dashboard(
         "skills": {"count": len(skill_names), "names": skill_names},
         "instances": instances,
         "orchestration": orchestration,
+        "loops": loops,
         "transfer": {
             "ready": agent.is_dir(),
             "detail": "ready" if agent.is_dir() else ".agent/ missing",
@@ -563,6 +567,7 @@ def _nav_lines(model: dict[str, Any], selected: str = "Overview") -> list[str]:
         ("Team Brain", team_detail),
         ("Skills", _plural(model["skills"]["count"], "skill")),
         ("Instances", instance_detail),
+        ("Loops", f"{model['loops']['valid']}/{model['loops']['configured']} valid"),
         ("Transfer", model["transfer"]["detail"]),
         ("Data", "ready" if model["data"]["exists"] else "not exported"),
     ]
@@ -586,11 +591,15 @@ def _overview_lines(model: dict[str, Any]) -> list[str]:
     if model["available"]:
         lines.append(f"  info {len(model['available'])} adapters available to add")
     memory = model["memory"]
+    loops = model["loops"]
     lines.extend(
         [
             "",
             "  Memory",
             f"  info {_plural(memory['episodes'], 'episode')}, {_plural(memory['lessons'], 'lesson')}, {_plural(memory['candidates'], 'candidate')}",
+            "",
+            "  Loops",
+            f"  info {loops['valid']}/{loops['configured']} configured valid; paused={loops['paused']}",
             "",
             "Actions",
             "  > Open adapter manager",
@@ -790,6 +799,18 @@ def _section_lines(section: str, model: dict[str, Any]) -> list[str]:
         return _skills_lines(model)
     if section == "Instances":
         return _instances_lines(model)
+    if section == "Loops":
+        latest = model["loops"].get("latest")
+        latest_text = "none" if latest is None else f"{latest['run_id']} {latest['status']}"
+        return [
+            "Loops",
+            "",
+            f"  configured: {model['loops']['configured']}",
+            f"  valid:      {model['loops']['valid']}",
+            f"  paused:     {model['loops']['paused']}",
+            f"  latest:     {latest_text}",
+            *(f"  invalid:    {name}" for name in model["loops"]["invalid"]),
+        ]
     if section == "Transfer":
         return _transfer_lines(model)
     if section == "Data":
@@ -861,6 +882,8 @@ def _draw(stdscr: Any, section_idx: int, target_root: Path, stack_root: Path, cu
             detail = str(model["skills"]["count"])
         elif name == "Instances":
             detail = str(model["instances"]["count"])
+        elif name == "Loops":
+            detail = f"{model['loops']['valid']}/{model['loops']['configured']}"
         _addstr(stdscr, 4 + idx, 1, _clip(f"{marker} {name:<10} {detail}", rail_w - 2))
 
     content_x = rail_w + 1

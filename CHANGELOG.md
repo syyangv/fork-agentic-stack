@@ -5,6 +5,78 @@ All notable changes to this project.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.19.1] — 2026-08-07
+
+Patch release. Four correctness fixes in memory retrieval, project upgrade, and
+file I/O. No contract, CLI, or on-disk format changes; upgrading is optional.
+
+### Fixed
+- **Recall returned superseded lessons** (#60). Supersession appends a new id
+  and never edits the old row, so `recall._load_structured()` kept surfacing
+  retired guidance beside its replacement. `superseded_by_map()` moved to
+  `render_lessons.py` and is now shared, so retrieval and rendering can't
+  disagree about what is retired. Provisional supersessions still do not retire
+  the old lesson.
+- **`upgrade` copied new loop skills to a doubled path** (#63). A genuinely
+  missing `loop-*` skill landed at `.agent/skills/skills/loop-x/` instead of
+  `.agent/skills/loop-x/`, in both `--dry-run` reports and real copies.
+- **Locale-dependent encoding in `learn.py`** (#61). `stdout`/`stderr` are
+  forced to UTF-8, and candidate JSON is written with an explicit encoding, so
+  non-ASCII claims survive on hosts whose default codepage isn't UTF-8.
+- **Leaked file handle** (#62). `_lesson_already_appended()` now reads through a
+  context manager instead of relying on refcounting to close the file.
+
+### Migration
+None required. Run `agentic-stack upgrade --dry-run`, then
+`agentic-stack upgrade --yes`, to pick up the fixes in an installed project.
+Projects that previously upgraded into `.agent/skills/skills/` can delete that
+stray directory; the correctly-placed skills are copied on the next upgrade.
+
+### Release
+- Tag `v0.19.1` cut from the verified release commit.
+- GitHub release: <https://github.com/codejunkie99/agentic-stack/releases/tag/v0.19.1>
+- Tarball sha256:
+  `a128f83f9734dd4341e9b9b22084944ab791b1d1321c4d0e5e3d60cbbc30e22c`.
+
+## [0.19.0] — 2026-07-18
+
+Adds portable, bounded agentic loops and a local meta-harness for resumable
+maker/verifier/checker work.
+
+### Added
+- Strict JSON loop contracts, executor profiles, constraints, budgets, and
+  portable seed skills.
+- Atomic checkpoints, privacy-safe events, shell-free bounded subprocesses,
+  owned Git worktrees, policy gates, stagnation breakers, and CLI lifecycle
+  verbs (`init`, `validate`, `run`, `resume`, `status`, `stop`, `cleanup`,
+  `audit`).
+- Read-only loop health in doctor/status/dashboard/Mission Control and hashed
+  loop-event ingestion in the local data layer.
+
+### Safety
+- L2/L3 action loops require worktree isolation, deterministic verification,
+  independent checker approval, finite budgets, and explicit approval before
+  mutating or external-write profiles.
+- Runtime events omit task/prompt/command/output content by construction. The
+  supervisor is not an operating-system sandbox; use harness-native isolation
+  for hostile child processes.
+
+### Migration
+Run `agentic-stack upgrade --dry-run`, then `agentic-stack upgrade --yes` in
+existing projects. Upgrade adds missing loop starters and skills but preserves
+authored contracts, runtime state, and existing loop skill directories.
+
+### Release
+- Tag `v0.19.0` cut from the verified release commit.
+- GitHub release: <https://github.com/codejunkie99/agentic-stack/releases/tag/v0.19.0>
+- Tarball sha256:
+  `825d667153e4d0ff16282d8d86100d7254682d600ee535c36709a876106563f1`.
+- Formula verification: `tests/test_transfer_scripts.py` passed 5 tests and
+  `ruby -c Formula/agentic-stack.rb` returned `Syntax OK`. This Homebrew
+  version rejected local-path audit, refused the untrusted tap name, and only
+  accepts installed formula names for `brew test`; no Homebrew audit/test pass
+  is claimed.
+
 ## [0.18.0] — 2026-05-10
 
 Minor release. Adds first-class integration with the external Brain CLI/MCP

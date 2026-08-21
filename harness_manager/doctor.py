@@ -30,6 +30,7 @@ from . import profiles as profiles_mod
 from . import upgrade as upgrade_mod
 from . import __version__
 from .scheduled_review_health import default_scheduler_path, inspect_scheduler
+from .loops.storage import collect_summary
 
 
 # Detection signals: (filename, signal_strength) tuples per adapter.
@@ -47,6 +48,7 @@ DETECT_SIGNALS = {
     "openclaw": [(".openclaw-system.md", "strong")],
     "pi": [(".pi/extensions/memory-hook.ts", "strong")],
     "codex": [(".agent/skills", "strong")],
+    "autohand-code": [(".autohand/skills", "strong")],
     "gemini": [
         ("GEMINI.md", "weak"),
         (".gemini/settings.json", "strong"),
@@ -56,10 +58,6 @@ DETECT_SIGNALS = {
     "opencode": [("opencode.json", "strong")],
     "hermes": [("AGENTS.md", "weak")],  # AGENTS.md alone is ambiguous
     "standalone-python": [("run.py", "weak")],
-    "gemini": [
-        ("gemini.md", "weak"),
-        (".gemini/skills", "strong"),
-    ],
     "copilot-cli": [(".github/instructions/agentic-stack.instructions.md", "strong")],
 }
 
@@ -94,7 +92,14 @@ def audit(target_root: Path | str, log: Callable[[str], None] | None = None) -> 
         log(f"    install.json is unreadable: {type(exc).__name__}")
         return 1
 
+    loop_summary = collect_summary(target_root)
+
     if doc is None:
+        if loop_summary["configured"]:
+            log(
+                f"loops: {loop_summary['valid']}/{loop_summary['configured']} valid"
+                + (f"; invalid: {', '.join(loop_summary['invalid'])}" if loop_summary["invalid"] else "")
+            )
         base_result = _audit_pre_v090(target_root, log)
         return max(base_result, _audit_scheduled_reviewer(log=log))
 
@@ -133,6 +138,11 @@ def audit(target_root: Path | str, log: Callable[[str], None] | None = None) -> 
 
     log("")
     log(f"summary: {_summary(doc, any_red)}")
+    if loop_summary["configured"]:
+        log(
+            f"loops: {loop_summary['valid']}/{loop_summary['configured']} valid"
+            + (f"; invalid: {', '.join(loop_summary['invalid'])}" if loop_summary["invalid"] else "")
+        )
     return 1 if any_red else 0
 
 
