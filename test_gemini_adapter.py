@@ -35,9 +35,9 @@ class GeminiAdapterTests(unittest.TestCase):
         self.assertIn(".agent/harness/hooks/gemini_post_tool.py", after_tool_command)
 
         session_end = settings["hooks"]["SessionEnd"][0]["hooks"]
-        self.assertIn(".agent/harness/hooks/orchestration_event.py", session_end[0]["command"])
-        self.assertIn("--signal finalize", session_end[0]["command"])
-        self.assertIn(".agent/memory/auto_dream.py", session_end[1]["command"])
+        self.assertEqual(len(session_end), 1)
+        self.assertIn(".agent/harness/hooks/session_complete.py", session_end[0]["command"])
+        self.assertIn("gemini", session_end[0]["command"])
 
     def test_doctor_detects_gemini_settings(self):
         doctor = (ROOT / "harness_manager" / "doctor.py").read_text(encoding="utf-8")
