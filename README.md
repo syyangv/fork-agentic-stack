@@ -152,6 +152,10 @@ Installed `.agent/` projects also get `python3 .agent/tools/brain_bridge.py`
 and a `brain` seed skill so host agents can query or write Brain memory when a
 task needs cross-harness long-term recall.
 
+See [docs/memory-architecture.md](docs/memory-architecture.md) for the
+ownership boundaries between local agentic-stack memory, external Brain, and
+Headroom, plus the automatic/manual workflows.
+
 Bare `./install.sh` (no arguments) opens a **multi-select wizard** on
 a fresh project — check every harness you actually use, hit enter,
 each one gets installed. The wizard auto-detects harnesses already on
