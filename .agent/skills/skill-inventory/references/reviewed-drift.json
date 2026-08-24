@@ -79,9 +79,23 @@
     "writing-beats": "Expected shared-brain skill in ~/.agent/skills; retained at its canonical registry. Reviewed 2026-07-15.",
     "writing-fragments": "Expected shared-brain skill in ~/.agent/skills; retained at its canonical registry. Reviewed 2026-07-15.",
     "writing-great-skills": "Expected shared-brain skill in ~/.agent/skills; retained at its canonical registry. Reviewed 2026-07-15.",
-    "writing-shape": "Expected shared-brain skill in ~/.agent/skills; retained at its canonical registry. Reviewed 2026-07-15."
+    "writing-shape": "Expected shared-brain skill in ~/.agent/skills; retained at its canonical registry. Reviewed 2026-07-15.",
+    "batch-grill-me": "Expected shared-brain skill in ~/.agent/skills; retained at its canonical registry. Reviewed 2026-08-24.",
+    "brain": "Expected shared-brain skill in ~/.agent/skills; retained at its canonical registry. Reviewed 2026-08-24.",
+    "connector-router": "Expected shared-brain skill in ~/.agent/skills; retained at its canonical registry. Reviewed 2026-08-24.",
+    "idea-to-ship": "Expected shared-brain skill in ~/.agent/skills; retained at its canonical registry. Reviewed 2026-08-24.",
+    "memory-orchestrator": "Expected shared-brain skill in ~/.agent/skills; retained at its canonical registry. Reviewed 2026-08-24.",
+    "model-routing": "Expected shared-brain skill in ~/.agent/skills; retained at its canonical registry. Reviewed 2026-08-24.",
+    "port-manager": "Expected shared-brain skill in ~/.agent/skills; retained at its canonical registry. Reviewed 2026-08-24.",
+    "pwa": "Expected shared-brain skill in ~/.agent/skills; retained at its canonical registry. Reviewed 2026-08-24.",
+    "pwa-ux": "Expected shared-brain skill in ~/.agent/skills; retained at its canonical registry. Reviewed 2026-08-24.",
+    "skill-inventory": "Expected shared-brain skill in ~/.agent/skills; retained at its canonical registry. Reviewed 2026-08-24.",
+    "to-questionnaire": "Expected shared-brain skill in ~/.agent/skills; retained at its canonical registry. Reviewed 2026-08-24.",
+    "wait-what": "Expected shared-brain skill in ~/.agent/skills; retained at its canonical registry. Reviewed 2026-08-24.",
+    "writing-for-agents": "Expected shared-brain skill in ~/.agent/skills; retained at its canonical registry. Reviewed 2026-08-24.",
+    "keyboard-shortcuts": "Expected shared-brain skill in ~/.agent/skills; retained at its canonical registry. Reviewed 2026-08-24."
   },
-  "reviewed_at": "2026-07-15",
+  "reviewed_at": "2026-08-24",
   "reviewed_claude_only": {
     "amazon-orders": "Expected Claude Code personal/Plugin skill; lives in ~/.claude/skills and is not mirrored to Codex/agentic-stack by design. Baselined 2026-06-03.",
     "browser-use": "Expected Claude Code personal/Plugin skill; lives in ~/.claude/skills and is not mirrored to Codex/agentic-stack by design. Baselined 2026-06-03.",
@@ -182,7 +196,6 @@
     "jiawu-task-manager": "Expected Claude Code personal/Plugin skill; lives in ~/.claude/skills and is not mirrored to Codex/agentic-stack by design. Baselined 2026-06-03.",
     "jokakaka-manga-sync": "Expected Claude Code personal/Plugin skill; lives in ~/.claude/skills and is not mirrored to Codex/agentic-stack by design. Baselined 2026-06-03.",
     "karpathy-guidelines": "Expected Claude Code personal/Plugin skill; lives in ~/.claude/skills and is not mirrored to Codex/agentic-stack by design. Baselined 2026-06-03.",
-    "keyboard-shortcuts": "Expected Claude Code personal/Plugin skill; lives in ~/.claude/skills and is not mirrored to Codex/agentic-stack by design. Baselined 2026-06-03.",
     "lets-go-rss": "Expected Claude Code personal/Plugin skill; lives in ~/.claude/skills and is not mirrored to Codex/agentic-stack by design. Baselined 2026-06-03.",
     "lets-go-rss-obsidian-sync": "Expected Claude Code personal/Plugin skill; lives in ~/.claude/skills and is not mirrored to Codex/agentic-stack by design. Baselined 2026-06-03.",
     "m4a-to-mp3": "Expected Claude Code personal/Plugin skill; lives in ~/.claude/skills and is not mirrored to Codex/agentic-stack by design. Baselined 2026-06-03.",
@@ -254,7 +267,11 @@
     "gsd-spike": "Expected Claude Code GSD plugin skill; lives in ~/.claude/skills and is not mirrored to Codex/agentic-stack by design. Baselined 2026-06-22.",
     "gsd-surface": "Expected Claude Code GSD plugin skill; lives in ~/.claude/skills and is not mirrored to Codex/agentic-stack by design. Baselined 2026-06-22.",
     "gsd-ultraplan-phase": "Expected Claude Code GSD plugin skill; lives in ~/.claude/skills and is not mirrored to Codex/agentic-stack by design. Baselined 2026-06-22.",
-    "gsd-workspace": "Expected Claude Code GSD plugin skill; lives in ~/.claude/skills and is not mirrored to Codex/agentic-stack by design. Baselined 2026-06-22."
+    "gsd-workspace": "Expected Claude Code GSD plugin skill; lives in ~/.claude/skills and is not mirrored to Codex/agentic-stack by design. Baselined 2026-06-22.",
+    "codex-log-guard": "Expected Claude Code local infrastructure skill; lives in ~/.claude/skills and is not mirrored to Codex/agentic-stack by design. Reviewed 2026-08-24.",
+    "external-keyboard-remap": "Expected Claude Code personal skill; lives in ~/.claude/skills and is not mirrored to Codex/agentic-stack by design. Reviewed 2026-08-24.",
+    "gws-workflow": "Expected Claude Code personal/integration skill; lives in ~/.claude/skills and is not mirrored to Codex/agentic-stack by design. Reviewed 2026-08-24.",
+    "vocal": "Expected Claude Code personal/vault skill; lives in ~/.claude/skills and is not mirrored to Codex/agentic-stack by design. Reviewed 2026-08-24."
   },
   "reviewed_codex_only": {
     "ask-claude": "Codex local helper to ask Claude CLI and save OMX artifact.",
@@ -267,6 +284,7 @@
     "omx-setup": "OMX setup/configuration workflow for Codex projects/user scope.",
     "plan": "OMX strategic planning workflow.",
     "web-clone": "OMX URL-driven website cloning workflow.",
-    "worker": "OMX tmux team worker protocol."
+    "worker": "OMX tmux team worker protocol.",
+    "init-project-repo": "Expected Codex/OMX local workflow skill; lives in ~/.codex/skills and is not mirrored to the shared registry by design. Reviewed 2026-08-24."
   }
 }
