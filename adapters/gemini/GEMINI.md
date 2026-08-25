@@ -10,6 +10,24 @@ skills, and protocols live in `.agent/`.
 4. `.agent/memory/semantic/LESSONS.md` — what we've already learned
 5. `.agent/protocols/permissions.md` — hard constraints, read before any tool call
 
+## Cross-harness guidance
+
+`GEMINI.md` is the Gemini-specific entrypoint, not a replacement for shared
+policy. For work involving `AGENTS.md`, `CLAUDE.md`, or `GEMINI.md` itself:
+
+1. Load `.agent/skills/guidance-sync/SKILL.md` as the governance guard.
+2. Use `.agent/skills/agent-orchestrator/SKILL.md` for route selection.
+3. Keep shared doctrine in `.agent/AGENTS.md` and the shared protocols.
+
+Gemini adapter installation, refresh, merge, and deployment remain owned by
+`agentic-stack`. Preserve existing `.gemini` state and merge adapter-owned
+wiring rather than replacing Gemini-local configuration.
+
+If a project-specific `GEMINI.md` contains session learnings, treat it like a
+project-specific session-learning document: classify its contents through
+`session-learnings` and promote durable results to canonical `.agent` memory.
+Do not copy raw session notes into shared policy.
+
 ## Before every non-trivial action — recall first
 
 For any task involving **deploy**, **ship**, **release**, **migration**,
