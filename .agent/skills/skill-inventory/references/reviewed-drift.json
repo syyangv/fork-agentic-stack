@@ -93,7 +93,8 @@
     "to-questionnaire": "Expected shared-brain skill in ~/.agent/skills; retained at its canonical registry. Reviewed 2026-08-24.",
     "wait-what": "Expected shared-brain skill in ~/.agent/skills; retained at its canonical registry. Reviewed 2026-08-24.",
     "writing-for-agents": "Expected shared-brain skill in ~/.agent/skills; retained at its canonical registry. Reviewed 2026-08-24.",
-    "keyboard-shortcuts": "Expected shared-brain skill in ~/.agent/skills; retained at its canonical registry. Reviewed 2026-08-24."
+    "keyboard-shortcuts": "Expected shared-brain skill in ~/.agent/skills; retained at its canonical registry. Reviewed 2026-08-24.",
+    "agent-orchestrator": "Expected shared-brain routing skill in ~/.agent/skills; intentionally not mirrored into Claude/Codex roots. Reviewed 2026-08-31."
   },
   "reviewed_at": "2026-08-24",
   "reviewed_claude_only": {
@@ -285,6 +286,7 @@
     "plan": "OMX strategic planning workflow.",
     "web-clone": "OMX URL-driven website cloning workflow.",
     "worker": "OMX tmux team worker protocol.",
-    "init-project-repo": "Expected Codex/OMX local workflow skill; lives in ~/.codex/skills and is not mirrored to the shared registry by design. Reviewed 2026-08-24."
+    "init-project-repo": "Expected Codex/OMX local workflow skill; lives in ~/.codex/skills and is not mirrored to the shared registry by design. Reviewed 2026-08-24.",
+    "gcp": "Expected Codex-local Google Cloud/Workspace orchestration skill; intentionally not mirrored into the shared or Claude registries. Reviewed 2026-08-31."
   }
 }
