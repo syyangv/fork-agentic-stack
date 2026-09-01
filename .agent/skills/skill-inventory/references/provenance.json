@@ -20,6 +20,7 @@
     "memory-manager": "custom",
     "obsidian-bases": "custom",
     "obsidian-cli": "custom",
+ "obsidian-config": "custom",
     "obsidian-markdown": "custom",
     "paseo": "custom",
     "paseo-advisor": "custom",

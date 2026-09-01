@@ -18,6 +18,7 @@
     "memory-manager": "Expected ~/.agent/skills/ entry (shared-brain agentic-stack skill). Baselined 2026-06-03 when ~/.agents/ (plural) was retired; ~/.agent/skills/ is now the canonical secondary registry per ~/.claude/CLAUDE.md.",
     "obsidian-bases": "Expected ~/.agent/skills/ entry (shared-brain agentic-stack skill). Baselined 2026-06-03 when ~/.agents/ (plural) was retired; ~/.agent/skills/ is now the canonical secondary registry per ~/.claude/CLAUDE.md.",
     "obsidian-cli": "Expected ~/.agent/skills/ entry (shared-brain agentic-stack skill). Baselined 2026-06-03 when ~/.agents/ (plural) was retired; ~/.agent/skills/ is now the canonical secondary registry per ~/.claude/CLAUDE.md.",
+ "obsidian-config": "Expected shared-brain Obsidian configuration skill in ~/.agent/skills; intentionally agent-only and routed by obsidian-orchestrator. Reviewed 2026-09-01.",
     "obsidian-markdown": "Expected ~/.agent/skills/ entry (shared-brain agentic-stack skill). Baselined 2026-06-03 when ~/.agents/ (plural) was retired; ~/.agent/skills/ is now the canonical secondary registry per ~/.claude/CLAUDE.md.",
     "paseo": "Expected ~/.agent/skills/ entry (shared-brain agentic-stack skill). Baselined 2026-06-03 when ~/.agents/ (plural) was retired; ~/.agent/skills/ is now the canonical secondary registry per ~/.claude/CLAUDE.md.",
     "paseo-advisor": "Expected ~/.agent/skills/ entry (shared-brain agentic-stack skill). Baselined 2026-06-03 when ~/.agents/ (plural) was retired; ~/.agent/skills/ is now the canonical secondary registry per ~/.claude/CLAUDE.md.",
