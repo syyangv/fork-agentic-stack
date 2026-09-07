@@ -94,7 +94,8 @@
     "skill-inventory": "custom",
     "to-questionnaire": "custom",
     "wait-what": "custom",
-    "writing-for-agents": "custom"
+    "writing-for-agents": "custom",
+    "obsidian-orchestrator": "custom"
   },
   "claude": {
     "agent-reach": "revised",
@@ -253,7 +254,8 @@
     "paseo-handoff": "custom",
     "paseo-help": "custom",
     "paseo-plugin": "custom",
-    "vocal": "custom"
+    "vocal": "custom",
+    "obsidian-show-covers": "custom"
   },
   "codex": {
     "ask-claude": "custom",
@@ -274,6 +276,10 @@
     "paseo-committee": "custom",
     "paseo-handoff": "custom",
     "paseo-help": "custom",
-    "paseo-plugin": "custom"
+    "paseo-plugin": "custom",
+    "image-skill-manager": "custom",
+    "photo-abstract-editorial": "custom",
+    "travel-memory-card-duo": "custom",
+    "travel-memory-sticker-card": "custom"
   }
 }

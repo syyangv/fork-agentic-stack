@@ -95,9 +95,10 @@
     "wait-what": "Expected shared-brain skill in ~/.agent/skills; retained at its canonical registry. Reviewed 2026-08-24.",
     "writing-for-agents": "Expected shared-brain skill in ~/.agent/skills; retained at its canonical registry. Reviewed 2026-08-24.",
     "keyboard-shortcuts": "Expected shared-brain skill in ~/.agent/skills; retained at its canonical registry. Reviewed 2026-08-24.",
-    "agent-orchestrator": "Expected shared-brain routing skill in ~/.agent/skills; intentionally not mirrored into Claude/Codex roots. Reviewed 2026-08-31."
+    "agent-orchestrator": "Expected shared-brain routing skill in ~/.agent/skills; intentionally not mirrored into Claude/Codex roots. Reviewed 2026-08-31.",
+    "obsidian-orchestrator": "Intentional shared-brain Obsidian routing skill; canonical in ~/.agent/skills and not mirrored into Claude/Codex roots. Reviewed 2026-09-07."
   },
-  "reviewed_at": "2026-08-24",
+  "reviewed_at": "2026-09-07",
   "reviewed_claude_only": {
     "amazon-orders": "Expected Claude Code personal/Plugin skill; lives in ~/.claude/skills and is not mirrored to Codex/agentic-stack by design. Baselined 2026-06-03.",
     "browser-use": "Expected Claude Code personal/Plugin skill; lives in ~/.claude/skills and is not mirrored to Codex/agentic-stack by design. Baselined 2026-06-03.",
@@ -273,7 +274,8 @@
     "codex-log-guard": "Expected Claude Code local infrastructure skill; lives in ~/.claude/skills and is not mirrored to Codex/agentic-stack by design. Reviewed 2026-08-24.",
     "external-keyboard-remap": "Expected Claude Code personal skill; lives in ~/.claude/skills and is not mirrored to Codex/agentic-stack by design. Reviewed 2026-08-24.",
     "gws-workflow": "Expected Claude Code personal/integration skill; lives in ~/.claude/skills and is not mirrored to Codex/agentic-stack by design. Reviewed 2026-08-24.",
-    "vocal": "Expected Claude Code personal/vault skill; lives in ~/.claude/skills and is not mirrored to Codex/agentic-stack by design. Reviewed 2026-08-24."
+    "vocal": "Expected Claude Code personal/vault skill; lives in ~/.claude/skills and is not mirrored to Codex/agentic-stack by design. Reviewed 2026-08-24.",
+    "obsidian-show-covers": "Intentional Claude-local Obsidian cover/playbill workflow; not mirrored into Codex or the shared registry. Reviewed 2026-09-07."
   },
   "reviewed_codex_only": {
     "ask-claude": "Codex local helper to ask Claude CLI and save OMX artifact.",
@@ -288,6 +290,10 @@
     "web-clone": "OMX URL-driven website cloning workflow.",
     "worker": "OMX tmux team worker protocol.",
     "init-project-repo": "Expected Codex/OMX local workflow skill; lives in ~/.codex/skills and is not mirrored to the shared registry by design. Reviewed 2026-08-24.",
-    "gcp": "Expected Codex-local Google Cloud/Workspace orchestration skill; intentionally not mirrored into the shared or Claude registries. Reviewed 2026-08-31."
+    "gcp": "Expected Codex-local Google Cloud/Workspace orchestration skill; intentionally not mirrored into the shared or Claude registries. Reviewed 2026-08-31.",
+    "image-skill-manager": "Intentional Codex-local image workflow/manager skill; harness-specific and not mirrored into Claude or the shared registry. Reviewed 2026-09-07.",
+    "photo-abstract-editorial": "Intentional Codex-local image workflow/manager skill; harness-specific and not mirrored into Claude or the shared registry. Reviewed 2026-09-07.",
+    "travel-memory-card-duo": "Intentional Codex-local image workflow/manager skill; harness-specific and not mirrored into Claude or the shared registry. Reviewed 2026-09-07.",
+    "travel-memory-sticker-card": "Intentional Codex-local image workflow/manager skill; harness-specific and not mirrored into Claude or the shared registry. Reviewed 2026-09-07."
   }
 }
