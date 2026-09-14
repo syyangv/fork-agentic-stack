@@ -1,0 +1,96 @@
+{
+  "source_ref": {
+    "source_id": "1f247527f6bbada5950e276859b1f888b1b0f135915e87070c903dbb044ebf04",
+    "vault_id": "work",
+    "note_id": "note_synthetic_p0_001",
+    "path": "10-Projects/agent-knowledge-vault.md",
+    "heading": "Architecture Decisions",
+    "line_start": 42,
+    "line_end": 58,
+    "content_hash": "69a4bf304119ef5aa7d9ad07c5ad445b8528ce157111722103ad31a3aedceb63"
+  },
+  "context_bundle": {
+    "task_id": "ktask_synthetic_p0_001",
+    "query": "Paseo plugin architecture and knowledge indexing",
+    "sources": [
+      {
+        "source_id": "1f247527f6bbada5950e276859b1f888b1b0f135915e87070c903dbb044ebf04",
+        "vault_id": "work",
+        "note_id": "note_synthetic_p0_001",
+        "path": "10-Projects/agent-knowledge-vault.md",
+        "heading": "Architecture Decisions",
+        "line_start": 42,
+        "line_end": 58,
+        "content_hash": "69a4bf304119ef5aa7d9ad07c5ad445b8528ce157111722103ad31a3aedceb63"
+      }
+    ],
+    "snippets": [
+      {
+        "vault_id": "work",
+        "path": "10-Projects/agent-knowledge-vault.md",
+        "heading": "Architecture Decisions",
+        "line_start": 42,
+        "line_end": 58,
+        "text": "Paseo plugin architecture separates client UI surfaces from daemon backend RPC handlers. Knowledge retrieval prepares bounded context without persisting personal notes."
+      }
+    ],
+    "total_chars": 168,
+    "created_at": "2026-09-13T13:49:00Z",
+    "has_personal_context": false,
+    "truncated": false
+  },
+  "task_record": {
+    "task_id": "ktask_synthetic_p0_001",
+    "agent_id": "agent_synthetic_p0_001",
+    "turn_id": "turn_synthetic_p0_001",
+    "workspace_id": "wks_synthetic_p0_001",
+    "provider": "agy/Gemini 3.8 Flash",
+    "status": "completed",
+    "source_manifest": [
+      {
+        "source_id": "1f247527f6bbada5950e276859b1f888b1b0f135915e87070c903dbb044ebf04",
+        "vault_id": "work",
+        "note_id": "note_synthetic_p0_001",
+        "path": "10-Projects/agent-knowledge-vault.md",
+        "heading": "Architecture Decisions",
+        "line_start": 42,
+        "line_end": 58,
+        "content_hash": "69a4bf304119ef5aa7d9ad07c5ad445b8528ce157111722103ad31a3aedceb63"
+      }
+    ],
+    "draft_ids": [
+      "draft_synthetic_p0_001"
+    ],
+    "created_at": "2026-09-13T13:49:00Z",
+    "updated_at": "2026-09-13T13:52:10Z"
+  },
+  "knowledge_draft": {
+    "draft_id": "draft_synthetic_p0_001",
+    "task_id": "ktask_synthetic_p0_001",
+    "turn_id": "turn_synthetic_p0_001",
+    "target_path": "00-Inbox/draft-20260913-plugin-boundaries.md",
+    "target_action": "create",
+    "target_base_hash": null,
+    "draft_hash": "c9b2d88a055f30b9368c48ff41b98f745a874df35412a500935152fd8cf68be5",
+    "title": "Architecture Pattern: Paseo Plugin Boundaries",
+    "content": "# Architecture Pattern: Paseo Plugin Boundaries\n\nPaseo plugins isolate client React Native surfaces from Node daemon subprocesses. Handlers communicate via typed Zod RPCs.",
+    "source_refs": [
+      {
+        "source_id": "1f247527f6bbada5950e276859b1f888b1b0f135915e87070c903dbb044ebf04",
+        "vault_id": "work",
+        "note_id": "note_synthetic_p0_001",
+        "path": "10-Projects/agent-knowledge-vault.md",
+        "heading": "Architecture Decisions",
+        "line_start": 42,
+        "line_end": 58,
+        "content_hash": "69a4bf304119ef5aa7d9ad07c5ad445b8528ce157111722103ad31a3aedceb63"
+      }
+    ],
+    "validation_level": "agent_reported",
+    "validation_evidence": "Agent synthesized draft following completion of task turn; external validation pending human review.",
+    "uncertainties": [],
+    "status": "draft",
+    "created_at": "2026-09-13T13:52:10Z",
+    "updated_at": "2026-09-13T13:52:10Z"
+  }
+}

@@ -1,0 +1,20 @@
+{
+  "name": "paseo-knowledge",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "test": "vitest run --config vitest.config.mjs --configLoader runner"
+  },
+  "devDependencies": {
+    "@getpaseo/client": "0.7.2",
+    "@getpaseo/plugin": "0.7.2",
+    "@getpaseo/protocol": "0.7.2",
+    "@types/node": "^20.9.0",
+    "@types/react": "~19.2.0",
+    "react": "19.1.0",
+    "typescript": "^5.9.3",
+    "vitest": "^4.1.7",
+    "zod": "^4.4.3"
+  }
+}

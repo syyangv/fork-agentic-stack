@@ -54,3 +54,7 @@ venv/
 .agent/skills/tldraw/INDEX.md
 .agent/skills/tldraw/snapshots/
 .agent/skills/tldraw/snapshots.jsonl
+
+# local private agent knowledge runtime data (derived db, config, task states)
+.agent/knowledge/
+.agent/knowledge/**
