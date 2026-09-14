@@ -1,9 +1,13 @@
+import os
 import json
 import subprocess
 import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
+
+from knowledge_core.drafts import DraftStore
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -197,6 +201,150 @@ class TestKnowledgeIndexCLI(unittest.TestCase):
             self.assertEqual(applied_payload["target_path"], target)
             self.assertTrue((vault / target).is_file())
             self.assertTrue((vault / draft["target_path"]).is_file())
+
+    def test_protected_review_cli_requires_human_gate_for_apply_and_reject(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            vault = root / "vault"
+            for directory in (
+                "00-Inbox",
+                "10-Projects",
+                "20-Research",
+                "30-Decisions",
+                "40-Lessons",
+            ):
+                (vault / directory).mkdir(parents=True, exist_ok=True)
+            draft_store = root / ".agent" / "knowledge" / "drafts.sqlite3"
+            journal = root / "runtime" / "apply.jsonl"
+            environment = os.environ.copy()
+            environment["HOME"] = str(root)
+
+            source = {
+                "source_id": "source_cli_protected",
+                "vault_id": "work",
+                "note_id": "note_cli_protected",
+                "path": "10-Projects/source.md",
+                "heading": "CLI",
+                "line_start": 1,
+                "line_end": 2,
+                "content_hash": "a" * 64,
+            }
+            candidate = {
+                "summary": "Protected CLI target selection",
+                "candidate_notes": ["Protected CLI formal target marker"],
+                "source_refs": [source],
+                "validation_evidence": ["synthetic"],
+                "uncertainties": [],
+            }
+            result = (
+                "<knowledge-candidate>"
+                + json.dumps(candidate)
+                + "</knowledge-candidate>"
+            )
+
+            def propose(task_id, turn_id):
+                completed = subprocess.run(
+                    [
+                        sys.executable,
+                        str(CLI),
+                        "propose_note",
+                        "--task-id",
+                        task_id,
+                        "--turn-id",
+                        turn_id,
+                        "--task-status",
+                        "completed",
+                        "--draft-store",
+                        str(draft_store),
+                        "--allow-protected-runtime",
+                        "--draft-vault",
+                        str(vault),
+                    ],
+                    input=json.dumps(
+                        {
+                            "result": result,
+                            "turn_status": "completed",
+                            "source_manifest": [source],
+                        }
+                    ),
+                    capture_output=True,
+                    text=True,
+                    env=environment,
+                    check=False,
+                )
+                self.assertEqual(completed.returncode, 0, completed.stderr)
+                return json.loads(completed.stdout)["draft"]
+
+            applied_draft = propose("protected-apply-task", "protected-apply-turn")
+            review_apply = [
+                sys.executable,
+                str(CLI),
+                "review_apply",
+                "--work-vault",
+                str(vault),
+                "--draft-store",
+                str(draft_store),
+                "--journal-path",
+                str(journal),
+                "--draft-id",
+                applied_draft["draft_id"],
+                "--draft-hash",
+                applied_draft["draft_hash"],
+                "--target-path",
+                "10-Projects/protected-approved.md",
+            ]
+            refused = subprocess.run(
+                review_apply,
+                capture_output=True,
+                text=True,
+                env=environment,
+                check=False,
+            )
+            self.assertNotEqual(refused.returncode, 0)
+            self.assertEqual(json.loads(refused.stdout)["error"], "approval_error")
+
+            applied = subprocess.run(
+                review_apply + ["--human-approved"],
+                capture_output=True,
+                text=True,
+                env=environment,
+                check=False,
+            )
+            self.assertEqual(applied.returncode, 0, applied.stderr)
+            self.assertTrue((vault / "10-Projects/protected-approved.md").is_file())
+
+            rejected_draft = propose("protected-reject-task", "protected-reject-turn")
+            rejected = subprocess.run(
+                [
+                    sys.executable,
+                    str(CLI),
+                    "review_reject",
+                    "--work-vault",
+                    str(vault),
+                    "--draft-store",
+                    str(draft_store),
+                    "--journal-path",
+                    str(journal),
+                    "--draft-id",
+                    rejected_draft["draft_id"],
+                    "--reason",
+                    "protected synthetic rejection",
+                    "--human-rejected",
+                ],
+                capture_output=True,
+                text=True,
+                env=environment,
+                check=False,
+            )
+            self.assertEqual(rejected.returncode, 0, rejected.stderr)
+            self.assertEqual(json.loads(rejected.stdout)["status"], "rejected")
+
+    def test_draft_store_default_refuses_protected_runtime(self):
+        with tempfile.TemporaryDirectory() as temp:
+            protected = (Path(temp) / "protected-runtime").resolve()
+            with patch("knowledge_core.drafts._PROTECTED_RUNTIME", protected):
+                with self.assertRaisesRegex(ValueError, "must not initialize"):
+                    DraftStore(protected / "drafts.sqlite3")
 
 
 if __name__ == "__main__":

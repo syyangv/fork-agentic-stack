@@ -26,7 +26,7 @@ from knowledge_core.bootstrap import init_work_vault
 from knowledge_core.index import DuplicateNoteIDError, KnowledgeIndex, KnowledgeIndexError
 from knowledge_core.context import ContextBuilder
 from knowledge_core.capture import capture_result
-from knowledge_core.drafts import DraftStore
+from knowledge_core.drafts import DraftStore, _is_protected_runtime_path
 from knowledge_core.approval import ApprovalApplier, ApprovalError
 from knowledge_core.provenance import ProvenanceError, SourceReader
 from knowledge_core.retrieval import KnowledgeRetriever
@@ -300,11 +300,19 @@ def _review_envelope() -> dict[str, object]:
     return envelope
 
 
-def _review_applier(args: argparse.Namespace) -> tuple[KnowledgeConfig, DraftStore, ApprovalApplier]:
+def _review_applier(
+    args: argparse.Namespace,
+    *,
+    human_gate: bool = False,
+) -> tuple[KnowledgeConfig, DraftStore, ApprovalApplier]:
     if not args.work_vault or not args.draft_store or not args.journal_path:
         raise ValueError("review commands require explicit work-vault, draft-store, and journal-path")
     config = KnowledgeConfig.create(work_vault_path=args.work_vault)
-    store = DraftStore(args.draft_store)
+    store = DraftStore(
+        args.draft_store,
+        allow_protected_runtime=human_gate
+        and _is_protected_runtime_path(args.draft_store),
+    )
     index = KnowledgeIndex(args.db_path) if args.db_path else None
     return config, store, ApprovalApplier(
         config.work_vault,
@@ -330,7 +338,10 @@ def cmd_review_apply(args: argparse.Namespace) -> int:
         if not args.human_approved:
             raise ApprovalError("review_apply requires the explicit --human-approved human boundary")
         envelope = _review_envelope()
-        config, store, applier = _review_applier(args)
+        config, store, applier = _review_applier(
+            args,
+            human_gate=args.human_approved,
+        )
         draft_id = args.draft_id or envelope.get("draft_id")
         draft_hash = args.draft_hash or envelope.get("draft_hash")
         if not isinstance(draft_id, str) or not isinstance(draft_hash, str):
@@ -388,7 +399,10 @@ def cmd_review_reject(args: argparse.Namespace) -> int:
         if not args.human_rejected:
             raise ApprovalError("review_reject requires the explicit --human-rejected human boundary")
         envelope = _review_envelope()
-        config, store, applier = _review_applier(args)
+        config, store, applier = _review_applier(
+            args,
+            human_gate=args.human_rejected,
+        )
         draft_id = args.draft_id or envelope.get("draft_id")
         reason = args.reason if args.reason is not None else envelope.get("reason")
         if not isinstance(draft_id, str) or not isinstance(reason, str):
