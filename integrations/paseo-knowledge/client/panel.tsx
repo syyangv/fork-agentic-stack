@@ -4,7 +4,7 @@ import {
   useAgent,
   useRpc,
   useWorkspace,
-} from "@getpaseo/plugin";
+} from "@getpaseo/plugin/client";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Pressable, ScrollView, Text, TextInput, View } from "react-native";
 import {
@@ -27,7 +27,7 @@ import {
   type StartKnowledgeTaskResponse,
   type WaitKnowledgeTaskResponse,
   type VaultScope,
-} from "./contracts.shared.js";
+} from "../shared/contracts.js";
 
 type WorkspaceProps = PluginWorkspacePanelProps;
 type AgentProps = PluginAgentPanelProps;

@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
-import type { PaseoAgent, PaseoAgentHandle, PaseoAgentStream, PaseoApi } from "@getpaseo/client";
+import type { PaseoAgent, PaseoAgentHandle, PaseoAgentStream, PaseoAgentTimelineEvent, PaseoApi } from "@getpaseo/client";
 import type {
   CaptureStatus,
   SourceRef,
@@ -9,7 +9,7 @@ import type {
   TaskSummary,
   UserError,
   VaultScope,
-} from "./contracts.shared.js";
+} from "../shared/contracts.js";
 
 type CoreContext = Record<string, unknown>;
 
@@ -588,11 +588,10 @@ export class TaskStore {
     task.cleanup.push(agent.subscribe((update) => {
       if (update.kind === "upsert" && update.agent.id === task.agentId) this.recordAgent(task, update.agent);
     }));
-    task.cleanup.push(agent.timeline.subscribe((stream) => {
-      if (stream.agentId === task.agentId) {
-        this.recordStream(task, stream);
-        onStream?.(stream, agent);
-      }
+    task.cleanup.push(agent.timeline.subscribe((stream: PaseoAgentTimelineEvent) => {
+      if (stream.agentId !== task.agentId || !isAgentStream(stream)) return;
+      this.recordStream(task, stream);
+      onStream?.(stream, agent);
     }));
     return agent;
   }
@@ -613,6 +612,10 @@ export class TaskStore {
   public flush(): void {
     this.durable?.replace(this.tasks.values());
   }
+}
+
+function isAgentStream(stream: PaseoAgentTimelineEvent): stream is PaseoAgentStream {
+  return stream.event.type !== "replacement";
 }
 
 function toDurableTaskRecord(task: TaskState): DurableTaskRecord {

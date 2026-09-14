@@ -5,6 +5,36 @@
 - 范围：基于 Proma 源码审阅，为当前 Obsidian / agentic-stack / Brain / Paseo stack 增加知识检索与审批沉淀闭环
 - 执行原则：逐 phase 实施、测试、验收；本文件不授权部署、迁移、删除、Git 提交或推送
 
+## Execution Progress Overlay — 2026-09-14 (authoritative current status)
+
+The header above is the original design snapshot and its “未开始实施” status is historical. It remains unchanged as a record of the approved plan. This overlay records execution status only; it does not weaken, replace, or reopen the P0–P7 requirements below.
+
+### Delivered and verified
+
+| Phase | Current state | Evidence boundary |
+|---|---|---|
+| P0 | **Partial** | Paseo source/contract evidence, synthetic fixtures, daemon environment propagation, restart, historical 0.7.2 plugin health, and core subprocess smoke are verified. After restart the daemon is 0.8.0 and rejects the pre-0.8 plugin manifest before startup; direct installed UI/RPC task flow and full reopen/recovery acceptance remain open. |
+| P1 | **Verified synthetically** | Safe independent work-vault bootstrap/scope/grants and personal-default quarantine pass; no personal vault was read or indexed. |
+| P2 | **Verified synthetically** | Conservative Markdown parsing, rebuildable SQLite/FTS5 indexing, incremental refresh, and corruption/immutability cases pass. |
+| P3 | **Verified synthetically** | Deterministic retrieval, provenance/hash checks, bounded contexts, injection isolation, and task-bound personal access gates pass. |
+| P4 | **Partial** | Plugin contracts, typecheck/tests, prior 0.7.2 installed-plugin health, and live core subprocess boundary pass. Current 0.8.0 health is **failed** until the required runtime-entry migration is applied; direct plugin UI/RPC invocation and ordinary-path compatibility remain open. |
+| P5 | **Verified synthetically and at installed Python/core boundary** | Candidate-only capture, completion gating, idempotency, durable task metadata, and personal-provenance quarantine pass. Synthetic Tasks A–E pass, including separate-task approved reuse; this is not plugin-RPC evidence. |
+| P6 | **Verified synthetically and through live core smoke** | Human-only formal targeting, hash/conflict checks, atomic apply, journal recovery, scoped index refresh, and later retrieval pass. |
+| P7 | **Open** | The 20-query evaluation and five bounded installed Python/core tasks pass, including cross-task approved reuse; measured warm search/context p95 targets pass. Integrated acceptance still requires the Paseo 0.8 migration and current plugin health, direct UI/RPC evidence, ordinary-path disable/reenable compatibility, and a fresh criterion-level audit. |
+
+### Delivery and evidence references
+
+- Git implementation and documentation are delivered through merged PRs **#27–#30** on `origin/master`; the latest known default-branch merge is `9afcf0f92ab98dcf8b98eb42e720a655e403e685`. Feature-branch and merge verification are tracked separately from runtime evidence.
+- Work vault: `/Users/syang/obsidian/agent-knowledge`; private runtime: `/Users/syang/.agent/knowledge`. Both were initialized safely without reading personal data.
+- Live handoff evidence: [`docs/evidence/knowledge-vault-live-handoff.md`](../evidence/knowledge-vault-live-handoff.md).
+- Plugin UI/RPC and ordinary-path audit: [`docs/evidence/knowledge-vault-plugin-rpc-compatibility.md`](../evidence/knowledge-vault-plugin-rpc-compatibility.md); static seams pass, but live RPC, current health, disable/reenable, and runtime ordinary-path compatibility remain open.
+- Synthetic installed-core E2E and latency evidence: [`docs/evidence/knowledge-vault-live-e2e.md`](../evidence/knowledge-vault-live-e2e.md); Tasks A–E pass, warm search p95 is 53.682 ms, warm context p95 is 58.654 ms, and full rebuild is 57.473 ms on the documented synthetic corpus.
+- Synthetic 20-query evaluation: [`docs/evidence/knowledge-vault-p7-synthetic-evaluation.md`](../evidence/knowledge-vault-p7-synthetic-evaluation.md); expected-source recall@5 is 20/20 and source-location correctness is 22/22 on the documented fixture corpus.
+
+### Explicitly open; not a claim of full P0–P7 acceptance
+
+No direct installed plugin UI/RPC claim, current daemon health claim before the 0.8 migration, ordinary-path runtime compatibility claim, real personal-data pilot, real provider task, production/real-data latency or recall evaluation, or deployment claim is made. Installed Python/core evidence does not substitute for direct plugin RPC verification. The plan’s original acceptance scenarios and safety boundaries remain authoritative.
+
 ## 1. 已确认的产品决定
 
 1. 保留现有 Personal Vault，仅用于用户的 personal knowledge，不将它改造成 agent 工作日志库。

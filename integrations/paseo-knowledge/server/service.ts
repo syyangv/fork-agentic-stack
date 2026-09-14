@@ -13,19 +13,19 @@ import {
   type CoreContextRequest,
   type CoreSearchRequest,
   type KnowledgeCore,
-} from "./core.server.js";
+} from "./core.js";
 import {
   type CorePayload,
   type SourceRef,
   type UserError,
   type VaultScope,
-} from "./contracts.shared.js";
+} from "../shared/contracts.js";
 import {
   PersonalGrantStore,
   TaskStore,
   type TaskState,
   summarizeTask,
-} from "./task-store.server.js";
+} from "./task-store.js";
 
 export interface KnowledgeServiceOptions {
   core: KnowledgeCore | null;

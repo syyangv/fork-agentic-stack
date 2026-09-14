@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { defineAttachmentSource, defineRpc } from "@getpaseo/plugin/server";
+import { defineAttachmentSource, defineRpc } from "@getpaseo/plugin";
 
 const id = z.string().trim().min(1).max(256);
 const taskId = id.regex(/^[A-Za-z0-9][A-Za-z0-9._:-]*$/);
