@@ -169,6 +169,7 @@ export class KnowledgeCliRunner implements KnowledgeCore {
       request.taskStatus,
       "--draft-store",
       draftStorePath,
+      "--allow-protected-runtime",
     ];
     return this.invoke(args, {
       result: request.resultText,

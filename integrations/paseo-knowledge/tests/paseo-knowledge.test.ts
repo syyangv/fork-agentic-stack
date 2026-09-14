@@ -184,6 +184,7 @@ describe("Paseo Knowledge P4 synthetic contracts", () => {
         "completed",
         "--draft-store",
         draftStore,
+        "--allow-protected-runtime",
       ],
       input: {
         result: resultText,

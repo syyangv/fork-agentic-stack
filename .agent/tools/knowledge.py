@@ -252,7 +252,10 @@ def cmd_propose_note(args: argparse.Namespace) -> int:
         return 1
 
     try:
-        with DraftStore(args.draft_store) as draft_store:
+        with DraftStore(
+            args.draft_store,
+            allow_protected_runtime=args.allow_protected_runtime,
+        ) as draft_store:
             result = capture_result(
                 args.task_id,
                 args.turn_id,
@@ -484,6 +487,11 @@ def main() -> int:
         "--draft-store",
         required=True,
         help="Explicit temporary/private SQLite draft-store path; no default is used",
+    )
+    p_propose.add_argument(
+        "--allow-protected-runtime",
+        action="store_true",
+        help="Allow the explicit production draft store under ~/.agent/knowledge",
     )
     p_propose.add_argument(
         "--draft-vault",
