@@ -96,9 +96,10 @@
     "writing-for-agents": "Expected shared-brain skill in ~/.agent/skills; retained at its canonical registry. Reviewed 2026-08-24.",
     "keyboard-shortcuts": "Expected shared-brain skill in ~/.agent/skills; retained at its canonical registry. Reviewed 2026-08-24.",
     "agent-orchestrator": "Expected shared-brain routing skill in ~/.agent/skills; intentionally not mirrored into Claude/Codex roots. Reviewed 2026-08-31.",
-    "obsidian-orchestrator": "Intentional shared-brain Obsidian routing skill; canonical in ~/.agent/skills and not mirrored into Claude/Codex roots. Reviewed 2026-09-07."
+    "obsidian-orchestrator": "Intentional shared-brain Obsidian routing skill; canonical in ~/.agent/skills and not mirrored into Claude/Codex roots. Reviewed 2026-09-07.",
+    "knap": "Intentional shared-brain Markdown templating skill; canonical in ~/.agent/skills and not mirrored into Claude/Codex roots. Reviewed 2026-09-14."
   },
-  "reviewed_at": "2026-09-07",
+  "reviewed_at": "2026-09-14",
   "reviewed_claude_only": {
     "amazon-orders": "Expected Claude Code personal/Plugin skill; lives in ~/.claude/skills and is not mirrored to Codex/agentic-stack by design. Baselined 2026-06-03.",
     "browser-use": "Expected Claude Code personal/Plugin skill; lives in ~/.claude/skills and is not mirrored to Codex/agentic-stack by design. Baselined 2026-06-03.",
@@ -294,6 +295,7 @@
     "image-skill-manager": "Intentional Codex-local image workflow/manager skill; harness-specific and not mirrored into Claude or the shared registry. Reviewed 2026-09-07.",
     "photo-abstract-editorial": "Intentional Codex-local image workflow/manager skill; harness-specific and not mirrored into Claude or the shared registry. Reviewed 2026-09-07.",
     "travel-memory-card-duo": "Intentional Codex-local image workflow/manager skill; harness-specific and not mirrored into Claude or the shared registry. Reviewed 2026-09-07.",
-    "travel-memory-sticker-card": "Intentional Codex-local image workflow/manager skill; harness-specific and not mirrored into Claude or the shared registry. Reviewed 2026-09-07."
+    "travel-memory-sticker-card": "Intentional Codex-local image workflow/manager skill; harness-specific and not mirrored into Claude or the shared registry. Reviewed 2026-09-07.",
+    "nutrition-intake": "Intentional Codex-local nutrition database and intake workflow; harness-specific and not mirrored into Claude or the shared registry. Reviewed 2026-09-14."
   }
 }

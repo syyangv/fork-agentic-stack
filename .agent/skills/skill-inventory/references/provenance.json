@@ -95,7 +95,8 @@
     "to-questionnaire": "custom",
     "wait-what": "custom",
     "writing-for-agents": "custom",
-    "obsidian-orchestrator": "custom"
+    "obsidian-orchestrator": "custom",
+    "knap": "custom"
   },
   "claude": {
     "agent-reach": "revised",
@@ -280,6 +281,7 @@
     "image-skill-manager": "custom",
     "photo-abstract-editorial": "custom",
     "travel-memory-card-duo": "custom",
-    "travel-memory-sticker-card": "custom"
+    "travel-memory-sticker-card": "custom",
+    "nutrition-intake": "custom"
   }
 }
