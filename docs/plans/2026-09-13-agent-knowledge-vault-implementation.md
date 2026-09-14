@@ -13,18 +13,18 @@ The header above is the original design snapshot and its “未开始实施” s
 
 | Phase | Current state | Evidence boundary |
 |---|---|---|
-| P0 | **Partial** | Paseo source/contract evidence, synthetic fixtures, daemon environment propagation, restart, historical 0.7.2 plugin health, and core subprocess smoke are verified. After restart the daemon is 0.8.0 and rejects the pre-0.8 plugin manifest before startup; direct installed UI/RPC task flow and full reopen/recovery acceptance remain open. |
+| P0 | **Partial** | Paseo source/contract evidence, synthetic fixtures, daemon environment propagation, restart, Paseo 0.8 plugin migration/reload/current health, and core subprocess smoke are verified. Direct installed UI/RPC task flow and full reopen/recovery acceptance remain open. |
 | P1 | **Verified synthetically** | Safe independent work-vault bootstrap/scope/grants and personal-default quarantine pass; no personal vault was read or indexed. |
 | P2 | **Verified synthetically** | Conservative Markdown parsing, rebuildable SQLite/FTS5 indexing, incremental refresh, and corruption/immutability cases pass. |
 | P3 | **Verified synthetically** | Deterministic retrieval, provenance/hash checks, bounded contexts, injection isolation, and task-bound personal access gates pass. |
-| P4 | **Partial** | Plugin contracts, typecheck/tests, prior 0.7.2 installed-plugin health, and live core subprocess boundary pass. Current 0.8.0 health is **failed** until the required runtime-entry migration is applied; direct plugin UI/RPC invocation and ordinary-path compatibility remain open. |
+| P4 | **Partial** | Plugin contracts, typecheck/tests, Paseo 0.8 migration, installed-plugin health, scoped disable/reenable, and live core subprocess boundary pass. Direct plugin UI/RPC invocation and ordinary-path runtime compatibility remain open. |
 | P5 | **Verified synthetically and at installed Python/core boundary** | Candidate-only capture, completion gating, idempotency, durable task metadata, and personal-provenance quarantine pass. Synthetic Tasks A–E pass, including separate-task approved reuse; this is not plugin-RPC evidence. |
 | P6 | **Verified synthetically and through live core smoke** | Human-only formal targeting, hash/conflict checks, atomic apply, journal recovery, scoped index refresh, and later retrieval pass. |
-| P7 | **Open** | The 20-query evaluation and five bounded installed Python/core tasks pass, including cross-task approved reuse; measured warm search/context p95 targets pass. Integrated acceptance still requires the Paseo 0.8 migration and current plugin health, direct UI/RPC evidence, ordinary-path disable/reenable compatibility, and a fresh criterion-level audit. |
+| P7 | **Open** | The 20-query evaluation and five bounded installed Python/core tasks pass, including cross-task approved reuse; measured warm search/context p95 targets pass; Paseo 0.8 migration/current plugin health and scoped disable/reenable pass. Integrated acceptance still requires direct UI/RPC evidence, ordinary-path runtime compatibility, and a fresh criterion-level audit. |
 
 ### Delivery and evidence references
 
-- Git implementation and documentation are delivered through merged PRs **#27–#30** on `origin/master`; the latest known default-branch merge is `9afcf0f92ab98dcf8b98eb42e720a655e403e685`. Feature-branch and merge verification are tracked separately from runtime evidence.
+- Git implementation, documentation, and the Paseo 0.8 migration are delivered through merged PRs **#27–#31** on `origin/master`; PR #31 head is `97a5c53dcc40009569fc274b088b0420f67061fc` and its verified default-branch merge is `9e442f01f8dd96a2c67bfcc81ca92b368213d8b4`. The feature branch remains pushed because the installed plugin source points at its worktree.
 - Work vault: `/Users/syang/obsidian/agent-knowledge`; private runtime: `/Users/syang/.agent/knowledge`. Both were initialized safely without reading personal data.
 - Live handoff evidence: [`docs/evidence/knowledge-vault-live-handoff.md`](../evidence/knowledge-vault-live-handoff.md).
 - Plugin UI/RPC and ordinary-path audit: [`docs/evidence/knowledge-vault-plugin-rpc-compatibility.md`](../evidence/knowledge-vault-plugin-rpc-compatibility.md); static seams pass, but live RPC, current health, disable/reenable, and runtime ordinary-path compatibility remain open.
@@ -33,7 +33,7 @@ The header above is the original design snapshot and its “未开始实施” s
 
 ### Explicitly open; not a claim of full P0–P7 acceptance
 
-No direct installed plugin UI/RPC claim, current daemon health claim before the 0.8 migration, ordinary-path runtime compatibility claim, real personal-data pilot, real provider task, production/real-data latency or recall evaluation, or deployment claim is made. Installed Python/core evidence does not substitute for direct plugin RPC verification. The plan’s original acceptance scenarios and safety boundaries remain authoritative.
+No direct installed plugin UI/RPC claim, ordinary-path runtime compatibility claim, real personal-data pilot, real provider task, production/real-data latency or recall evaluation, or deployment claim is made. Installed Python/core evidence and scoped lifecycle tests do not substitute for direct plugin RPC verification. The plan’s original acceptance scenarios and safety boundaries remain authoritative.
 
 ## 1. 已确认的产品决定
 
