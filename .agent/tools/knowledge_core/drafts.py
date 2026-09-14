@@ -23,6 +23,11 @@ P6_REVIEW_STATUSES = frozenset({"draft", "accepted", "rejected"})
 _PROTECTED_RUNTIME = Path("~/.agent/knowledge").expanduser().resolve()
 
 
+def _is_protected_runtime_path(path: str | Path) -> bool:
+    resolved = Path(path).expanduser().resolve()
+    return resolved == _PROTECTED_RUNTIME or _PROTECTED_RUNTIME in resolved.parents
+
+
 def _now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
 
@@ -47,7 +52,7 @@ class DraftStore:
     connection-local.
     """
 
-    def __init__(self, path: str | Path):
+    def __init__(self, path: str | Path, *, allow_protected_runtime: bool = False):
         self.path = str(path)
         self._lock = RLock()
         self._memory_connection: sqlite3.Connection | None = None
@@ -58,8 +63,11 @@ class DraftStore:
             return
 
         resolved = Path(path).expanduser().resolve()
-        if resolved == _PROTECTED_RUNTIME or _PROTECTED_RUNTIME in resolved.parents:
+        protected_runtime_path = _is_protected_runtime_path(resolved)
+        if protected_runtime_path and not allow_protected_runtime:
             raise ValueError("P5 draft storage must not initialize ~/.agent/knowledge")
+        if allow_protected_runtime and not protected_runtime_path:
+            raise ValueError("allow_protected_runtime requires a path inside ~/.agent/knowledge")
         resolved.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
         self.path = str(resolved)
         connection = sqlite3.connect(self.path)

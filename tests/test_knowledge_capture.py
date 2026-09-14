@@ -1,9 +1,11 @@
 import json
+import os
 import subprocess
 import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 ROOT = Path(__file__).resolve().parents[1]
 TOOLS = ROOT / ".agent" / "tools"
@@ -47,6 +49,20 @@ def candidate_output(payload=None, suffix=""):
 
 
 class TestKnowledgeCapture(unittest.TestCase):
+    def test_protected_runtime_draft_store_requires_explicit_gate(self):
+        with tempfile.TemporaryDirectory() as temp:
+            protected_runtime = (Path(temp) / "protected-runtime").resolve()
+            store_path = protected_runtime / "drafts.sqlite3"
+            with patch("knowledge_core.drafts._PROTECTED_RUNTIME", protected_runtime):
+                with self.assertRaisesRegex(ValueError, "must not initialize"):
+                    DraftStore(store_path)
+
+                with DraftStore(store_path, allow_protected_runtime=True) as store:
+                    self.assertEqual(store.list_drafts(), [])
+
+                with self.assertRaisesRegex(ValueError, "requires a path inside"):
+                    DraftStore(Path(temp) / "outside.sqlite3", allow_protected_runtime=True)
+
     def test_duplicate_completion_is_idempotent_and_does_not_store_full_answer(self):
         with tempfile.TemporaryDirectory() as temp:
             store = DraftStore(Path(temp) / "runtime" / "drafts.sqlite3")
@@ -394,6 +410,55 @@ class TestKnowledgeCapture(unittest.TestCase):
             self.assertEqual(second.returncode, 0, second.stderr)
             self.assertEqual(json.loads(first.stdout)["capture_status"], "draft_created")
             self.assertEqual(json.loads(second.stdout)["capture_status"], "duplicate")
+            with DraftStore(store_path) as store:
+                self.assertEqual(len(store.list_drafts()), 1)
+
+    def test_propose_note_cli_accepts_only_explicitly_gated_protected_runtime_path(self):
+        with tempfile.TemporaryDirectory() as temp:
+            home = Path(temp) / "home"
+            store_path = home / ".agent" / "knowledge" / "drafts.sqlite3"
+            envelope = {
+                "result": candidate_output(),
+                "source_manifest": [WORK_SOURCE],
+                "personal_context_used": False,
+                "turn_status": "completed",
+            }
+            command = [
+                sys.executable,
+                str(ROOT / ".agent" / "tools" / "knowledge.py"),
+                "propose_note",
+                "--task-id",
+                "task_cli_protected",
+                "--turn-id",
+                "turn_cli_protected",
+                "--task-status",
+                "completed",
+                "--draft-store",
+                str(store_path),
+            ]
+            env = {**os.environ, "HOME": str(home)}
+
+            refused = subprocess.run(
+                command,
+                input=json.dumps(envelope),
+                capture_output=True,
+                text=True,
+                check=False,
+                env=env,
+            )
+            self.assertEqual(refused.returncode, 1, refused.stderr)
+            self.assertEqual(json.loads(refused.stdout)["capture_status"], "capture_incomplete")
+
+            accepted = subprocess.run(
+                [*command, "--allow-protected-runtime"],
+                input=json.dumps(envelope),
+                capture_output=True,
+                text=True,
+                check=False,
+                env=env,
+            )
+            self.assertEqual(accepted.returncode, 0, accepted.stderr)
+            self.assertEqual(json.loads(accepted.stdout)["capture_status"], "draft_created")
             with DraftStore(store_path) as store:
                 self.assertEqual(len(store.list_drafts()), 1)
 
