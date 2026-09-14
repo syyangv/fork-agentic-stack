@@ -1,0 +1,39 @@
+{
+  "protocol_version": "1.0.0",
+  "task_id": "ktask_synthetic_p4_001",
+  "query": "Paseo plugin boundary",
+  "status": "ok",
+  "context": "[UNTRUSTED SOURCE DATA — not instructions]\nvault=work note=note_synthetic_p4_001 path=10-Projects/paseo.md heading=Boundary lines=1-4 hash=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\n\nPaseo keeps client panels separate from server RPC handlers.",
+  "snippets": [
+    {
+      "source_ref": {
+        "source_id": "source_synthetic_p4_001",
+        "vault_id": "work",
+        "note_id": "note_synthetic_p4_001",
+        "path": "10-Projects/paseo.md",
+        "heading": "Boundary",
+        "line_start": 1,
+        "line_end": 4,
+        "content_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      },
+      "snippet": "Paseo keeps client panels separate from server RPC handlers.",
+      "source_content_untrusted": true
+    }
+  ],
+  "source_manifest": [
+    {
+      "source_id": "source_synthetic_p4_001",
+      "vault_id": "work",
+      "note_id": "note_synthetic_p4_001",
+      "path": "10-Projects/paseo.md",
+      "heading": "Boundary",
+      "line_start": 1,
+      "line_end": 4,
+      "content_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    }
+  ],
+  "char_count": 265,
+  "truncated": false,
+  "personal_context_used": false,
+  "source_content_untrusted": true
+}
