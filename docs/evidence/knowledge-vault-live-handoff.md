@@ -4,6 +4,10 @@ Date: 2026-09-14
 Worktree: `/Users/syang/.paseo/worktrees/16bjydof/agent-knowledge-vault`
 Branch: `feat/agent-knowledge-vault`
 
+## Acceptance status correction
+
+Implementation, Git delivery, independent work-vault/runtime initialization, plugin installation, daemon reload/restart, and historical 0.7.2 plugin health are delivered. **Integrated P7 acceptance remains OPEN** because the post-restart 0.8.0 daemon rejects the pre-0.8 plugin manifest until migration, and because direct installed plugin UI/RPC task execution, current health refresh, ordinary-path disable/reenable compatibility, and the final independent criterion audit remain unverified. Five synthetic E2E tasks including cross-task approved reuse and measured latency are recorded in `docs/evidence/knowledge-vault-live-e2e.md`; this file does not claim full P0–P7 acceptance.
+
 ## Authorized and completed
 
 The user explicitly authorized initialization of the independent work vault and private runtime, plus plugin installation and necessary Paseo reload. No personal-vault read or index was authorized.
@@ -144,11 +148,11 @@ The daemon-wide switch affects all configured trusted plugins; the user separate
 
 ## Synthetic evidence and remaining gates
 
-- Final Python knowledge suite: 62 passed.
+- Final Python knowledge suite after the latest source fix: 66 passed.
 - Final plugin suite: 21 passed; TypeScript and Python compilation passed.
-- Repository suite: 449 passed, 1 skipped for native Windows junction support.
+- Repository suite after the latest source fix: 451 passed, 1 skipped for native Windows junction support.
 - P0 fixture invariants: 8 source refs, 168 context characters, matching draft hash, `agent_reported`.
 - T18: explicit formal approval, path-scoped refresh, later retrieval, Inbox exclusion — passed synthetically.
 - P7.2 20-query synthetic evaluation: 20/20 expected-source hits, 100% recall@5, 22/22 source-location correctness; evidence in `docs/evidence/knowledge-vault-p7-synthetic-evaluation.md`.
 
-Verified live: daemon environment propagation, restart, plugin reload/health, plugin startup logs, and the production core subprocess capture/approval/retrieval loop. Direct plugin UI/RPC invocation remains unverified because the browser automation host was unavailable. Not verified or authorized: real provider task, personal-data pilot, real-data E2E, latency/performance pilot, 20-query real-data recall, deployment. Git commit/push/merge are tracked separately in the repository handoff.
+Verified live or synthetic at the installed core boundary: daemon environment propagation, restart, historical plugin startup/health, production core subprocess capture/approval/retrieval, synthetic Tasks A–E, cross-task reuse, warm search/context p95, and full rebuild timing. The post-restart daemon is 0.8.0 and currently rejects the pre-0.8 plugin manifest; migration and reload are pending. Direct plugin UI/RPC invocation remains unverified because the browser automation host was unavailable during the audit. Current plugin health after migration, ordinary-path disable/reenable compatibility, and final independent audit remain OPEN. Not verified or authorized: real provider task, personal-data pilot, real-data E2E, real-data latency/recall, deployment. Git commit/push/merge are tracked separately in the repository handoff.
