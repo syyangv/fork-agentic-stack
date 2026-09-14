@@ -5,7 +5,6 @@
     "moduleResolution": "NodeNext",
     "lib": ["ES2023", "DOM"],
     "types": ["node", "react"],
-    "typeRoots": ["/Users/syang/projects/paseo/node_modules/@types"],
     "jsx": "react-jsx",
     "strict": true,
     "skipLibCheck": true,
@@ -14,21 +13,17 @@
     "allowSyntheticDefaultImports": true,
     "noUnusedLocals": true,
     "noUnusedParameters": true,
-    "baseUrl": "/Users/syang/projects/paseo",
-    "paths": {
-      "@getpaseo/plugin": ["/Users/syang/projects/paseo/packages/plugin/src/index.ts"],
-      "@getpaseo/plugin/server": ["/Users/syang/projects/paseo/packages/plugin/src/server.ts"],
-      "@getpaseo/client": ["/Users/syang/projects/paseo/packages/client/src/index.ts"],
-      "@getpaseo/protocol/*": ["/Users/syang/projects/paseo/packages/protocol/src/*"],
-      "zod": ["/Users/syang/projects/paseo/node_modules/zod/index.d.ts"],
-      "react": ["/Users/syang/projects/paseo/node_modules/@types/react/index.d.ts"],
-      "react/jsx-runtime": ["/Users/syang/projects/paseo/node_modules/@types/react/jsx-runtime.d.ts"],
-      "react-native": ["/Users/syang/projects/paseo/node_modules/react-native/types/index.d.ts"],
-      "vitest": ["/Users/syang/projects/paseo/node_modules/vitest/dist/index.d.ts"],
-      "use-sync-external-store/shim/with-selector": ["/Users/syang/.paseo/worktrees/16bjydof/agent-knowledge-vault/integrations/paseo-knowledge/types/use-sync-external-store.d.ts"]
-    },
     "noEmit": true
   },
-  "include": ["*.ts", "*.tsx", "tests/**/*.ts", "types/**/*.d.ts"],
+  "include": [
+    "index.*.ts",
+    "index.*.tsx",
+    "client/**/*.ts",
+    "client/**/*.tsx",
+    "server/**/*.ts",
+    "shared/**/*.ts",
+    "tests/**/*.ts",
+    "types/**/*.d.ts"
+  ],
   "exclude": ["node_modules", "dist"]
 }

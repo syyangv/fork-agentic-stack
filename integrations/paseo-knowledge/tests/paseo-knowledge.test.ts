@@ -2,16 +2,16 @@ import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, syml
 import os from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { KnowledgeCliRunner } from "../core.server.js";
+import { KnowledgeCliRunner } from "../server/core.js";
 import {
   KnowledgeAttachmentSearchRpc,
   KnowledgeAttachmentSource,
   PluginStatusRpc,
   PrepareKnowledgeTaskRpc,
   StartKnowledgeTaskRpc,
-} from "../contracts.shared.js";
-import { KnowledgeTaskService, resolveProductionTaskStatePath } from "../service.server.js";
-import { PersonalGrantStore } from "../task-store.server.js";
+} from "../shared/contracts.js";
+import { KnowledgeTaskService, resolveProductionTaskStatePath } from "../server/service.js";
+import { PersonalGrantStore } from "../server/task-store.js";
 
 const fixture = JSON.parse(
   readFileSync(new URL("./fixtures/context-bundle.json", import.meta.url), "utf8"),
@@ -640,15 +640,36 @@ describe("Paseo Knowledge P4 synthetic contracts", () => {
     expect(resolveProductionTaskStatePath({ PASEO_KNOWLEDGE_RUNTIME_DIR: "/tmp/paseo-knowledge-runtime" })).toBe("/tmp/paseo-knowledge-runtime/task-state.json");
   });
 
-  it("defines typed status/search/attachment seams and no formal-write contribution", () => {
+  it("keeps typed seams and the governed Paseo 0.8 runtime boundary", () => {
     expect(PluginStatusRpc.name).toBe("knowledge.status");
     expect(PrepareKnowledgeTaskRpc.name).toBe("knowledge.task.prepare");
     expect(StartKnowledgeTaskRpc.name).toBe("knowledge.task.start");
     expect(KnowledgeAttachmentSource.search).toBe(KnowledgeAttachmentSearchRpc);
     expect(KnowledgeAttachmentSearchRpc.output.parse({ items: [] })).toEqual({ items: [] });
-    const contributionSource = readFileSync(new URL("../index.ts", import.meta.url), "utf8");
-    expect(contributionSource).not.toMatch(/write|review_apply|formal/i);
-    expect(contributionSource).not.toContain("addClientSide");
-    expect(contributionSource).not.toContain("addCommandCenterItem");
+
+    const clientEntry = readFileSync(new URL("../index.client.tsx", import.meta.url), "utf8");
+    const serverEntry = readFileSync(new URL("../index.server.ts", import.meta.url), "utf8");
+    const manifest = JSON.parse(readFileSync(new URL("../paseo-plugin.json", import.meta.url), "utf8")) as {
+      requirements?: { paseo?: string };
+    };
+    const packageManifest = JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8")) as {
+      devDependencies: Record<string, string>;
+    };
+
+    expect(manifest.requirements?.paseo).toBe(">=0.8.0");
+    expect(packageManifest.devDependencies["@getpaseo/client"]).toBe("0.8.0");
+    expect(packageManifest.devDependencies["@getpaseo/plugin"]).toBe("0.8.0");
+    expect(packageManifest.devDependencies["@getpaseo/protocol"]).toBe("0.8.0");
+    expect(clientEntry).toContain('from "@getpaseo/plugin/client"');
+    expect(clientEntry).toContain("client.addWorkspacePanel");
+    expect(clientEntry).toContain("client.addAttachmentSource");
+    expect(clientEntry).not.toContain("server/service");
+    expect(serverEntry).toContain('from "@getpaseo/plugin/server"');
+    expect(serverEntry).toContain("server.handle");
+    expect(serverEntry).not.toContain("addWorkspacePanel");
+    expect(serverEntry).not.toContain("addComposerPill");
+    expect(clientEntry).not.toContain("addComposerPill");
+    expect(clientEntry).not.toMatch(/formal.?write|review_apply|intercept/i);
+    expect(() => readFileSync(new URL("../index.ts", import.meta.url), "utf8")).toThrow();
   });
 });

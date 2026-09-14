@@ -5,15 +5,19 @@ installed or connected by this repository change.
 
 ## Runtime boundary
 
-- `panel.client.tsx` contains only React Native UI, cached workspace/agent
+- `client/panel.tsx` contains only React Native UI, cached workspace/agent
   selectors, and typed RPC calls. It never reads a vault or creates a client.
-- `service.server.ts` owns task state, task-scoped personal grants, agent
+- `server/service.ts` owns task state, task-scoped personal grants, agent
   creation, explicit send, lifecycle subscriptions, timeline refetch, and
   reconciliation.
-- `core.server.ts` invokes the versioned Python CLI with
+- `server/core.ts` invokes the versioned Python CLI with
   `spawn(absolutePythonExecutable, argv, { shell: false })`. Core JSON remains
   stdout; stderr is diagnostics and is never treated as a result.
-- `contracts.shared.ts` defines the typed RPC and attachment seams.
+- `shared/contracts.ts` defines the typed RPC and attachment seams.
+
+The plugin targets Paseo 0.8.0 or newer. `index.client.tsx` owns panels and
+the governed attachment source; `index.server.ts` owns RPC handlers. There is
+no formal-write contribution or global composer interception.
 
 Configure the daemon-side environment with absolute paths before a separately
 authorized installation:

@@ -1,6 +1,6 @@
 import { spawn } from "node:child_process";
 import path from "node:path";
-import type { SourceRef } from "./contracts.shared.js";
+import type { SourceRef } from "../shared/contracts.js";
 
 export interface CoreContextRequest {
   taskId: string;
