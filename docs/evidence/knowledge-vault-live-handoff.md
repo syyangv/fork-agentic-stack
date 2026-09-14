@@ -32,6 +32,7 @@ Source reviewed and typechecked:
 ```text
 /Users/syang/.paseo/worktrees/16bjydof/agent-knowledge-vault/integrations/paseo-knowledge
 runtime ID: paseo-knowledge
+Implementation source provenance: `449957125718e822020ad664d59a77b2a975df61`; merged into fork `master` as merge commit `a742258d923b920252057f4a0bf194df74f74098`.
 ```
 
 Install command used:
@@ -89,7 +90,7 @@ source=/Users/syang/.paseo/worktrees/16bjydof/agent-knowledge-vault/integrations
 
 Plugin log: `Loading plugin`, `Plugin ready`; one Node `fs.F_OK` deprecation warning; no plugin load/RPC error observed.
 
-The live daemon environment still lacks the configured absolute core variables. Paseo's install CLI has no plugin environment option, and changing the already-running daemon environment would require a separately authorized daemon restart or supported environment-management mechanism. Therefore no live core RPC/E2E task was claimed.
+The six absolute core variables were propagated through the persistent LaunchAgent and the daemon was restarted. The daemon PID changed from `62512` to `63079`, start time became `2026-09-14T14:22:56.906Z`, and the personal-vault variable remained absent.
 
 For reference, the intended daemon-side environment is:
 
@@ -102,7 +103,7 @@ PASEO_KNOWLEDGE_DRAFT_STORE=/Users/syang/.agent/knowledge/drafts.sqlite3
 PASEO_KNOWLEDGE_TASK_STATE=/Users/syang/.agent/knowledge/task-state.json
 ```
 
-## Rollback and smoke gate
+## Rollback and live smoke result
 
 Rollback commands:
 
@@ -113,7 +114,18 @@ Rollback commands:
 
 If the global switch must be disabled, restore the saved config backup or set `pluginsEnabled=false` and run `paseo reload --json`. The source directory and initialized work vault are not deleted automatically.
 
-Synthetic-only smoke already verified locally: index/search/context/capture/approval/T18 and the 20-query evaluation. A true live plugin-core smoke remains blocked on the daemon environment propagation above; no personal source or real provider task was attempted.
+The production core subprocess boundary was exercised with the propagated absolute paths and synthetic work-vault data:
+
+```text
+status: ready
+search: ok, 1 synthetic source result
+build_context: ok, 328 bounded characters, personal_context_used=false
+capture: draft_created (test-only task/turn)
+review_apply: accepted, target 20-Research/live-smoke-accepted-20260914-c.md, index_updated=true
+later search: formal accepted path returned; Inbox draft path excluded; no personal result
+```
+
+This proves the live Python/core subprocess path, draft store, explicit human approval, atomic apply, path-scoped index refresh, and later retrieval. Direct plugin UI/RPC invocation was not exercised because the Paseo browser automation host timed out; plugin process health was verified through `paseo plugin ls` and logs. No real provider task or personal source was used.
 
 The original activation sequence was:
 
@@ -126,12 +138,9 @@ The daemon-wide switch affects all configured trusted plugins; the user separate
 
 ## Synthetic-only live smoke (pending daemon environment propagation)
 
-1. Propagate only the absolute knowledge environment values listed above through an explicitly authorized daemon environment mechanism.
-2. Reload/restart only as authorized, then verify `paseo plugin ls --json` remains `running` with no load error.
-3. Use only synthetic work-vault content and work scope: `status → index → search → build_context` with provenance/hash checks.
-4. Exercise one test-only knowledge task using an explicitly selected provider/model, a synthetic prompt, and an explicit test-only approval-shaped capture; do not grant or read personal sources.
-5. Verify ordinary Paseo task/composer paths are not intercepted and inspect plugin logs for errors without exposing credentials.
-6. Remove the synthetic smoke note and refresh the derived index only if that cleanup is separately confirmed safe; never bulk-delete or alter existing notes.
+1. If a direct plugin UI/RPC smoke is required, reconnect a supported Paseo browser/UI host and invoke only the same synthetic work scope.
+2. Verify ordinary Paseo task/composer paths are not intercepted and inspect plugin logs for errors without exposing credentials.
+3. Remove synthetic smoke notes only by explicit path-specific authorization; never bulk-delete or alter existing notes.
 
 ## Synthetic evidence and remaining gates
 
@@ -142,4 +151,4 @@ The daemon-wide switch affects all configured trusted plugins; the user separate
 - T18: explicit formal approval, path-scoped refresh, later retrieval, Inbox exclusion — passed synthetically.
 - P7.2 20-query synthetic evaluation: 20/20 expected-source hits, 100% recall@5, 22/22 source-location correctness; evidence in `docs/evidence/knowledge-vault-p7-synthetic-evaluation.md`.
 
-Verified live: daemon reload, plugin installation, plugin catalog health, and plugin startup logs. Not verified or authorized: live core RPC/E2E task because daemon environment propagation is pending, real provider task, personal-data pilot, real-data E2E, latency/performance pilot, 20-query real-data recall, deployment. Git commit/push are tracked separately in the repository handoff.
+Verified live: daemon environment propagation, restart, plugin reload/health, plugin startup logs, and the production core subprocess capture/approval/retrieval loop. Direct plugin UI/RPC invocation remains unverified because the browser automation host was unavailable. Not verified or authorized: real provider task, personal-data pilot, real-data E2E, latency/performance pilot, 20-query real-data recall, deployment. Git commit/push/merge are tracked separately in the repository handoff.
