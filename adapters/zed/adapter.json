@@ -1,0 +1,11 @@
+{
+  "name": "zed",
+  "description": "Zed — project-root `.rules` file read by the Assistant panel. No executable hooks; AI runs commands from project root cwd.",
+  "files": [
+    {
+      "src": ".rules",
+      "dst": ".rules",
+      "merge_policy": "merge_or_alert"
+    }
+  ]
+}

@@ -56,6 +56,7 @@ DETECT_SIGNALS = {
         (".claude/settings.json", "weak"),
     ],
     "cursor": [(".cursor/rules/agentic-stack.mdc", "strong")],
+    "zed": [(".rules", "weak")],  # generic root filename; ambiguous alone
     "windsurf": [
         (".windsurf/rules/agentic-stack.md", "strong"),
         (".windsurfrules", "weak"),

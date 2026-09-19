@@ -76,7 +76,7 @@ brew install agentic-stack
 # drop the brain into any project — the onboarding wizard runs automatically
 cd your-project
 agentic-stack claude-code
-# or: cursor | windsurf | opencode | openclaw | copilot-cli | gemini | hermes | pi | codex | autohand-code | standalone-python | antigravity
+# or: cursor | windsurf | zed | opencode | openclaw | copilot-cli | gemini | hermes | pi | codex | autohand-code | standalone-python | antigravity
 ```
 
 ### Windows (PowerShell)
@@ -101,7 +101,7 @@ agentic-stack dashboard
 git clone https://github.com/codejunkie99/agentic-stack.git
 cd agentic-stack && ./install.sh claude-code         # mac / linux / git-bash
 # or on Windows PowerShell: .\install.ps1 claude-code
-# adapters: claude-code | cursor | windsurf | opencode | openclaw | copilot-cli | gemini | hermes | pi | codex | autohand-code | standalone-python | antigravity
+# adapters: claude-code | cursor | windsurf | zed | opencode | openclaw | copilot-cli | gemini | hermes | pi | codex | autohand-code | standalone-python | antigravity
 ```
 
 ### Once installed: manage what's wired
@@ -373,6 +373,7 @@ adapters/                       # one small shim per harness, each with adapter.
 ├── cursor/        (.cursor/rules/*.mdc)
 ├── gemini/        (GEMINI.md + .gemini/settings.json hooks + .gemini/skills merge)
 ├── windsurf/      (.windsurf/rules/*.md + legacy .windsurfrules)
+├── zed/           (.rules — Assistant panel project rules)
 ├── opencode/      (AGENTS.md + opencode.json)
 ├── openclaw/      (AGENTS.md + system-prompt include; auto-registers per-project agent)
 ├── hermes/        (AGENTS.md)
@@ -432,6 +433,7 @@ verify_codex_fixes.py           # v0.8.0 regression checks (33 checks)
 | **Cursor** | `.cursor/rules/*.mdc` | no (manual reflect calls) |
 | **Google Gemini CLI** | `GEMINI.md` + `.gemini/settings.json` hooks | yes (AfterTool, SessionEnd) |
 | **Windsurf** | `.windsurfrules` | no (manual reflect calls) |
+| **Zed** | `.rules` | no (manual reflect calls) |
 | **OpenCode** | `AGENTS.md` + `opencode.json` | partial (permission rules) |
 | **OpenClaw** | `AGENTS.md` (auto-injected) + per-project `openclaw agents add --workspace` | varies by fork |
 | **Hermes Agent** | `AGENTS.md` (agentskills.io compatible) | partial (own memory) |
