@@ -21,6 +21,58 @@ _CONFIG = {
     "project_aliases": {},
 }
 
+# A copied brain must not carry this repository's task state into a user's
+# project. Curated lessons remain seed content; working state is reset.
+_FRESH_WORKSPACE = """# Workspace (live task state)
+
+> Replace this template on your first real task. The dream cycle auto-archives
+> this file after 2 days of inactivity — don't keep long-lived notes here.
+
+## Current task
+-
+
+## Open files
+-
+
+## Active hypotheses
+-
+
+## Checkpoints
+-
+
+## Next step
+-
+"""
+
+_FRESH_REVIEW_QUEUE = """# Review Queue
+
+_No pending candidates._
+"""
+
+_VOLATILE_BRAIN_FILES: dict[str, str] = {
+    "memory/working/WORKSPACE.md": _FRESH_WORKSPACE,
+    "memory/working/REVIEW_QUEUE.md": _FRESH_REVIEW_QUEUE,
+    "memory/episodic/AGENT_LEARNINGS.jsonl": "",
+}
+
+_TRANSIENT_BRAIN_DIRS = frozenset({
+    "memory/episodic/snapshots",
+    "memory/candidates/rejected",
+})
+
+# Keep this explicit instead of parsing .gitignore at runtime. The evidence
+# ledger is per-project state even though the current ignore file does not
+# need to list every derived artifact.
+_RUNTIME_STATE_PATHS = frozenset({
+    ".upgrade-transaction.json",
+    "memory/candidates/.lifecycle.lock",
+    "memory/dream-state.json",
+    "memory/evidence/revalidation.sqlite3",
+    "memory/orchestration/scheduled-local.json",
+    "runtime",
+})
+_STAGED_CANDIDATE_DIR = "memory/candidates"
+
 
 def validate_profile(profile: str) -> str:
     if profile not in VALID_PROFILES:
@@ -30,6 +82,11 @@ def validate_profile(profile: str) -> str:
 
 def minimal_omitted_paths() -> frozenset[str]:
     return frozenset()
+
+
+def runtime_state_paths() -> frozenset[str]:
+    """Return per-project runtime paths excluded from copied brains."""
+    return _RUNTIME_STATE_PATHS
 
 
 def profile_record(profile: str, scheduled_python: str | Path | None = None, *, runtime: scheduled_runtime.ScheduledRuntime | None = None, forbidden_roots: tuple[str | Path, ...] = ()) -> dict[str, object]:
@@ -118,10 +175,40 @@ def copy_brain(source: Path, destination: Path, *, profile: str) -> None:
     validate_profile(profile)
     if destination.exists():
         raise FileExistsError(f"brain destination already exists: {destination}")
-    shutil.copytree(source, destination)
+    shutil.copytree(source, destination, ignore=_ignore_for(source, profile))
+    _seed_fresh_state(destination)
     ensure_local_schedule_config(destination)
     config = destination / "memory/orchestration/config.json"
     config.write_text(json.dumps(_CONFIG, indent=2) + "\n", encoding="utf-8")
+
+
+def _is_backup_artifact(name: str) -> bool:
+    return name.endswith(".bak") or ".bak-" in name or name.endswith("~")
+
+
+def _seed_fresh_state(destination: Path) -> None:
+    """Reset task and review state so a copied brain starts clean."""
+    for relative, contents in _VOLATILE_BRAIN_FILES.items():
+        target = destination / relative
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text(contents, encoding="utf-8")
+
+
+def _ignore_for(source: Path, profile: str):
+    def ignore(directory: str, names: list[str]) -> set[str]:
+        relative = Path(directory).relative_to(source)
+        omitted = {name for name in names if name == "__pycache__"}
+        omitted.update(
+            name for name in names
+            if (relative / name).as_posix() in _TRANSIENT_BRAIN_DIRS
+            or (relative / name).as_posix() in _RUNTIME_STATE_PATHS
+            or _is_backup_artifact(name)
+        )
+        if relative.as_posix() == _STAGED_CANDIDATE_DIR:
+            omitted.update(name for name in names if name.endswith(".json"))
+        return omitted
+
+    return ignore
 
 
 def infrastructure_bytes(source: Path, profile: str) -> bytes:
