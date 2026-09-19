@@ -6,7 +6,7 @@ Branch: `feat/agent-knowledge-vault`
 
 ## Acceptance status correction
 
-Implementation, Git delivery (including PR #31 merged as `9e442f01f8dd96a2c67bfcc81ca92b368213d8b4`), independent work-vault/runtime initialization, plugin installation, daemon reload/restart, Paseo 0.8 migration, current plugin health, and scoped disable/reenable are delivered. **Integrated P7 acceptance remains OPEN** because direct installed plugin UI/RPC task execution, runtime ordinary-path compatibility, and the final independent criterion audit remain unverified. Five synthetic E2E tasks including cross-task approved reuse and measured latency are recorded in `docs/evidence/knowledge-vault-live-e2e.md`; this file does not claim full P0–P7 acceptance.
+Implementation and Git delivery through PR #32 (`ae774a8a10bf857f3637b68ddeb7f160e6d1259f`), independent work-vault/runtime initialization, plugin installation, daemon reload/restart, Paseo 0.8 migration, current plugin status, and scoped disable/reenable are delivered. **Integrated P7 acceptance remains OPEN** because direct installed plugin UI/RPC task execution, runtime ordinary-path compatibility, and the final independent criterion audit remain unverified. Five synthetic E2E tasks including cross-task approved reuse and measured latency are recorded in `docs/evidence/knowledge-vault-live-e2e.md`; this file does not claim full P0–P7 acceptance.
 
 ## Authorized and completed
 
@@ -156,3 +156,7 @@ The daemon-wide switch affects all configured trusted plugins; the user separate
 - P7.2 20-query synthetic evaluation: 20/20 expected-source hits, 100% recall@5, 22/22 source-location correctness; evidence in `docs/evidence/knowledge-vault-p7-synthetic-evaluation.md`.
 
 Verified live or synthetic at the installed core boundary: daemon environment propagation, restart, Paseo 0.8 migration, plugin reload/current health, scoped disable/reenable, production core subprocess capture/approval/retrieval, synthetic Tasks A–E, cross-task reuse, warm search/context p95, and full rebuild timing. Direct plugin UI/RPC invocation remains unverified because the supported browser path exposes daemon health but not the Paseo client UI/plugin panel. Runtime ordinary-path compatibility and final independent audit remain OPEN. Not verified or authorized: real provider task, personal-data pilot, real-data E2E, real-data latency/recall, deployment. Git commit/push/merge are tracked separately in the repository handoff.
+
+## Final delivery reconciliation — 2026-09-19
+
+Remote master contains PR #32 merge `ae774a8a10bf857f3637b68ddeb7f160e6d1259f`; the feature branch remains at `3f3f515996afbbbaa0792819a3a10d64b1d1ba38`. Current supported plugin listing/status reports enabled=true and status=running on daemon 0.8.0. A later log-fetch attempt returned transport 1006, so log transport is intermittent; the earlier reload/lifecycle evidence includes Plugin ready.
