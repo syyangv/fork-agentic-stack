@@ -67,3 +67,27 @@ All were checked immediately before deletion and deleted with normal `git push o
 - Retained remote refs are exactly: `feat/agent-knowledge-vault`, `master`, and `spec/v0.19-agentic-turn`.
 
 Live UI/RPC acceptance remains a separate open criterion and did not block these unrelated safe branch deletions.
+
+## Exact retained dirty/untracked inventory
+
+These existing paths were inspected and intentionally not removed because their contents are dirty or untracked:
+
+| Path(s) | Exact blocking status |
+|---|---|
+| `/private/tmp/kv-review-adapter`, `/private/tmp/kv-review-seed`, `/private/tmp/kv-review-zed` | modified `.agent/memory/episodic/AGENT_LEARNINGS.jsonl`; untracked `.agent/memory/candidates/rejected/`; untracked `.agent/memory/episodic/snapshots/` |
+| `/Users/syang/.agentic-stack-attest-fix` | modified episodic log and `memory/working/REVIEW_QUEUE.md`; untracked candidates `8b3e0b2e87dc.json`, `a9d3f0db5991.json`, rejected/, snapshots/ |
+| `/Users/syang/.agentic-stack-config-fix` | modified episodic log and review queue; untracked candidate `a9d3f0db5991.json`, rejected/, snapshots/ |
+| `/Users/syang/.agentic-stack-memos-retirement` | modified episodic log and review queue; untracked candidates `8b3e0b2e87dc.json`, `a9d3f0db5991.json`, rejected/, snapshots/ |
+| `/Users/syang/.agentic-stack-phase1` | modified episodic log; untracked candidates `8b3e0b2e87dc.json`, `a9d3f0db5991.json`, rejected/ |
+| `/Users/syang/.agentic-stack-phase2` | modified episodic log; untracked candidates `8b3e0b2e87dc.json`, `a9d3f0db5991.json`, rejected/ |
+| `/Users/syang/.agentic-stack-phase3` | modified episodic log and `memory/working/WORKSPACE.md`; untracked candidates `8b3e0b2e87dc.json`, `a9d3f0db5991.json`, rejected/ |
+| `/Users/syang/.agentic-stack-phase4` | modified episodic log and workspace/review queue; untracked candidates `8b3e0b2e87dc.json`, `a9d3f0db5991.json`, rejected/ |
+| `/Users/syang/.agentic-stack-phase5` | modified episodic log and workspace/review queue; untracked candidates `8b3e0b2e87dc.json`, `a9d3f0db5991.json`, rejected/ |
+| `/Users/syang/.agentic-stack-phase6` | modified episodic log and workspace/review queue; untracked candidates `8b3e0b2e87dc.json`, `a9d3f0db5991.json`, rejected/ |
+| `/Users/syang/.agentic-stack-phase7` | modified episodic log only |
+| `/Users/syang/.agentic-stack-phase8` | modified episodic log and workspace/review queue; untracked candidates `8b3e0b2e87dc.json`, `a9d3f0db5991.json`, rejected/, snapshots/ |
+| `/Users/syang/.agentic-stack-phase8-opus` | modified episodic log only |
+| `/Users/syang/.agentic-stack-safety` | modified episodic log and workspace/review queue; untracked candidates `8b3e0b2e87dc.json`, `a9d3f0db5991.json`, rejected/, snapshots/ |
+| `/Users/syang/.agentic-stack-seed` | modified episodic log and workspace/review queue; untracked candidates `8b3e0b2e87dc.json`, `a9d3f0db5991.json`, rejected/, snapshots/ |
+| `/Users/syang/.agentic-stack-zed` | modified episodic log; untracked candidates `34d73602ada4.json`, `8b3e0b2e87dc.json`, `a9d3f0db5991.json`, `b5f78f2e08b3.json`, rejected/, snapshots/ |
+| Current manager/source `/Users/syang/.paseo/worktrees/16bjydof/agent-knowledge-vault` | active manager; untracked `.playwright-mcp/`, `integrations/paseo-knowledge/node_modules/`, `node_modules/` |
