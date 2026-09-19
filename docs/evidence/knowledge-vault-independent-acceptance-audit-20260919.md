@@ -2,7 +2,7 @@
 
 Date: 2026-09-19
 Repository default under review: `origin/master` at `6a270bedf859d8160011a89c62055ffeb1aad88c`
-Repaired integration: `repair/reconcile-fork-branches` at `6879e4d`
+Repaired integration: `repair/reconcile-fork-branches` at `274a70c` (delivered by PR #36)
 
 ## Audit boundary
 
@@ -34,4 +34,4 @@ No force push, bypass, reset, dirty worktree deletion, installed-plugin-source r
 
 ## Handoff
 
-The code repair is tested and the repair branch is ready for normal remote delivery. Acceptance should remain **OPEN** until a supported Paseo client can connect to the daemon WebSocket and exercise synthetic plugin UI/RPC task invocation plus an ordinary-path compatibility check.
+The code repair is tested and delivered to default by PR #36. Acceptance should remain **OPEN** until a supported Paseo client can connect to the daemon WebSocket and exercise synthetic plugin UI/RPC task invocation plus an ordinary-path compatibility check.

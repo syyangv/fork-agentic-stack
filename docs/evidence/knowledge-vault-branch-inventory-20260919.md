@@ -2,8 +2,8 @@
 
 Date: 2026-09-19
 Repository: `https://github.com/syyangv/fork-agentic-stack.git`
-Default remote: `origin/master` at `6a270bedf859d8160011a89c62055ffeb1aad88c`
-Repair branch: `repair/reconcile-fork-branches` at `154f9bd` (temporary integration worktree)
+Default remote: `origin/master` at `7d583381579aa12a169b10f765c33bc2f305bbc8` (PR #36 merged)
+Repair branch: `repair/reconcile-fork-branches` at `274a70c` (PR #36 merged; temporary integration worktree retained)
 
 ## Explicit authorization and state
 
@@ -22,7 +22,7 @@ Live state was inspected before changes:
 |---|---|---|---|
 | `agent/adapter-safety` at `14bdd5c` | High-value installer/data-loss fix; focused tests pass. Old base conflicted in current `CHANGELOG.md` and `doctor.py`. | Reconciled into `ef53286`: explicit merge policies, shared-file overwrite rejection, weak ambiguous detection, duplicate Gemini signal guard. | Retain original ref/worktree; it is still checked out and dirty. No deletion. |
 | `agent/brain-seed-hygiene` at `42b8a6f` | Privacy fix is valid; verbatim merge would resurrect retired pre-MemOS profile filtering. | Ported current-compatible behavior into `1e838a7`: clean brain seeding, runtime/staged-state exclusions, backup exclusion, restored preference template, adapted tests. | Retain original ref/worktree; it is still checked out and dirty. No deletion. |
-| `agent/zed-adapter` at `6dfbf2f` | Valid hookless adapter plus stale-workspace repair; old hook file conflicts with current provider-retirement deletion. | Reconciled into `f923074`: Zed manifest/docs/tests, weak `.rules` detection, non-destructive install, workspace reseed; did not resurrect deleted orchestration hook. | Retain original ref/worktree; it is still checked out and dirty. No deletion. |
+| `agent/zed-adapter` at `6dfbf2f` | Valid hookless adapter plus stale-workspace repair; old hook file conflicts with current provider-retirement deletion. | Reconciled into `f923074` and delivered by PR #36; Zed manifest/docs/tests, weak `.rules` detection, non-destructive install, workspace reseed; did not resurrect deleted orchestration hook. | PR #14 is now merged, but retain the original ref/worktree because it is still checked out and dirty. No deletion. |
 | `origin/claude/fix-issue-JdKTT` at `a16823c` | Small valid doctor UX repair; no local worktree. | Ported into `154f9bd`: yellow merge warnings explain the issue and point to the snippet source/reprint path. | Retain remote-only ref until remote PR/open-state can be conclusively checked. |
 | `origin/spec/v0.19-agentic-turn` at `69aac89` | Docs-only historical spec; no implementation/test acceptance evidence and no conclusive merge request. | Not merged into the product default. | Protected/uncertain; retain. |
 | `agent/phase0-memory-trust` and merged phase branches | Historical merged work; several refs are worktree-backed, and the local phase0 ref is not proven an ancestor of current remote default because of history shape. | No repair needed in this task. | Retain; no dirty worktree deletion or force branch deletion. |
@@ -51,4 +51,4 @@ No remaining ref met every safe deletion condition in this pass: confirmed merge
 
 ## Delivery checkpoint
 
-The repaired branch is a descendant of current `origin/master` and is ready for a normal push and fast-forward default-branch delivery. Remote push/merge and any subsequent remote stale-ref cleanup remain external-state operations; they are the next checkpoint, not claimed by this evidence until verified.
+PR #36 is merged into `origin/master` at `7d583381579aa12a169b10f765c33bc2f305bbc8`; its four required cross-platform checks passed. The repair branch remains pushed and checked out in the temporary integration worktree, so it is intentionally retained. No open PRs remain. Remote stale-ref cleanup still has no candidates meeting every rule because the repaired input refs remain worktree-backed or uncertain.
