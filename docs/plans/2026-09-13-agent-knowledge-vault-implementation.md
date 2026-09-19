@@ -24,7 +24,7 @@ The header above is the original design snapshot and its “未开始实施” s
 
 ### Delivery and evidence references
 
-- Git implementation, documentation, and the Paseo 0.8 migration are delivered through merged PRs **#27–#31** on `origin/master`; PR #31 head is `97a5c53dcc40009569fc274b088b0420f67061fc` and its verified default-branch merge is `9e442f01f8dd96a2c67bfcc81ca92b368213d8b4`. The feature branch remains pushed because the installed plugin source points at its worktree.
+- Git implementation, documentation, Paseo 0.8 migration, and final live-verification evidence are delivered through merged PRs **#27–#32** on `origin/master`; PR #32 merge is `ae774a8a10bf857f3637b68ddeb7f160e6d1259f`, and the feature branch remains pushed at `3f3f515996afbbbaa0792819a3a10d64b1d1ba38` because the installed plugin source points at its worktree.
 - Work vault: `/Users/syang/obsidian/agent-knowledge`; private runtime: `/Users/syang/.agent/knowledge`. Both were initialized safely without reading personal data.
 - Live handoff evidence: [`docs/evidence/knowledge-vault-live-handoff.md`](../evidence/knowledge-vault-live-handoff.md).
 - Plugin UI/RPC and ordinary-path audit: [`docs/evidence/knowledge-vault-plugin-rpc-compatibility.md`](../evidence/knowledge-vault-plugin-rpc-compatibility.md); static seams pass, but live RPC, current health, disable/reenable, and runtime ordinary-path compatibility remain open.

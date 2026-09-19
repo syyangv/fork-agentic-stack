@@ -94,3 +94,7 @@ No other plugin was configured, no daemon-wide switch was changed, and no real p
 ## Remaining safe gate
 
 The migration, reload, current health, and scoped lifecycle checks now pass. The remaining safe gate is direct installed-plugin UI/RPC invocation through a supported Paseo client, followed by runtime ordinary-path compatibility evidence; use only synthetic work-scope data and a fresh active-task check before any further lifecycle action. Until then, direct UI/RPC and runtime ordinary-path criteria remain OPEN.
+
+## Final delivery reconciliation — 2026-09-19
+
+PR #32 merged the final live-verification documentation as ae774a8a10bf857f3637b68ddeb7f160e6d1259f; the installed source branch remains 3f3f515996afbbbaa0792819a3a10d64b1d1ba38. On daemon 0.8.0, supported plugin ls/status reported enabled=true and status=running. A later standalone plugin logs call returned transport closed (code 1006), so log retrieval is intermittent; this does not change the successful reload/status/lifecycle evidence, but direct UI/RPC remains OPEN.
