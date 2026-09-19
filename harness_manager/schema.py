@@ -19,6 +19,48 @@ VALID_MERGE_POLICIES = {"overwrite", "skip_if_exists", "merge_or_alert"}
 VALID_FALLBACKS = {"rsync_with_delete", "copy_with_delete", "copy_with_merge"}
 VALID_POST_INSTALL_ACTIONS = {"openclaw_register_workspace", "codex_sync_skills"}
 
+# Destination paths that a user, or a tool other than us, plausibly authors.
+# Writing one of these with merge_policy 'overwrite' destroys their content,
+# which is how the Zed `.rules` bug shipped. An adapter that needs a file it
+# fully owns should pick a name nobody else would choose — the way cursor
+# uses `.cursor/rules/agentic-stack.mdc` rather than `.cursorrules`.
+#
+# Matched on the whole dst first, then on the basename, so both
+# `.claude/settings.json` and a root-level `CLAUDE.md` are covered.
+SHARED_DESTINATIONS = {
+    ".claude/settings.json",
+    ".gemini/settings.json",
+}
+SHARED_BASENAMES = {
+    "AGENTS.md",
+    "AGENT.md",
+    "CLAUDE.md",
+    "GEMINI.md",
+    "README.md",
+    ".rules",
+    ".cursorrules",
+    ".windsurfrules",
+    ".clinerules",
+    "opencode.json",
+}
+
+
+def is_shared_filename(dst: str) -> bool:
+    """True if dst is a path users or other tools write themselves.
+
+    Conservative by construction: it is far cheaper to force an adapter
+    author to justify a policy than to silently delete someone's file.
+    """
+    # Strip a leading './' prefix only. str.lstrip("./") strips *characters*,
+    # which would turn '.windsurfrules' into 'windsurfrules' and let every
+    # dotfile past the guard.
+    normalised = dst.replace("\\", "/")
+    while normalised.startswith("./"):
+        normalised = normalised[2:]
+    if normalised in SHARED_DESTINATIONS:
+        return True
+    return normalised.rsplit("/", 1)[-1] in SHARED_BASENAMES
+
 
 class ManifestError(ValueError):
     """Raised when adapter.json fails validation. Includes source for context."""
@@ -99,10 +141,22 @@ def _validate_files(files: list, source: str) -> None:
             raise ManifestError(es, "'src' and 'dst' must be non-empty strings")
         _check_path_safe(src, es, "src")
         _check_path_safe(dst, es, "dst")
-        policy = _check_optional(entry, "merge_policy", (str,), es)
-        if policy is not None and policy not in VALID_MERGE_POLICIES:
+        # Required, not optional: the installer used to default a missing
+        # policy to 'overwrite', so forgetting the key silently destroyed a
+        # user-authored file. Silence must not mean "destroy".
+        policy = _require(entry, "merge_policy", (str,), es)
+        if policy not in VALID_MERGE_POLICIES:
             raise ManifestError(
                 es, f"merge_policy must be one of {sorted(VALID_MERGE_POLICIES)}, got '{policy}'"
+            )
+        if policy == "overwrite" and is_shared_filename(dst):
+            raise ManifestError(
+                es,
+                f"'{dst}' is a filename users or other tools author themselves, "
+                f"so merge_policy 'overwrite' would destroy their content. "
+                f"Use 'merge_or_alert' (wire the brain in without clobbering) "
+                f"or 'skip_if_exists'. If this file is genuinely ours alone, "
+                f"give it an adapter-specific name instead.",
             )
         _check_optional(entry, "substitute", (bool,), es)
         _check_optional(entry, "from_stack", (bool,), es)

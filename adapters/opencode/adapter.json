@@ -10,7 +10,7 @@
     {
       "src": "opencode.json",
       "dst": "opencode.json",
-      "merge_policy": "overwrite"
+      "merge_policy": "merge_or_alert"
     }
   ]
 }
