@@ -98,3 +98,7 @@ The migration, reload, current health, and scoped lifecycle checks now pass. The
 ## Final delivery reconciliation — 2026-09-19
 
 PR #32 merged the final live-verification documentation as ae774a8a10bf857f3637b68ddeb7f160e6d1259f; the installed source branch remains 3f3f515996afbbbaa0792819a3a10d64b1d1ba38. On daemon 0.8.0, supported plugin ls/status reported enabled=true and status=running. A later standalone plugin logs call returned transport closed (code 1006), so log retrieval is intermittent; this does not change the successful reload/status/lifecycle evidence, but direct UI/RPC remains OPEN.
+
+## Supported client-route retry — 2026-09-19
+
+Canonical Paseo 0.8 client/runtime docs were consulted. The hosted Paseo v0.8 web client was opened through the supported Playwright browser route and its Direct connection flow was exercised with no password or pairing link. Both canonical local targets timed out: tcp://127.0.0.1:6767 and tcp://localhost:6767. The client displayed Connection timed out / check host, port, and network. The local daemon /api/health endpoint had previously returned status ok, but no client WebSocket session or plugin panel was established. No auth bypass, guessed endpoint, credential, or config change was used. Direct installed UI/RPC remains OPEN with an actionable prerequisite: restore a supported client-to-daemon WebSocket path or authorize the necessary scoped connectivity fix.

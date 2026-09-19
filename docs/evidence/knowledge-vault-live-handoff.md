@@ -162,3 +162,5 @@ Verified live or synthetic at the installed core boundary: daemon environment pr
 Remote master contains PR #32 merge `ae774a8a10bf857f3637b68ddeb7f160e6d1259f`; the feature branch remains at `3f3f515996afbbbaa0792819a3a10d64b1d1ba38`. Current supported plugin listing/status reports enabled=true and status=running on daemon 0.8.0. A later log-fetch attempt returned transport 1006, so log transport is intermittent; the earlier reload/lifecycle evidence includes Plugin ready.
 
 Git delivery and branch cleanup evidence: `docs/evidence/knowledge-vault-git-delivery.md`.
+
+Supported client-route retry evidence: `docs/evidence/knowledge-vault-plugin-rpc-compatibility.md` records the canonical hosted-client Direct connection attempts to both `tcp://127.0.0.1:6767` and `tcp://localhost:6767`, each timing out without credentials or bypass.
