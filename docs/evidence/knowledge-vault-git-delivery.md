@@ -34,3 +34,16 @@ Retained deliberately:
 - master/default, open PR #14 agent/zed-adapter, unmerged/spec refs, and all worktree-backed branches remain protected.
 
 No worktree or directory was removed. Remaining untracked state is local root/integration node_modules only; neither is staged or pushed.
+
+## Final branch-repair delivery — 2026-09-19
+
+The remaining mergeable fork work was reconciled on `repair/reconcile-fork-branches` and delivered normally:
+
+| PR | Purpose | Merge commit |
+|---:|---|---|
+| 36 | repaired adapter-safety, brain-seed hygiene, Zed, actionable-doctor, tests, and branch/audit evidence | `7d583381579aa12a169b10f765c33bc2f305bbc8` |
+| 37 | post-merge branch and acceptance evidence reconciliation | `794c47b5b5bd290a1a323c64252cd4968728a183` |
+
+All four required PR #36 cross-platform upgrade checks passed: Ubuntu 3.9/3.12 and Windows 3.9/3.12. The canonical local `master` checkout was fast-forwarded to `794c47b5b5bd290a1a323c64252cd4968728a183`; it is clean and tracks `origin/master`. The repair branch remains pushed and checked out in a retained temporary integration worktree, so it was not deleted.
+
+No open PRs remain. Original repaired input refs remain retained where worktrees are still checked out/dirty or the ref is uncertain; no force deletion, worktree removal, or installed plugin-source removal was used.
