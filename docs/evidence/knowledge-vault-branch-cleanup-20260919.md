@@ -91,3 +91,41 @@ These existing paths were inspected and intentionally not removed because their 
 | `/Users/syang/.agentic-stack-seed` | modified episodic log and workspace/review queue; untracked candidates `8b3e0b2e87dc.json`, `a9d3f0db5991.json`, rejected/, snapshots/ |
 | `/Users/syang/.agentic-stack-zed` | modified episodic log; untracked candidates `34d73602ada4.json`, `8b3e0b2e87dc.json`, `a9d3f0db5991.json`, `b5f78f2e08b3.json`, rejected/, snapshots/ |
 | Current manager/source `/Users/syang/.paseo/worktrees/16bjydof/agent-knowledge-vault` | active manager; untracked `.playwright-mcp/`, `integrations/paseo-knowledge/node_modules/`, `node_modules/` |
+
+## Approved bounded retirement execution — 2026-09-19
+
+The user explicitly approved retirement of the exact 19 paths in the preservation ledger. Immediately before removal:
+
+- 19/19 worktree statuses matched their archived porcelain manifests.
+- 19/19 archive hashes/manifests and current file hashes matched.
+- 0 active Paseo owners and 0 symlinks were present in the candidate trees.
+- Durable private recovery copies were verified at `/Users/syang/.paseo/private/agentic-stack-branch-archives-20260919`; original `/private/tmp` archives remain present.
+- All archived tips remain recoverable Git objects; integrated tips are ancestors of current master.
+
+Removed exactly these 19 worktrees, with no extra path:
+
+```text
+/private/tmp/kv-review-adapter
+/private/tmp/kv-review-seed
+/private/tmp/kv-review-zed
+/Users/syang/.agentic-stack-attest-fix
+/Users/syang/.agentic-stack-config-fix
+/Users/syang/.agentic-stack-memos-retirement
+/Users/syang/.agentic-stack-phase1
+/Users/syang/.agentic-stack-phase10
+/Users/syang/.agentic-stack-phase2
+/Users/syang/.agentic-stack-phase3
+/Users/syang/.agentic-stack-phase4
+/Users/syang/.agentic-stack-phase5
+/Users/syang/.agentic-stack-phase6
+/Users/syang/.agentic-stack-phase7
+/Users/syang/.agentic-stack-phase8
+/Users/syang/.agentic-stack-phase8-opus
+/Users/syang/.agentic-stack-safety
+/Users/syang/.agentic-stack-seed
+/Users/syang/.agentic-stack-zed
+```
+
+Attached local refs were deleted only with ordinary `git branch -d` after retirement: adapter-safety, brain-seed-hygiene, phase1–phase8/Opus, Zed, `fix/memos-deployed-legacy-profile`, and `refactor/retire-memos` (14 refs). Detached trees had no local branch. `agent/phase0-memory-trust` remains the sole residual local branch requiring targeted force-ref approval; no `-D` was used.
+
+Final counts: local heads **17 → 3**, worktrees **21 → 2**, origin heads unchanged at **3**. Remaining worktrees are canonical master and the active manager/plugin-source worktree. Remaining origin refs are feature/plugin-source, master, and spec. Open PRs remain **0**.
