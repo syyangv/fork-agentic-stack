@@ -1,50 +1,54 @@
-# Agent Knowledge Vault — Full Branch Inventory
+# Fork Branch Review, Repair, and Cleanup Evidence
 
 Date: 2026-09-19
-Repository: https://github.com/syyangv/fork-agentic-stack.git
-Verified remote default: master at `3ec2a051596493a9e6d427c7bb2b127f01236011` at inventory time.
-Local canonical master is separately checked out at `7ef5dc7dab039744b475f6fee65c2f2eaf9aa07f`; it was not reset or changed.
+Repository: `https://github.com/syyangv/fork-agentic-stack.git`
+Default remote: `origin/master` at `6a270bedf859d8160011a89c62055ffeb1aad88c`
+Repair branch: `repair/reconcile-fork-branches` at `154f9bd` (temporary integration worktree)
 
-## Counts and ownership
+## Explicit authorization and state
 
-- Local heads inventoried: 19.
-- Origin remote heads inventoried: 17.
-- Fork PR records inspected: 34.
-- Worktrees inspected: 23; no worktree was removed.
-- Active Paseo ownership: the knowledge-vault workspace/manager only; other branch-backed worktrees are retained regardless of current agent idleness.
+The persisted manager record for `596e7a6c-f7e6-4f3a-868b-1880387631e6` is archived/closed. Its durable plan authorizes the remaining implementation, testing, Git delivery, and safe cleanup, while prohibiting force operations, dirty worktree deletion, personal-vault reads, and removal of the installed plugin source. The daemon log preserves lifecycle metadata and the final archive event but not the manager conversation text; the plan/evidence files are therefore the authoritative durable authorization record used here.
 
-## Branch inventory
+Live state was inspected before changes:
 
-| Ref | Tip SHA | Scope | Worktree | PR state | Ancestor of origin/master | Decision |
-|---|---|---|---|---|---|---|
-| `agent/adapter-safety` | `14bdd5c8303bf43cf6716c4f4d8b85a068484042` | local | `/Users/syang/.agentic-stack-safety` | - | no | RETAIN: existing worktree; no worktree removal authorized |
-| `agent/brain-seed-hygiene` | `42b8a6f85767a53593fe28f8e7cbcf0e98bcbd3a` | local | `/Users/syang/.agentic-stack-seed` | - | no | RETAIN: existing worktree; no worktree removal authorized |
-| `agent/phase0-memory-trust` | `c101aeb1c2f1977c55e46c97e5d090ed3a075186` | local | `-` | #1:MERGED | no | RETAIN: unique/uncertain or not proven ancestor of origin/master |
-| `agent/phase1-memory-contracts` | `113b17f2b88d4b2af052bd09c512280128c3adb5` | local | `/Users/syang/.agentic-stack-phase1` | #2:MERGED | yes | RETAIN: existing worktree; no worktree removal authorized |
-| `agent/phase2-governance-orchestrator` | `c80ee70348a5e29fc3fe6491ea34831a1c0a46e6` | local | `/Users/syang/.agentic-stack-phase2` | #3:MERGED | yes | RETAIN: existing worktree; no worktree removal authorized |
-| `agent/phase3-memos-shadow` | `0f8c7c966ff74dac7d0a1f17e8bfd133f511a7d9` | local | `/Users/syang/.agentic-stack-phase3` | #4:MERGED | yes | RETAIN: existing worktree; no worktree removal authorized |
-| `agent/phase4-review-fixes` | `cc2c0fe7c5a3ce5bac889cd404bb1f2fc201a200` | local | `/Users/syang/.agentic-stack-phase4` | #6:MERGED | yes | RETAIN: existing worktree; no worktree removal authorized |
-| `agent/phase5-crg-evidence` | `6b68e000027ee23d2d77a17ff60def332b4969d1` | local | `/Users/syang/.agentic-stack-phase5` | #7:MERGED | yes | RETAIN: existing worktree; no worktree removal authorized |
-| `agent/phase6-federated-assist` | `78374b59ca9e752f195cab8a4c1162f4206de2a0` | local | `/Users/syang/.agentic-stack-phase6` | #8:MERGED | yes | RETAIN: existing worktree; no worktree removal authorized |
-| `agent/phase7-promotion-revalidation` | `5538881fea13fa11741a501f5a7f1f5c41c20886` | local | `/Users/syang/.agentic-stack-phase7` | #9:MERGED | yes | RETAIN: existing worktree; no worktree removal authorized |
-| `agent/phase8-host-evolution` | `f0fcbd8d7787b63e998626db1be13cf4d91cf56a` | local | `/Users/syang/.agentic-stack-phase8` | #10:MERGED | yes | RETAIN: existing worktree; no worktree removal authorized |
-| `agent/phase8-opus-pilot` | `26c09149d9a70732314487c5e95f116c31795fb2` | local | `/Users/syang/.agentic-stack-phase8-opus` | #11:MERGED | yes | RETAIN: existing worktree; no worktree removal authorized |
-| `agent/zed-adapter` | `6dfbf2fdbba56f0d86383d7c9caf71f400b95ea9` | local | `/Users/syang/.agentic-stack-zed` | #14:OPEN | no | RETAIN: open PR #14 |
-| `claude/fix-issue-JdKTT` | `a16823cec20b03eb65e79ba04cd6a225079e877a` | origin | `-` | - | n/a | RETAIN: remote-only without conclusive merge/PR evidence |
-| `feat/agent-knowledge-vault` | `472676ac1ad1c392f806e2684d4b726029bd64db` | local | `/Users/syang/.paseo/worktrees/16bjydof/agent-knowledge-vault` | #34:MERGED,#33:MERGED,#32:MERGED,#31:MERGED,#30:MERGED,#29:MERGED,#28:MERGED,#27:MERGED | yes | RETAIN: installed plugin source worktree/current manager |
-| `fix/governed-hook-alignment` | `1511c659cc2aee71bcf4be78fe9749e0d16e3f55` | local | `/private/tmp/agentic-stack-hook-alignment` | #24:MERGED | yes | RETAIN: existing worktree; no worktree removal authorized |
-| `fix/memos-deployed-legacy-profile` | `e2b683ba36910668f96d30db7fb2f7323fea6a8d` | local | `/Users/syang/.agentic-stack-config-fix` | #19:MERGED | yes | RETAIN: existing worktree; no worktree removal authorized |
-| `fix/retirement-readonly-tree` | `473f8a9e3586efb3874bd9ac844c342285fa6e25` | local | `/private/tmp/agentic-stack-retirement-deploy` | #23:MERGED | yes | RETAIN: existing worktree; no worktree removal authorized |
-| `master` | `7ef5dc7dab039744b475f6fee65c2f2eaf9aa07f` | local | `/Users/syang/.agentic-stack` | - | yes | RETAIN: default/local canonical checkout |
-| `refactor/retire-memos` | `571e0dee200ae1207b5746dd3589496a8cc6f888` | local | `/Users/syang/.agentic-stack-memos-retirement` | #21:MERGED | yes | RETAIN: existing worktree; no worktree removal authorized |
-| `spec/v0.19-agentic-turn` | `69aac8956249753ceb3f4722b039eeccd6dd9c83` | origin | `-` | - | n/a | RETAIN: protected/unmerged |
+- Current installed-source worktree: `/Users/syang/.paseo/worktrees/16bjydof/agent-knowledge-vault`; branch `feat/agent-knowledge-vault`; no tracked modifications. Existing untracked `node_modules/` and `.playwright-mcp/` were preserved.
+- Local canonical `master` remains checked out at `/Users/syang/.agentic-stack`; it is behind `origin/master` and was not reset or deleted.
+- Branch-backed worktrees remain present, including dirty memory/runtime state in several owned worktrees; none was cleaned or removed.
+- Paseo daemon process is listening on `127.0.0.1:6767`, but the supported CLI currently reports transport closed/unresponsive. No daemon restart or plugin lifecycle mutation was performed in this pass.
 
-## Cleanup decision
+## Remaining fork branch review
 
-At inventory time, only branches marked SAFE CANDIDATE meet the deletion rule: fully merged by PR/ancestry, no open PR, no active owner, and no worktree. Default/protected/release/spec refs, open PRs, unique/uncertain refs, and installed-source worktrees are retained. Any deletion is performed separately with safe local `git branch -d` or normal remote branch deletion; never force deletion.
+| Ref | Review result | Delivery action | Safety disposition |
+|---|---|---|---|
+| `agent/adapter-safety` at `14bdd5c` | High-value installer/data-loss fix; focused tests pass. Old base conflicted in current `CHANGELOG.md` and `doctor.py`. | Reconciled into `ef53286`: explicit merge policies, shared-file overwrite rejection, weak ambiguous detection, duplicate Gemini signal guard. | Retain original ref/worktree; it is still checked out and dirty. No deletion. |
+| `agent/brain-seed-hygiene` at `42b8a6f` | Privacy fix is valid; verbatim merge would resurrect retired pre-MemOS profile filtering. | Ported current-compatible behavior into `1e838a7`: clean brain seeding, runtime/staged-state exclusions, backup exclusion, restored preference template, adapted tests. | Retain original ref/worktree; it is still checked out and dirty. No deletion. |
+| `agent/zed-adapter` at `6dfbf2f` | Valid hookless adapter plus stale-workspace repair; old hook file conflicts with current provider-retirement deletion. | Reconciled into `f923074`: Zed manifest/docs/tests, weak `.rules` detection, non-destructive install, workspace reseed; did not resurrect deleted orchestration hook. | Retain original ref/worktree; it is still checked out and dirty. No deletion. |
+| `origin/claude/fix-issue-JdKTT` at `a16823c` | Small valid doctor UX repair; no local worktree. | Ported into `154f9bd`: yellow merge warnings explain the issue and point to the snippet source/reprint path. | Retain remote-only ref until remote PR/open-state can be conclusively checked. |
+| `origin/spec/v0.19-agentic-turn` at `69aac89` | Docs-only historical spec; no implementation/test acceptance evidence and no conclusive merge request. | Not merged into the product default. | Protected/uncertain; retain. |
+| `agent/phase0-memory-trust` and merged phase branches | Historical merged work; several refs are worktree-backed, and the local phase0 ref is not proven an ancestor of current remote default because of history shape. | No repair needed in this task. | Retain; no dirty worktree deletion or force branch deletion. |
+| `feat/agent-knowledge-vault` | Installed plugin source and current knowledge-vault handoff. | Already delivered through the existing merged PR chain; no source removal. | Protected installed source. |
 
-The current feature worktree and branch remain required by the installed plugin source path. Local generated `.playwright-mcp/`, root `node_modules/`, and integration `node_modules/` are not branch-cleanup targets.
+## Verification
 
-## Cleanup pass result
+In clean detached review worktrees, before reconciliation:
 
-For this 2026-09-19 full inventory pass, local heads were 19 before and after, and origin heads were 17 before and after: **0 additional refs were deleted** because no remaining ref met every safe-deletion condition. The prior documented deletions were remote agent/phase0-memory-trust and local fix/retirement-npm-symlinks. The remaining local phase0 ref is retained because safe local git branch -d cannot prove it merged into this checkout's local master and force deletion is prohibited; its remote ref is already gone. Worktree-backed merged branches, the open Zed branch, spec/uncertain refs, and the installed feature branch remain protected.
+- `agent/adapter-safety`: full historical suite had a timing-sensitive inherited failure; immediate focused timeout regression passed.
+- `agent/brain-seed-hygiene`: `583 passed, 2 skipped`.
+- `agent/zed-adapter`: immediate focused Zed/archive/detection set `19 passed`; the inherited full suite had one timing-sensitive shutdown failure that passed on immediate focused rerun.
+
+On the repaired current-default integration branch:
+
+```text
+focused branch-regression set: 41 passed
+full repository suite: 487 passed, 1 skipped
+```
+
+The full suite command was `PYTHONDONTWRITEBYTECODE=1 python3 -m pytest -q`; `git diff --check` and changed-source compilation also pass.
+
+## Safe cleanup result
+
+No remaining ref met every safe deletion condition in this pass: confirmed merged into the current default, no open/uncertain review, no active owner, and no worktree. All retained refs have an explicit reason above. No `--force`, `git reset --hard`, `git clean`, dirty worktree deletion, or installed plugin-source removal was used.
+
+## Delivery checkpoint
+
+The repaired branch is a descendant of current `origin/master` and is ready for a normal push and fast-forward default-branch delivery. Remote push/merge and any subsequent remote stale-ref cleanup remain external-state operations; they are the next checkpoint, not claimed by this evidence until verified.
