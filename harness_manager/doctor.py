@@ -34,32 +34,89 @@ from .loops.storage import collect_summary
 
 
 # Detection signals: (filename, signal_strength) tuples per adapter.
-# Strong signals = file exists AND has the expected shape.
+#
+# STRONG means: this path existing proves *we* installed this adapter here.
+# Both consumers rely on that and only that — state.legacy_unregistered_adapters()
+# gates pre-v0.9 migration on it, and cli.py pre-checks onboarding boxes with it,
+# where a false positive can install over a user's file.
+#
+# So a path may only be strong if nothing but our installer creates it. That
+# rules out three categories, all of which used to be marked strong here:
+#   - files the user or the harness vendor authors (.windsurfrules,
+#     opencode.json, .claude/settings.json, .gemini/settings.json)
+#   - anything under .agent/, which is the shared brain rather than any one
+#     adapter's footprint (codex's .agent/skills matched every brain-present
+#     project, so codex was reported as legacy-unregistered everywhere)
+#   - generic root filenames (CLAUDE.md, AGENTS.md, run.py) — already weak
+#
+# assert_signals_consistent() below enforces this; a test calls it.
 DETECT_SIGNALS = {
     "claude-code": [
         ("CLAUDE.md", "weak"),
-        (".claude/settings.json", "strong"),
+        (".claude/settings.json", "weak"),
     ],
     "cursor": [(".cursor/rules/agentic-stack.mdc", "strong")],
+    "zed": [(".rules", "weak")],  # generic root filename; ambiguous alone
     "windsurf": [
         (".windsurf/rules/agentic-stack.md", "strong"),
-        (".windsurfrules", "strong"),
+        (".windsurfrules", "weak"),
     ],
     "openclaw": [(".openclaw-system.md", "strong")],
     "pi": [(".pi/extensions/memory-hook.ts", "strong")],
-    "codex": [(".agent/skills", "strong")],
+    "codex": [(".agent/skills", "weak")],
     "autohand-code": [(".autohand/skills", "strong")],
+    # Single entry: this key was previously declared twice, and the second
+    # literal silently discarded the first, dropping .gemini/settings.json
+    # from detection entirely.
     "gemini": [
         ("GEMINI.md", "weak"),
-        (".gemini/settings.json", "strong"),
+        ("gemini.md", "weak"),
+        (".gemini/settings.json", "weak"),
         (".gemini/skills", "strong"),
     ],
     "antigravity": [("ANTIGRAVITY.md", "strong")],
-    "opencode": [("opencode.json", "strong")],
+    "opencode": [("opencode.json", "weak")],
     "hermes": [("AGENTS.md", "weak")],  # AGENTS.md alone is ambiguous
     "standalone-python": [("run.py", "weak")],
     "copilot-cli": [(".github/instructions/agentic-stack.instructions.md", "strong")],
 }
+
+VALID_SIGNAL_STRENGTHS = {"strong", "weak"}
+
+
+def assert_signals_consistent() -> None:
+    """Raise if DETECT_SIGNALS violates the strong-signal contract.
+
+    Cheap to call, and the only thing standing between a copy-pasted
+    manifest and a false-positive install over someone's file.
+    """
+    from . import schema as schema_mod
+
+    for adapter, signals in DETECT_SIGNALS.items():
+        seen: set[str] = set()
+        for path, strength in signals:
+            if strength not in VALID_SIGNAL_STRENGTHS:
+                raise ValueError(
+                    f"{adapter}: signal '{path}' has strength '{strength}'; "
+                    f"expected one of {sorted(VALID_SIGNAL_STRENGTHS)}"
+                )
+            if path in seen:
+                raise ValueError(f"{adapter}: signal '{path}' listed twice")
+            seen.add(path)
+            if strength != "strong":
+                continue
+            if schema_mod.is_shared_filename(path):
+                raise ValueError(
+                    f"{adapter}: '{path}' is authored by users or other tools, "
+                    f"so its presence does not prove we installed anything; "
+                    f"mark it weak"
+                )
+            if path == ".agent" or path.startswith(".agent/"):
+                raise ValueError(
+                    f"{adapter}: '{path}' is part of the shared brain, not this "
+                    f"adapter's footprint, so it matches every brain-present "
+                    f"project; mark it weak"
+                )
 
 
 # ---- statuses ---------------------------------------------------------
@@ -203,23 +260,39 @@ def _audit_adapter(
     # the user merges the snippet. Re-check current file content — they
     # may have merged it since install. Yellow if still un-merged; green
     # if they merged.
-    still_alerted = []
+    unwired: list[str] = []
+    other_alerted: list[str] = []
     for f in entry.get("files_alerted", []):
         p = target_root / f
         if not p.is_file():
-            still_alerted.append(f"{f} (file missing entirely)")
+            other_alerted.append(f"{f} (file missing entirely)")
             continue
         try:
             content = p.read_text(encoding="utf-8", errors="replace")
         except OSError:
-            still_alerted.append(f"{f} (unreadable)")
+            other_alerted.append(f"{f} (unreadable)")
             continue
         if ".agent/" not in content:
-            still_alerted.append(f)
-    if still_alerted:
+            unwired.append(f)
+    if unwired:
         lines.append(
-            f"merge required: {', '.join(still_alerted)} — install printed a snippet to paste in"
+            f"merge required: {', '.join(unwired)} exists but does not "
+            f"reference .agent/ — the brain isn't wired into it yet."
         )
+        snippet_src = _alerted_snippet_source(adapter_name, unwired)
+        if snippet_src:
+            lines.append(
+                f"  to wire it up, merge the snippet from {snippet_src} "
+                f"into {unwired[0]} (or re-run `./install.sh {adapter_name}` "
+                f"to re-print it)."
+            )
+        else:
+            lines.append(
+                f"  re-run `./install.sh {adapter_name}` to re-print the snippet."
+            )
+        status_overall = YELLOW
+    if other_alerted:
+        lines.append(f"merge required: {', '.join(other_alerted)}")
         status_overall = YELLOW
 
     # Check skills_link target exists
@@ -315,6 +388,32 @@ def _audit_adapter(
         return RED, lines
 
     return status_overall, lines
+
+
+def _alerted_snippet_source(adapter_name: str, alerted: list[str]) -> str | None:
+    """Look up the adapter source path for the first alerted dst file.
+
+    Returns the absolute path to the snippet the user needs to merge, or
+    None if the adapter manifest can't be read. Doctor never reads the
+    target's files_alerted entries blindly — they may include suffixes
+    like " (file missing entirely)" — so we strip those before matching.
+    """
+    if not alerted:
+        return None
+    first = alerted[0].split(" (")[0]
+    stack_root = Path(__file__).resolve().parent.parent
+    manifest_path = stack_root / "adapters" / adapter_name / "adapter.json"
+    if not manifest_path.is_file():
+        return None
+    try:
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return None
+    for entry in manifest.get("files", []):
+        if entry.get("dst") == first and entry.get("src"):
+            src_root = stack_root if entry.get("from_stack") else manifest_path.parent
+            return str(src_root / entry["src"])
+    return None
 
 
 def _check_openclaw_agent(agent_name: str) -> str:

@@ -1,5 +1,13 @@
 # Changelog
 
+## [Unreleased]
+
+### Fixed
+- **Adapter installation is fail-safe for shared files.** File manifests now require an explicit merge policy, reject destructive overwrites of user-authored paths, preserve existing configuration with `merge_or_alert`, and avoid false legacy-install detection from ambiguous signals.
+- **Copied brains start clean.** Installer copies exclude task state, staged/rejected candidates, snapshots, runtime ledgers, and backup artifacts, then reseed the required workspace, review queue, and episodic log. Curated lessons remain available as seed knowledge.
+- **Stale workspace archival self-heals.** Archiving keeps a fresh `WORKSPACE.md` in place rather than leaving a tracked path deleted.
+- **Zed support is explicit and non-destructive.** The new adapter installs a project-root `.rules` file with `merge_or_alert`, weak detection, documentation, and regression tests.
+
 All notable changes to this project.
 
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),

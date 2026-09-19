@@ -295,7 +295,18 @@ def install(
         content = src_path.read_bytes()
         if entry.get("substitute", False):
             content = _substitute(content, manifest, target_root)
-        merge_policy = entry.get("merge_policy", "overwrite")
+        # No default. schema.validate() requires the key, but install() is
+        # also reachable with a hand-built dict (tests, callers that skip
+        # validation), and defaulting to 'overwrite' there would reintroduce
+        # the silent data-loss path this guard exists to close.
+        try:
+            merge_policy = entry["merge_policy"]
+        except KeyError:
+            raise ValueError(
+                f"adapter '{adapter_name}' file entry {entry.get('dst', '?')!r} "
+                f"has no merge_policy; refusing to guess (a wrong guess "
+                f"destroys user content)"
+            ) from None
         # For merge_or_alert we need text for the snippet output.
         try:
             src_text = content.decode("utf-8")

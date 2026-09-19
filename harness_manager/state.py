@@ -91,10 +91,15 @@ def legacy_unregistered_adapters(target_root: Path | str) -> list[str]:
     # STRONG signals only. Weak signals (plain CLAUDE.md / AGENTS.md /
     # run.py) are ambiguous even in a brain-present repo: users may
     # have the brain template from cloning agentic-stack AND their own
-    # AGENTS.md. Gating on weak signals there false-refuses. Weak-only
-    # adapters (hermes, standalone-python) won't auto-gate on upgrade
-    # from pre-v0.9, but `./install.sh doctor` (which DOES consider
-    # weak signals) is the documented path for legacy migration.
+    # AGENTS.md. Gating on weak signals there false-refuses.
+    #
+    # Weak-only adapters (claude-code, codex, opencode, hermes,
+    # standalone-python) won't auto-gate on upgrade from pre-v0.9, but
+    # `./install.sh doctor` (which DOES consider weak signals) is the
+    # documented path for legacy migration. Note codex was previously
+    # strong on `.agent/skills`, which is the shared brain rather than
+    # anything codex installs — so it matched every brain-present
+    # project and gated all of them.
     return sorted(
         name
         for name, signals in doctor_mod.DETECT_SIGNALS.items()
