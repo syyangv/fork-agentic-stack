@@ -1,5 +1,5 @@
 {
-  "notes": "Codex-only skills are expected Codex/OMX local infrastructure. ~/.agent/skills entries are expected shared-brain skills and remain at their canonical path, not mirrored into ~/.claude/skills or ~/.codex/skills. Claude-only personal/plugin skills remain under ~/.claude/skills by design. Baseline reconciled 2026-07-15; future scans should surface only new one-root-only additions. ~/.agents/ (plural) is retired.",
+  "notes": "Codex-only skills are expected Codex/OMX local infrastructure. ~/.agent/skills entries are expected shared-brain skills and remain at their canonical path, not mirrored into ~/.claude/skills or ~/.codex/skills. Claude-only personal/plugin skills remain under ~/.claude/skills by design. Baseline reconciled 2026-07-15; future scans should surface only new one-root-only additions. ~/.agents/ (plural) is retired and was fully removed 2026-09-21 (it still held paseo-installer artifacts written 2026-08-27 to the retired path). paseo/paseo-advisor/paseo-committee/paseo-handoff ~/.agent/skills copies were stale (2026-08-04) and were re-synced from ~/.claude/skills on 2026-09-21; paseo-help/paseo-plugin were added to ~/.agent/skills the same day. All three roots now hold identical content.",
   "reviewed_agent_only": {
     "agentic-stack": "Expected ~/.agent/skills/ entry (shared-brain agentic-stack skill). Baselined 2026-06-03 when ~/.agents/ (plural) was retired; ~/.agent/skills/ is now the canonical secondary registry per ~/.claude/CLAUDE.md.",
     "agentic-stack-review": "Expected ~/.agent/skills/ entry (shared-brain agentic-stack skill). Baselined 2026-06-03 when ~/.agents/ (plural) was retired; ~/.agent/skills/ is now the canonical secondary registry per ~/.claude/CLAUDE.md.",
@@ -18,13 +18,13 @@
     "memory-manager": "Expected ~/.agent/skills/ entry (shared-brain agentic-stack skill). Baselined 2026-06-03 when ~/.agents/ (plural) was retired; ~/.agent/skills/ is now the canonical secondary registry per ~/.claude/CLAUDE.md.",
     "obsidian-bases": "Expected ~/.agent/skills/ entry (shared-brain agentic-stack skill). Baselined 2026-06-03 when ~/.agents/ (plural) was retired; ~/.agent/skills/ is now the canonical secondary registry per ~/.claude/CLAUDE.md.",
     "obsidian-cli": "Expected ~/.agent/skills/ entry (shared-brain agentic-stack skill). Baselined 2026-06-03 when ~/.agents/ (plural) was retired; ~/.agent/skills/ is now the canonical secondary registry per ~/.claude/CLAUDE.md.",
- "obsidian-config": "Expected shared-brain Obsidian configuration skill in ~/.agent/skills; intentionally agent-only and routed by obsidian-orchestrator. Reviewed 2026-09-01.",
+    "obsidian-config": "Expected shared-brain Obsidian configuration skill in ~/.agent/skills; intentionally agent-only and routed by obsidian-orchestrator. Reviewed 2026-09-01.",
     "obsidian-markdown": "Expected ~/.agent/skills/ entry (shared-brain agentic-stack skill). Baselined 2026-06-03 when ~/.agents/ (plural) was retired; ~/.agent/skills/ is now the canonical secondary registry per ~/.claude/CLAUDE.md.",
-    "paseo": "Expected ~/.agent/skills/ entry (shared-brain agentic-stack skill). Baselined 2026-06-03 when ~/.agents/ (plural) was retired; ~/.agent/skills/ is now the canonical secondary registry per ~/.claude/CLAUDE.md.",
-    "paseo-advisor": "Expected ~/.agent/skills/ entry (shared-brain agentic-stack skill). Baselined 2026-06-03 when ~/.agents/ (plural) was retired; ~/.agent/skills/ is now the canonical secondary registry per ~/.claude/CLAUDE.md.",
-    "paseo-committee": "Expected ~/.agent/skills/ entry (shared-brain agentic-stack skill). Baselined 2026-06-03 when ~/.agents/ (plural) was retired; ~/.agent/skills/ is now the canonical secondary registry per ~/.claude/CLAUDE.md.",
+    "paseo": "Expected ~/.agent/skills/ entry (shared-brain agentic-stack skill). Synced to current content (identical to ~/.claude/skills + ~/.codex/skills pairs) on 2026-09-21.",
+    "paseo-advisor": "Expected ~/.agent/skills/ entry (shared-brain agentic-stack skill). Synced to current content (identical to ~/.claude/skills + ~/.codex/skills pairs) on 2026-09-21.",
+    "paseo-committee": "Expected ~/.agent/skills/ entry (shared-brain agentic-stack skill). Synced to current content (identical to ~/.claude/skills + ~/.codex/skills pairs) on 2026-09-21.",
     "paseo-epic": "Expected ~/.agent/skills/ entry (shared-brain agentic-stack skill). Baselined 2026-06-03 when ~/.agents/ (plural) was retired; ~/.agent/skills/ is now the canonical secondary registry per ~/.claude/CLAUDE.md.",
-    "paseo-handoff": "Expected ~/.agent/skills/ entry (shared-brain agentic-stack skill). Baselined 2026-06-03 when ~/.agents/ (plural) was retired; ~/.agent/skills/ is now the canonical secondary registry per ~/.claude/CLAUDE.md.",
+    "paseo-handoff": "Expected ~/.agent/skills/ entry (shared-brain agentic-stack skill). Synced to current content (identical to ~/.claude/skills + ~/.codex/skills pairs) on 2026-09-21.",
     "paseo-loop": "Expected ~/.agent/skills/ entry (shared-brain agentic-stack skill). Baselined 2026-06-03 when ~/.agents/ (plural) was retired; ~/.agent/skills/ is now the canonical secondary registry per ~/.claude/CLAUDE.md.",
     "paseo-orchestrate": "Expected ~/.agent/skills/ entry (shared-brain agentic-stack skill). Baselined 2026-06-03 when ~/.agents/ (plural) was retired; ~/.agent/skills/ is now the canonical secondary registry per ~/.claude/CLAUDE.md.",
     "paseo-settings": "Expected ~/.agent/skills/ entry (shared-brain agentic-stack skill). Baselined 2026-06-03 when ~/.agents/ (plural) was retired; ~/.agent/skills/ is now the canonical secondary registry per ~/.claude/CLAUDE.md.",
@@ -99,7 +99,7 @@
     "obsidian-orchestrator": "Intentional shared-brain Obsidian routing skill; canonical in ~/.agent/skills and not mirrored into Claude/Codex roots. Reviewed 2026-09-07.",
     "knap": "Intentional shared-brain Markdown templating skill; canonical in ~/.agent/skills and not mirrored into Claude/Codex roots. Reviewed 2026-09-14."
   },
-  "reviewed_at": "2026-09-14",
+  "reviewed_at": "2026-09-21",
   "reviewed_claude_only": {
     "amazon-orders": "Expected Claude Code personal/Plugin skill; lives in ~/.claude/skills and is not mirrored to Codex/agentic-stack by design. Baselined 2026-06-03.",
     "browser-use": "Expected Claude Code personal/Plugin skill; lives in ~/.claude/skills and is not mirrored to Codex/agentic-stack by design. Baselined 2026-06-03.",
@@ -276,7 +276,13 @@
     "external-keyboard-remap": "Expected Claude Code personal skill; lives in ~/.claude/skills and is not mirrored to Codex/agentic-stack by design. Reviewed 2026-08-24.",
     "gws-workflow": "Expected Claude Code personal/integration skill; lives in ~/.claude/skills and is not mirrored to Codex/agentic-stack by design. Reviewed 2026-08-24.",
     "vocal": "Expected Claude Code personal/vault skill; lives in ~/.claude/skills and is not mirrored to Codex/agentic-stack by design. Reviewed 2026-08-24.",
-    "obsidian-show-covers": "Intentional Claude-local Obsidian cover/playbill workflow; not mirrored into Codex or the shared registry. Reviewed 2026-09-07."
+    "obsidian-show-covers": "Intentional Claude-local Obsidian cover/playbill workflow; not mirrored into Codex or the shared registry. Reviewed 2026-09-07.",
+    "paseo": "Paseo-installer skill; identical copy also exists in ~/.codex/skills (md5 match). Not mirrored to the shared registry. Reviewed 2026-09-21.",
+    "paseo-advisor": "Paseo-installer skill; identical copy also exists in ~/.codex/skills (md5 match). Not mirrored to the shared registry. Reviewed 2026-09-21.",
+    "paseo-committee": "Paseo-installer skill; identical copy also exists in ~/.codex/skills (md5 match). Not mirrored to the shared registry. Reviewed 2026-09-21.",
+    "paseo-handoff": "Paseo-installer skill; identical copy also exists in ~/.codex/skills (md5 match). Not mirrored to the shared registry. Reviewed 2026-09-21.",
+    "paseo-help": "Paseo-installer skill; identical copy also exists in ~/.codex/skills (md5 match). Not mirrored to the shared registry. Reviewed 2026-09-21.",
+    "paseo-plugin": "Paseo-installer skill; identical copy also exists in ~/.codex/skills (md5 match). Not mirrored to the shared registry. Reviewed 2026-09-21."
   },
   "reviewed_codex_only": {
     "ask-claude": "Codex local helper to ask Claude CLI and save OMX artifact.",
@@ -296,6 +302,12 @@
     "photo-abstract-editorial": "Intentional Codex-local image workflow/manager skill; harness-specific and not mirrored into Claude or the shared registry. Reviewed 2026-09-07.",
     "travel-memory-card-duo": "Intentional Codex-local image workflow/manager skill; harness-specific and not mirrored into Claude or the shared registry. Reviewed 2026-09-07.",
     "travel-memory-sticker-card": "Intentional Codex-local image workflow/manager skill; harness-specific and not mirrored into Claude or the shared registry. Reviewed 2026-09-07.",
-    "nutrition-intake": "Intentional Codex-local nutrition database and intake workflow; harness-specific and not mirrored into Claude or the shared registry. Reviewed 2026-09-14."
+    "nutrition-intake": "Intentional Codex-local nutrition database and intake workflow; harness-specific and not mirrored into Claude or the shared registry. Reviewed 2026-09-14.",
+    "paseo": "Paseo-installer skill; identical copy also exists in ~/.claude/skills (md5 match). Not mirrored to the shared registry. Reviewed 2026-09-21.",
+    "paseo-advisor": "Paseo-installer skill; identical copy also exists in ~/.claude/skills (md5 match). Not mirrored to the shared registry. Reviewed 2026-09-21.",
+    "paseo-committee": "Paseo-installer skill; identical copy also exists in ~/.claude/skills (md5 match). Not mirrored to the shared registry. Reviewed 2026-09-21.",
+    "paseo-handoff": "Paseo-installer skill; identical copy also exists in ~/.claude/skills (md5 match). Not mirrored to the shared registry. Reviewed 2026-09-21.",
+    "paseo-help": "Paseo-installer skill; identical copy also exists in ~/.claude/skills (md5 match). Not mirrored to the shared registry. Reviewed 2026-09-21.",
+    "paseo-plugin": "Paseo-installer skill; identical copy also exists in ~/.claude/skills (md5 match). Not mirrored to the shared registry. Reviewed 2026-09-21."
   }
 }
