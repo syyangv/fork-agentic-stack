@@ -30,7 +30,6 @@ sys.path.insert(0, os.path.join(BASE, "harness"))
 sys.path.insert(0, os.path.join(BASE, "memory"))
 from brain_role import require_live_brain  # noqa: E402
 
-require_live_brain(BASE, "learn.py")
 from text import word_set  # noqa: E402
 from cluster import pattern_id  # noqa: E402
 from candidate_lock import atomic_write_json, candidate_lifecycle_lock  # noqa: E402
@@ -121,6 +120,7 @@ def stage(claim, conditions, source="learn", importance=7):
 
 
 def main():
+    require_live_brain(BASE, "learn.py")
     p = argparse.ArgumentParser(
         description="Teach the agent a lesson in one command.")
     p.add_argument("claim", help="The lesson, phrased as a rule or principle.")

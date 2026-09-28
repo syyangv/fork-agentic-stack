@@ -365,7 +365,7 @@ class BrainSeedHygieneTest(unittest.TestCase):
         """A new tool that writes without the guard reintroduces the bug."""
         required = {
             "learn.py", "graduate.py", "reject.py", "reopen.py",
-            "list_candidates.py", "memory_reflect.py",
+            "memory_reflect.py",
         }
         tools = ROOT / ".agent" / "tools"
         for name in sorted(required):
@@ -375,6 +375,43 @@ class BrainSeedHygieneTest(unittest.TestCase):
                 self.assertRegex(
                     source, r"require_live_brain\(BASE,",
                     f"{name} imports the guard but never calls it",
+                )
+
+    def test_writers_guard_at_entry_not_at_import(self):
+        """An import-time guard breaks read-only tools that log via memory_reflect.
+
+        recall.py imports memory_reflect purely to record what it surfaced, and
+        wraps that call in `except Exception`. A module-level refusal raises
+        SystemExit, which is not an Exception, so the read itself would die.
+        """
+        for name in ("learn.py", "graduate.py", "reject.py", "reopen.py",
+                     "memory_reflect.py"):
+            with self.subTest(tool=name):
+                source = (ROOT / ".agent" / "tools" / name).read_text()
+                module_level = [
+                    line for line in source.splitlines()
+                    if line.startswith("require_live_brain(")
+                ]
+                self.assertEqual(
+                    module_level, [],
+                    f"{name} guards at import time; move the call into main()",
+                )
+
+    def test_read_only_tools_stay_usable_against_the_seed(self):
+        """Reading the template must keep working even though writing is refused."""
+        import subprocess
+
+        for name, args in (("recall.py", ["seed", "brain"]),
+                           ("list_candidates.py", []),
+                           ("show.py", [])):
+            with self.subTest(tool=name):
+                result = subprocess.run(
+                    [sys.executable, str(ROOT / ".agent" / "tools" / name), *args],
+                    capture_output=True, text=True, timeout=60,
+                )
+                self.assertNotIn(
+                    "refusing to write into a seed brain", result.stderr,
+                    f"{name} is read-only and must not be blocked",
                 )
 
 

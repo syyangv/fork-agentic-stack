@@ -10,7 +10,6 @@ BASE = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 sys.path.insert(0, os.path.join(BASE, "memory"))
 from brain_role import require_live_brain  # noqa: E402
 
-require_live_brain(BASE, "reopen.py")
 
 from review_state import mark_reopened
 
@@ -18,6 +17,7 @@ CANDIDATES = os.path.join(BASE, "memory/candidates")
 
 
 def main():
+    require_live_brain(BASE, "reopen.py")
     p = argparse.ArgumentParser(description="Reopen a rejected candidate.")
     p.add_argument("candidate_id")
     p.add_argument("--reviewer", default="host-agent")

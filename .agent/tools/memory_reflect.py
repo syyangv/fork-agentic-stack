@@ -8,8 +8,6 @@ from brain_role import require_live_brain  # noqa: E402
 from hooks.post_execution import log_execution
 from hooks.on_failure import on_failure
 
-require_live_brain(BASE, "memory_reflect.py")
-
 
 def reflect(skill_name, action, outcome, success=True, importance=5,
             reflection="", error=None, confidence=None, evidence_ids=None,
@@ -28,6 +26,10 @@ def reflect(skill_name, action, outcome, success=True, importance=5,
 
 if __name__ == "__main__":
     import argparse
+    # Guarded here, at the CLI boundary, not at import: read-only tools such as
+    # recall.py import this module to log, and an import-time refusal would
+    # break those reads.
+    require_live_brain(BASE, "memory_reflect.py")
     p = argparse.ArgumentParser()
     p.add_argument("skill")
     p.add_argument("action")
