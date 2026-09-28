@@ -54,7 +54,9 @@ def purge() -> list[str]:
 
 
 def main() -> int:
-    if "--once" not in sys.argv:
+    # One-shot by default so launchd's StartInterval can drive it; --watch keeps
+    # a resident loop for callers that prefer that.
+    if "--watch" in sys.argv:
         while True:
             purge()
             time.sleep(INTERVAL)
