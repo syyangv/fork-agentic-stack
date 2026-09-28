@@ -4,7 +4,7 @@ import os, sys
 BASE = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 sys.path.insert(0, os.path.join(BASE, "harness"))
 sys.path.insert(0, os.path.join(BASE, "memory"))
-from brain_role import require_live_brain  # noqa: E402
+from brain_role import require_live_brain, refuse_seed_write  # noqa: E402
 from hooks.post_execution import log_execution
 from hooks.on_failure import on_failure
 
@@ -12,6 +12,11 @@ from hooks.on_failure import on_failure
 def reflect(skill_name, action, outcome, success=True, importance=5,
             reflection="", error=None, confidence=None, evidence_ids=None,
             pain_score=None):
+    # Guarded here as well as at the CLI, because this is a library entry point:
+    # recall.py imports reflect() purely to log what it surfaced. SystemExit
+    # would escape its `except Exception` and kill the read; SeedBrainWrite
+    # does not, so the read survives and only the log is skipped.
+    refuse_seed_write(BASE, "memory_reflect.reflect")
     if success:
         return log_execution(skill_name, action, outcome, True,
                              reflection=reflection, importance=importance,

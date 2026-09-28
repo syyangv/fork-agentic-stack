@@ -410,9 +410,49 @@ class BrainSeedHygieneTest(unittest.TestCase):
                     capture_output=True, text=True, timeout=60,
                 )
                 self.assertNotIn(
+                    "refusing to write into a seed brain", result.stdout,
+                    f"{name} is read-only; it must not emit a refusal",
+                )
+                self.assertNotIn(
                     "refusing to write into a seed brain", result.stderr,
                     f"{name} is read-only and must not be blocked",
                 )
+
+    def test_reading_the_seed_does_not_write_to_it(self):
+        """A read tool that logs must skip the log, not take the read down.
+
+        recall.py imports memory_reflect to record what it surfaced. If that
+        raised SystemExit it would escape `except Exception` and kill the read;
+        if it silently succeeded it would write session state into the template.
+        The only correct outcome: the read returns, the log is skipped.
+        """
+        import subprocess
+
+        log = ROOT / ".agent" / "memory" / "episodic" / "AGENT_LEARNINGS.jsonl"
+        before = log.stat().st_size
+        result = subprocess.run(
+            [sys.executable, str(ROOT / ".agent" / "tools" / "recall.py"), "seed read"],
+            capture_output=True, text=True, timeout=60,
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("Consulted lessons", result.stdout, "the read itself must survive")
+        self.assertEqual(log.stat().st_size, before, "recall logged into the seed")
+        self.assertIn("recall log failed", result.stderr, "the skip must be visible")
+
+    def test_library_writer_raises_a_catchable_exception(self):
+        """refuse_seed_write must not raise SystemExit.
+
+        SystemExit is not an Exception, so any caller wrapping the write in
+        `except Exception` would die with it instead of degrading.
+        """
+        sys.path.insert(0, str(ROOT / ".agent" / "memory"))
+        self.addCleanup(sys.path.remove, str(ROOT / ".agent" / "memory"))
+        import brain_role
+
+        with self.assertRaises(brain_role.SeedBrainWrite):
+            brain_role.refuse_seed_write(str(ROOT / ".agent"), "reflect")
+        self.assertTrue(issubclass(brain_role.SeedBrainWrite, Exception))
+        self.assertFalse(issubclass(brain_role.SeedBrainWrite, SystemExit))
 
 
 if __name__ == "__main__":
