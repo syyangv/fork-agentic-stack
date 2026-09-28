@@ -6,14 +6,15 @@ Paseo desktop app wrote skill copies there again on 2026-09-23. This guard runs
 every 60s from launchd (`com.syang.agentic-stack.paseo-guard`) and deletes any
 directory that reappears.
 
-Only `~/.agents/skills/<name>/` is touched, and only when it is a real
-directory. Nothing under the live roots (`~/.agent`, `~/.claude`, `~/.codex`)
-is ever read or modified here.
+The whole `~/.agents/` tree is retired, so every entry under
+`~/.agents/skills/` is removed regardless of whether it looks like a skill —
+Paseo has been observed creating both complete trees and bare directories.
+Nothing under the live roots (`~/.agent`, `~/.claude`, `~/.codex`) is ever
+read or modified here.
 """
 from __future__ import annotations
 
 import json
-import shutil
 import sys
 import time
 from pathlib import Path
@@ -34,22 +35,33 @@ def log(message: str) -> None:
 
 
 def purge() -> list[str]:
-    skills = RETIRED_ROOT / "skills"
-    if not skills.is_dir():
+    """Remove everything under the retired root, symlinks included but never followed."""
+    if not RETIRED_ROOT.exists() and not RETIRED_ROOT.is_symlink():
         return []
+    if RETIRED_ROOT.is_symlink():
+        # A symlink at the root is not a tree we created; drop just the link.
+        RETIRED_ROOT.unlink()
+        log("purged symlink at retired ~/.agents path")
+        return ["."]
     removed = []
-    for entry in sorted(skills.iterdir()):
-        if entry.is_dir() and (entry / "SKILL.md").is_file():
-            shutil.rmtree(entry, ignore_errors=True)
-            removed.append(entry.name)
+    # Deepest first so parents are empty by the time we try them; a plain sort
+    # would try `skills` before `skills/<name>` and leave the tree behind.
+    for entry in sorted(RETIRED_ROOT.rglob("*"), key=lambda p: len(p.parts), reverse=True):
+        try:
+            if entry.is_dir() and not entry.is_symlink():
+                entry.rmdir()
+            else:
+                entry.unlink()
+        except OSError:
+            continue
+        removed.append(str(entry.relative_to(RETIRED_ROOT)))
     if removed:
-        log(f"purged retired ~/.agents/skills entries: {', '.join(removed)}")
+        log(f"purged {len(removed)} retired ~/.agents entries: {', '.join(removed[:20])}")
     try:
-        skills.rmdir()
         RETIRED_ROOT.rmdir()
-        log("purged empty retired ~/.agents root")
+        log("purged retired ~/.agents root")
     except OSError:
-        pass
+        log("retired ~/.agents root not empty after purge; left in place")
     return removed
 
 
