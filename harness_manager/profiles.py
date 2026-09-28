@@ -73,6 +73,12 @@ _RUNTIME_STATE_PATHS = frozenset({
 })
 _STAGED_CANDIDATE_DIR = "memory/candidates"
 
+# Marks this repo's own brain as a template rather than a live one. The memory
+# tools resolve BASE from their own __file__, so without it a session run
+# through the repo path writes state that copy_brain then ships to every new
+# project. It must be stripped on copy, or every install would refuse writes.
+_SEED_MARKER = "memory/BRAIN-ROLE"
+
 
 def validate_profile(profile: str) -> str:
     if profile not in VALID_PROFILES:
@@ -202,6 +208,7 @@ def _ignore_for(source: Path, profile: str):
             name for name in names
             if (relative / name).as_posix() in _TRANSIENT_BRAIN_DIRS
             or (relative / name).as_posix() in _RUNTIME_STATE_PATHS
+            or (relative / name).as_posix() == _SEED_MARKER
             or _is_backup_artifact(name)
         )
         if relative.as_posix() == _STAGED_CANDIDATE_DIR:

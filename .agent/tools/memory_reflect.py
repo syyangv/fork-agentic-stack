@@ -1,9 +1,14 @@
 """Reflection utility. Call from any skill after significant events."""
 import os, sys
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "harness"))
+BASE = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+sys.path.insert(0, os.path.join(BASE, "harness"))
+sys.path.insert(0, os.path.join(BASE, "memory"))
+from brain_role import require_live_brain  # noqa: E402
 from hooks.post_execution import log_execution
 from hooks.on_failure import on_failure
+
+require_live_brain(BASE, "memory_reflect.py")
 
 
 def reflect(skill_name, action, outcome, success=True, importance=5,

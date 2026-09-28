@@ -10,6 +10,9 @@ import os, sys, json, argparse, hashlib, datetime
 
 BASE = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 sys.path.insert(0, os.path.join(BASE, "memory"))
+from brain_role import require_live_brain  # noqa: E402
+
+require_live_brain(BASE, "graduate.py")
 
 from review_state import mark_graduated
 from validate import heuristic_check

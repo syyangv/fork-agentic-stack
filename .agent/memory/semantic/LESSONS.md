@@ -13,14 +13,6 @@
 
 ## Auto-promoted entries will be appended below
 
-### 2026-09
-
-- A config writer must locate its insertion point by parsing the structure, never by line offset from a matched key  <!-- status=accepted confidence=0.6 evidence=1 id=lesson_7b0b166eb0ad -->
-- A validator that finds the artifact it is meant to detect will report healthy; a self-inflicted corruption must be checked with an independent parser  <!-- status=accepted confidence=0.6 evidence=1 id=lesson_46362c7d79a9 -->
-- An absent registry entry means unknown, not none; a maintenance job must never write a destructive default derived from missing metadata  <!-- status=accepted confidence=0.6 evidence=1 id=lesson_aa61b7d7e123 -->
-- launchctl bootstrap fails with 'Input/output error' when the label is marked disabled in launchctl print-disabled; run launchctl enable gui/<uid>/<label> first  <!-- status=accepted confidence=0.6 evidence=1 id=lesson_9dd075947f63 -->
-- A guard job must be tested against the failure shape it exists for, not only the shape seen when it was written  <!-- status=accepted confidence=0.6 evidence=1 id=lesson_62bf46f7aefb -->
-
 ### 2026-05
 
 - When sharing skills between Claude, Codex, and agentic-stack, prefer secondary registry lookup at the original skill root over symlink or copy mirrors.  <!-- status=accepted confidence=0.6 evidence=1 id=lesson_2647c12dc81d -->

@@ -28,6 +28,7 @@ Run from the agentic-stack repo root:
 from __future__ import annotations
 
 import json
+import sys
 import tempfile
 import unittest
 from pathlib import Path
@@ -312,6 +313,69 @@ class BrainSeedHygieneTest(unittest.TestCase):
         # ...while the curated lessons this repo does intend to ship survive.
         graduated = destination / "memory" / "candidates" / "graduated"
         self.assertTrue(any(graduated.iterdir()))
+
+    # --- the seed marker and the write guard -------------------------------
+
+    def test_repo_brain_declares_itself_a_seed(self):
+        """The template must be distinguishable from a live brain.
+
+        Without this marker, the memory tools — which resolve BASE from their
+        own __file__ — cannot tell that writing here ships one machine's
+        session history into every project installed afterwards.
+        """
+        marker = ROOT / ".agent" / "memory" / "BRAIN-ROLE"
+        self.assertTrue(marker.exists(), "repo brain is missing its BRAIN-ROLE marker")
+        self.assertEqual(marker.read_text().strip(), "seed")
+
+    def test_copied_brain_is_live(self):
+        """copy_brain must not propagate the marker, or every install is inert.
+
+        Asserted against the real repo brain, not the fixture: the marker ships
+        in this tree, so a plain copytree would hand it to every project.
+        """
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        destination = Path(tmp.name) / ".agent"
+        profiles.copy_brain(ROOT / ".agent", destination, profile=profiles.STANDARD)
+        self.assertFalse(
+            (destination / "memory" / "BRAIN-ROLE").exists(),
+            "copy_brain propagated the seed marker; every install would refuse writes",
+        )
+
+    def test_guard_refuses_writes_into_the_real_seed(self):
+        sys.path.insert(0, str(ROOT / ".agent" / "memory"))
+        self.addCleanup(sys.path.remove, str(ROOT / ".agent" / "memory"))
+        import brain_role
+
+        self.assertTrue(brain_role.is_seed_brain(str(ROOT / ".agent")))
+        with self.assertRaises(SystemExit) as ctx:
+            brain_role.require_live_brain(str(ROOT / ".agent"), "learn.py")
+        self.assertEqual(ctx.exception.code, brain_role.EXIT_SEED_BRAIN)
+        self.assertNotEqual(brain_role.EXIT_SEED_BRAIN, 2, "collides with argparse usage errors")
+
+    def test_guard_allows_a_copied_brain(self):
+        sys.path.insert(0, str(ROOT / ".agent" / "memory"))
+        self.addCleanup(sys.path.remove, str(ROOT / ".agent" / "memory"))
+        import brain_role
+
+        _, destination = self._install()
+        brain_role.require_live_brain(str(destination), "learn.py")  # must not raise
+
+    def test_every_memory_writer_calls_the_guard(self):
+        """A new tool that writes without the guard reintroduces the bug."""
+        required = {
+            "learn.py", "graduate.py", "reject.py", "reopen.py",
+            "list_candidates.py", "memory_reflect.py",
+        }
+        tools = ROOT / ".agent" / "tools"
+        for name in sorted(required):
+            with self.subTest(tool=name):
+                source = (tools / name).read_text()
+                self.assertIn("require_live_brain", source)
+                self.assertRegex(
+                    source, r"require_live_brain\(BASE,",
+                    f"{name} imports the guard but never calls it",
+                )
 
 
 if __name__ == "__main__":
