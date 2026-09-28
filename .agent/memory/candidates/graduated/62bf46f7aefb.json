@@ -1,0 +1,47 @@
+{
+  "id": "62bf46f7aefb",
+  "key": "manual_62bf46",
+  "name": "manual_62bf46",
+  "claim": "A guard job must be tested against the failure shape it exists for, not only the shape seen when it was written",
+  "conditions": [
+    "against",
+    "exists",
+    "failure",
+    "guard",
+    "job",
+    "only",
+    "seen",
+    "shape",
+    "tested",
+    "written"
+  ],
+  "evidence_ids": [
+    "2026-09-28T15:04:56.067327+00:00"
+  ],
+  "cluster_size": 1,
+  "canonical_salience": 8.0,
+  "staged_at": "2026-09-28T15:04:56.067327+00:00",
+  "status": "accepted",
+  "decisions": [
+    {
+      "ts": "2026-09-28T15:04:56.067327+00:00",
+      "action": "staged",
+      "reviewer": "learn"
+    },
+    {
+      "ts": "2026-09-28T15:04:56.106109+00:00",
+      "action": "graduated",
+      "reviewer": "learn.py",
+      "notes": "purge_paseo_duplicates.py only removed ~/.agents/skills/<name>/ when it contained a SKILL.md, and tried parents before children so a populated tree never collapsed. A live test with a bare directory and a stray file showed the retired root surviving a full 60s cycle \u2014 the exact condition the job exists to prevent. Also: a resident loop body under a StartInterval plist spawns a new process each interval.",
+      "provisional": false,
+      "evidence_snapshot": [
+        "2026-09-28T15:04:56.067327+00:00"
+      ],
+      "lessons_sha": "bb4382773dcd"
+    }
+  ],
+  "rejection_count": 0,
+  "accepted_at": "2026-09-28T15:04:56.106105+00:00",
+  "reviewer": "learn.py",
+  "rationale": "purge_paseo_duplicates.py only removed ~/.agents/skills/<name>/ when it contained a SKILL.md, and tried parents before children so a populated tree never collapsed. A live test with a bare directory and a stray file showed the retired root surviving a full 60s cycle \u2014 the exact condition the job exists to prevent. Also: a resident loop body under a StartInterval plist spawns a new process each interval."
+}

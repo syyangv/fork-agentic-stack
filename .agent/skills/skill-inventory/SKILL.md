@@ -80,6 +80,48 @@ Strict gate for unchecked one-root-only drift:
 ```bash
 python3 ~/.agentic-stack/.agent/tools/skill_inventory.py --fail-on-unchecked-drift
 ```
+
+## Tag writing safety
+
+The weekly writer (`~/Library/Scripts/skill_inventory_weekly.py`) edits skill
+frontmatter. Five rules, each learned from a real corruption:
+
+- **Insert before the closing fence**, never at `matched_key_index + 1`. Inside a
+  `description: >-` block scalar, that line is swallowed and the frontmatter
+  stops parsing.
+- **Self-heal stranded keys.** A key written between a block-scalar header and
+  its indented body truncates the scalar. Detect that exact signature and
+  relocate the key.
+- **An absent `provenance.json` entry means unknown, not none.** Never write a
+  destructive default derived from missing metadata — that silently dropped
+  `custom`/`revised` and overwrote `tags: [custom]` with `tags: []`.
+- **A `tags:` nested under `metadata:` is already tagged.** Report it as such
+  rather than adding a duplicate top-level key.
+- **Validate with an independent parser**, not the writer's own reader. A reader
+  that finds the line the writer just inserted will report the file healthy and
+  the corruption never surfaces.
+
+After changing the writer, confirm all three roots still parse:
+
+```bash
+python3 - <<'PY'
+import glob, os, yaml
+bad = []
+for root in ('.agent/skills', '.claude/skills', '.codex/skills'):
+    for p in glob.glob(os.path.expanduser('~/' + root + '/*/SKILL.md')):
+        t = open(p).read()
+        if not t.startswith('---'):
+            continue
+        try:
+            d = yaml.safe_load(t.split('\n---', 1)[0][3:])
+        except Exception as e:
+            bad.append((p, e)); continue
+        if not isinstance(d, dict) or not d.get('name') or not d.get('description'):
+            bad.append((p, 'missing name/description'))
+print(len(bad), 'problems')
+PY
+```
+
 ## Secondary skill registry policy
 
 `~/.claude/skills` and `~/.agent/skills` are secondary registries for Codex.

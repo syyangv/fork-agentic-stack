@@ -1,0 +1,49 @@
+{
+  "id": "46362c7d79a9",
+  "key": "manual_46362c",
+  "name": "manual_46362c",
+  "claim": "A validator that finds the artifact it is meant to detect will report healthy; a self-inflicted corruption must be checked with an independent parser",
+  "conditions": [
+    "artifact",
+    "checked",
+    "corruption",
+    "detect",
+    "finds",
+    "healthy",
+    "independent",
+    "meant",
+    "parser",
+    "report",
+    "self-inflicted",
+    "validator"
+  ],
+  "evidence_ids": [
+    "2026-09-28T15:04:42.169518+00:00"
+  ],
+  "cluster_size": 1,
+  "canonical_salience": 8.0,
+  "staged_at": "2026-09-28T15:04:42.169518+00:00",
+  "status": "accepted",
+  "decisions": [
+    {
+      "ts": "2026-09-28T15:04:42.169518+00:00",
+      "action": "staged",
+      "reviewer": "learn"
+    },
+    {
+      "ts": "2026-09-28T15:04:42.210445+00:00",
+      "action": "graduated",
+      "reviewer": "learn.py",
+      "notes": "get_frontmatter_tags searched for any line starting with 'tags:' and found the one the same script had just injected, so it declared the file healthy and the 16 broken skills never self-healed. Detecting with the same code path that wrote the data hides the bug indefinitely.",
+      "provisional": false,
+      "evidence_snapshot": [
+        "2026-09-28T15:04:42.169518+00:00"
+      ],
+      "lessons_sha": "2a6fe7f64462"
+    }
+  ],
+  "rejection_count": 0,
+  "accepted_at": "2026-09-28T15:04:42.210443+00:00",
+  "reviewer": "learn.py",
+  "rationale": "get_frontmatter_tags searched for any line starting with 'tags:' and found the one the same script had just injected, so it declared the file healthy and the 16 broken skills never self-healed. Detecting with the same code path that wrote the data hides the bug indefinitely."
+}
