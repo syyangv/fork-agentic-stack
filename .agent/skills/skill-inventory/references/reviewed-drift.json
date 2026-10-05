@@ -1,5 +1,5 @@
 {
-  "notes": "Codex-only skills are expected Codex/OMX local infrastructure. ~/.agent/skills entries are expected shared-brain skills and remain at their canonical path, not mirrored into ~/.claude/skills or ~/.codex/skills. Claude-only personal/plugin skills remain under ~/.claude/skills by design. Baseline reconciled 2026-07-15; future scans should surface only new one-root-only additions. ~/.agents/ (plural) is retired and was fully removed 2026-09-21 (it still held paseo-installer artifacts written 2026-08-27 to the retired path). paseo/paseo-advisor/paseo-committee/paseo-handoff ~/.agent/skills copies were stale (2026-08-04) and were re-synced from ~/.claude/skills on 2026-09-21; paseo-help/paseo-plugin were added to ~/.agent/skills the same day. All three roots now hold identical content. 2026-09-28: the weekly scan's tag writer had been inserting `tags:` at description_idx+1, which lands inside a `description: >-` block scalar and corrupts the frontmatter; 16 skills were repaired and the writer now inserts before the closing fence and self-heals. A missing provenance entry no longer erases SOURCE_TAGS (it only means unknown). device-sync baselined as agent-only. ~/.agents/ (plural) resurfaced 2026-09-23 via Paseo and was removed again; com.syang.agentic-stack.paseo-guard now purges it.",
+  "notes": "Codex-only skills are expected Codex/OMX local infrastructure. ~/.agent/skills entries are expected shared-brain skills and remain at their canonical path, not mirrored into ~/.claude/skills or ~/.codex/skills. Claude-only personal/plugin skills remain under ~/.claude/skills by design. Baseline reconciled 2026-07-15; future scans should surface only new one-root-only additions. ~/.agents/ (plural) is retired and was fully removed 2026-09-21 (it still held paseo-installer artifacts written 2026-08-27 to the retired path). paseo/paseo-advisor/paseo-committee/paseo-handoff ~/.agent/skills copies were stale (2026-08-04) and were re-synced from ~/.claude/skills on 2026-09-21; paseo-help/paseo-plugin were added to ~/.agent/skills the same day. All three roots now hold identical content. 2026-09-28: the weekly scan's tag writer had been inserting `tags:` at description_idx+1, which lands inside a `description: >-` block scalar and corrupts the frontmatter; 16 skills were repaired and the writer now inserts before the closing fence and self-heals. A missing provenance entry no longer erases SOURCE_TAGS (it only means unknown). device-sync baselined as agent-only. ~/.agents/ (plural) resurfaced 2026-09-23 via Paseo and was removed again; com.syang.agentic-stack.paseo-guard now purges it. 2026-10-05: credit-card-rewards, linuxbox, and pwa-linux-migration baselined as agent-only.",
   "reviewed_agent_only": {
     "agent-orchestrator": "Expected shared-brain routing skill in ~/.agent/skills; intentionally not mirrored into Claude/Codex roots. Reviewed 2026-08-31.",
     "agentic-stack": "Expected ~/.agent/skills/ entry (shared-brain agentic-stack skill). Baselined 2026-06-03 when ~/.agents/ (plural) was retired; ~/.agent/skills/ is now the canonical secondary registry per ~/.claude/CLAUDE.md.",
@@ -13,6 +13,7 @@
     "codebase-design": "Expected shared-brain skill in ~/.agent/skills; retained at its canonical registry. Reviewed 2026-07-15.",
     "codebase-onboarding": "Expected ~/.agent/skills/ entry (shared-brain agentic-stack skill). Baselined 2026-06-03 when ~/.agents/ (plural) was retired; ~/.agent/skills/ is now the canonical secondary registry per ~/.claude/CLAUDE.md.",
     "connector-router": "Expected shared-brain skill in ~/.agent/skills; retained at its canonical registry. Reviewed 2026-08-24.",
+    "credit-card-rewards": "Expected shared-brain credit-card rewards skill in ~/.agent/skills; intentionally agent-only and routed by obsidian-orchestrator. Reviewed 2026-10-05.",
     "data-flywheel": "Expected ~/.agent/skills/ entry (shared-brain agentic-stack skill). Baselined 2026-06-03 when ~/.agents/ (plural) was retired; ~/.agent/skills/ is now the canonical secondary registry per ~/.claude/CLAUDE.md.",
     "data-layer": "Expected ~/.agent/skills/ entry (shared-brain agentic-stack skill). Baselined 2026-06-03 when ~/.agents/ (plural) was retired; ~/.agent/skills/ is now the canonical secondary registry per ~/.claude/CLAUDE.md.",
     "debug-investigator": "Expected ~/.agent/skills/ entry (shared-brain agentic-stack skill). Baselined 2026-06-03 when ~/.agents/ (plural) was retired; ~/.agent/skills/ is now the canonical secondary registry per ~/.claude/CLAUDE.md.",
@@ -40,6 +41,7 @@
     "json-canvas": "Expected ~/.agent/skills/ entry (shared-brain agentic-stack skill). Baselined 2026-06-03 when ~/.agents/ (plural) was retired; ~/.agent/skills/ is now the canonical secondary registry per ~/.claude/CLAUDE.md.",
     "keyboard-shortcuts": "Expected shared-brain skill in ~/.agent/skills; retained at its canonical registry. Reviewed 2026-08-24.",
     "knap": "Intentional shared-brain Markdown templating skill; canonical in ~/.agent/skills and not mirrored into Claude/Codex roots. Reviewed 2026-09-14.",
+    "linuxbox": "Expected shared-brain remote Linux management skill in ~/.agent/skills; intentionally agent-only. Reviewed 2026-10-05.",
     "loop-me": "Expected shared-brain skill in ~/.agent/skills; retained at its canonical registry. Reviewed 2026-07-15.",
     "memory-manager": "Expected ~/.agent/skills/ entry (shared-brain agentic-stack skill). Baselined 2026-06-03 when ~/.agents/ (plural) was retired; ~/.agent/skills/ is now the canonical secondary registry per ~/.claude/CLAUDE.md.",
     "memory-orchestrator": "Expected shared-brain skill in ~/.agent/skills; retained at its canonical registry. Reviewed 2026-08-24.",
@@ -64,6 +66,7 @@
     "port-manager": "Expected shared-brain skill in ~/.agent/skills; retained at its canonical registry. Reviewed 2026-08-24.",
     "prototype": "Expected shared-brain skill in ~/.agent/skills; retained at its canonical registry. Reviewed 2026-07-15.",
     "pwa": "Expected shared-brain skill in ~/.agent/skills; retained at its canonical registry. Reviewed 2026-08-24.",
+    "pwa-linux-migration": "Expected shared-brain PWA Linux migration skill in ~/.agent/skills; intentionally agent-only and routed by pwa. Reviewed 2026-10-05.",
     "pwa-ux": "Expected shared-brain skill in ~/.agent/skills; retained at its canonical registry. Reviewed 2026-08-24.",
     "python-patterns": "Expected ~/.agent/skills/ entry (shared-brain agentic-stack skill). Baselined 2026-06-03 when ~/.agents/ (plural) was retired; ~/.agent/skills/ is now the canonical secondary registry per ~/.claude/CLAUDE.md.",
     "qa": "Expected shared-brain skill in ~/.agent/skills; retained at its canonical registry. Reviewed 2026-07-15.",
@@ -100,7 +103,7 @@
     "writing-great-skills": "Expected shared-brain skill in ~/.agent/skills; retained at its canonical registry. Reviewed 2026-07-15.",
     "writing-shape": "Expected shared-brain skill in ~/.agent/skills; retained at its canonical registry. Reviewed 2026-07-15."
   },
-  "reviewed_at": "2026-09-28",
+  "reviewed_at": "2026-10-05",
   "reviewed_claude_only": {
     "amazon-orders": "Expected Claude Code personal/Plugin skill; lives in ~/.claude/skills and is not mirrored to Codex/agentic-stack by design. Baselined 2026-06-03.",
     "browser-use": "Expected Claude Code personal/Plugin skill; lives in ~/.claude/skills and is not mirrored to Codex/agentic-stack by design. Baselined 2026-06-03.",
