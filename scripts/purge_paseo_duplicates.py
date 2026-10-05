@@ -72,7 +72,9 @@ def main() -> int:
         while True:
             purge()
             time.sleep(INTERVAL)
-    print(json.dumps({"purged": purge(), "retired_root_exists": RETIRED_ROOT.exists()}))
+    removed = purge()
+    if removed:
+        print(json.dumps({"purged": removed, "retired_root_exists": RETIRED_ROOT.exists()}))
     return 0
 
 
