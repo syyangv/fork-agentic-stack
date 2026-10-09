@@ -61,6 +61,7 @@
     "paseo-loop": "Expected ~/.agent/skills/ entry (shared-brain agentic-stack skill). Baselined 2026-06-03 when ~/.agents/ (plural) was retired; ~/.agent/skills/ is now the canonical secondary registry per ~/.claude/CLAUDE.md.",
     "paseo-orchestrate": "Expected ~/.agent/skills/ entry (shared-brain agentic-stack skill). Baselined 2026-06-03 when ~/.agents/ (plural) was retired; ~/.agent/skills/ is now the canonical secondary registry per ~/.claude/CLAUDE.md.",
     "paseo-settings": "Expected ~/.agent/skills/ entry (shared-brain agentic-stack skill). Baselined 2026-06-03 when ~/.agents/ (plural) was retired; ~/.agent/skills/ is now the canonical secondary registry per ~/.claude/CLAUDE.md.",
+    "pdf": "Expected shared-brain PDF manipulation and physical document capture skill in ~/.agent/skills; created 2026-10-08.",
     "plan-grill-orchestrator": "Expected shared-brain skill in ~/.agent/skills; retained at its canonical registry. Reviewed 2026-07-15.",
     "planning-with-files": "Expected shared-brain skill in ~/.agent/skills; retained at its canonical registry. Reviewed 2026-07-15.",
     "port-manager": "Expected shared-brain skill in ~/.agent/skills; retained at its canonical registry. Reviewed 2026-08-24.",

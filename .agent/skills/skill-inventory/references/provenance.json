@@ -63,6 +63,7 @@
     "paseo-orchestrate": "custom",
     "paseo-plugin": "custom",
     "paseo-settings": "custom",
+    "pdf": "custom",
     "plan-grill-orchestrator": "revised",
     "planning-with-files": "revised",
     "port-manager": "custom",
