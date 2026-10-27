@@ -107,7 +107,8 @@
     "writing-for-agents": "custom",
     "writing-fragments": "revised",
     "writing-great-skills": "revised",
-    "writing-shape": "revised"
+    "writing-shape": "revised",
+    "obsidian-math": "custom"
   },
   "claude": {
     "agent-reach": "revised",
@@ -270,7 +271,8 @@
     "paseo-help": "custom",
     "paseo-plugin": "custom",
     "vocal": "custom",
-    "obsidian-show-covers": "custom"
+    "obsidian-show-covers": "custom",
+    "obsidian-math": "custom"
   },
   "codex": {
     "ask-claude": "custom",
