@@ -1,0 +1,34 @@
+> test
+> vitest run --config vitest.config.mjs --configLoader runner
+
+
+ RUN  v4.1.11 /private/tmp/kv-clean-arm64-20260920-mfijRd/integrations/paseo-knowledge
+
+
+ ❯ tests/paseo-knowledge.test.ts [queued]
+
+ Test Files 0 passed (2)
+      Tests 0 passed (0)
+   Start at 15:47:16
+   Duration 0ms
+ ✓ tests/client-entry-lifecycle.test.ts (1 test) 4ms
+
+ ❯ tests/paseo-knowledge.test.ts 0/22
+
+ Test Files 1 passed (2)
+      Tests 1 passed (23)
+   Start at 15:47:16
+   Duration 204ms
+
+ ❯ tests/paseo-knowledge.test.ts 1/22
+
+ Test Files 1 passed (2)
+      Tests 2 passed (23)
+   Start at 15:47:16
+   Duration 304ms
+ ✓ tests/paseo-knowledge.test.ts (22 tests) 185ms
+
+ Test Files  2 passed (2)
+      Tests  23 passed (23)
+   Start at  15:47:16
+   Duration  398ms (transform 70ms, setup 0ms, import 127ms, tests 189ms, environment 0ms)
