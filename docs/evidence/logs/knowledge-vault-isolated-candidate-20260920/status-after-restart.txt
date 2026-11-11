@@ -1,0 +1,73 @@
+{
+  "daemonUrl": "ws://127.0.0.1:16767/ws",
+  "pluginId": "paseo-knowledge",
+  "startedAt": "2026-09-21T01:13:53.369Z",
+  "connected": true,
+  "plugins": [
+    {
+      "id": "paseo-knowledge",
+      "path": "/Users/syang/.agentic-stack-kv-rpc/integrations/paseo-knowledge",
+      "enabled": true,
+      "status": "running"
+    }
+  ],
+  "results": [
+    {
+      "method": "knowledge.status",
+      "ok": true,
+      "ms": 32.389,
+      "value": {
+        "configured": true,
+        "coreStatus": "ready",
+        "task": {
+          "taskId": "ktask_isolated_001",
+          "workspaceId": "workspace_synthetic_001",
+          "agentId": null,
+          "turnId": null,
+          "provider": "synthetic/no-tools",
+          "vaultScope": "work",
+          "status": "failed",
+          "captureStatus": "not_attempted",
+          "sourceManifest": [],
+          "excludedSourceIds": [],
+          "personalContextUsed": false,
+          "lastTimelineEvent": null,
+          "error": {
+            "code": "tool_isolation_unavailable",
+            "message": "Knowledge tasks cannot start: Paseo does not provide a provider-agnostic no-tools boundary for untrusted indexed vault text.",
+            "retryable": false
+          },
+          "createdAt": "2026-09-20T20:42:02.825Z",
+          "updatedAt": "2026-09-20T20:42:02.893Z"
+        },
+        "tasks": [
+          {
+            "taskId": "ktask_isolated_001",
+            "workspaceId": "workspace_synthetic_001",
+            "agentId": null,
+            "turnId": null,
+            "provider": "synthetic/no-tools",
+            "vaultScope": "work",
+            "status": "failed",
+            "captureStatus": "not_attempted",
+            "sourceManifest": [],
+            "excludedSourceIds": [],
+            "personalContextUsed": false,
+            "lastTimelineEvent": null,
+            "error": {
+              "code": "tool_isolation_unavailable",
+              "message": "Knowledge tasks cannot start: Paseo does not provide a provider-agnostic no-tools boundary for untrusted indexed vault text.",
+              "retryable": false
+            },
+            "createdAt": "2026-09-20T20:42:02.825Z",
+            "updatedAt": "2026-09-20T20:42:02.893Z"
+          }
+        ],
+        "error": null
+      }
+    }
+  ],
+  "connectionState": {
+    "status": "connected"
+  }
+}

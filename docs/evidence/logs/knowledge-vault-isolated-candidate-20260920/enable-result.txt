@@ -1,0 +1,6 @@
+{
+  "id": "paseo-knowledge",
+  "path": "/Users/syang/.agentic-stack-kv-rpc/integrations/paseo-knowledge",
+  "enabled": true,
+  "status": "running"
+}

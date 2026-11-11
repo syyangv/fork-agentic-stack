@@ -1,0 +1,25 @@
+{
+  "daemonUrl": "ws://127.0.0.1:16767/ws",
+  "pluginId": "paseo-knowledge",
+  "startedAt": "2026-09-21T01:14:17.606Z",
+  "connected": true,
+  "plugins": [
+    {
+      "id": "paseo-knowledge",
+      "path": "/Users/syang/.agentic-stack-kv-rpc/integrations/paseo-knowledge",
+      "enabled": false,
+      "status": "disabled"
+    }
+  ],
+  "results": [
+    {
+      "method": "knowledge.status",
+      "ok": false,
+      "ms": 1.982,
+      "error": "Request failed: Plugin is not available: paseo-knowledge requestType=plugin.rpc.invoke.request code=handler_error"
+    }
+  ],
+  "connectionState": {
+    "status": "connected"
+  }
+}

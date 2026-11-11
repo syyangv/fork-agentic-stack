@@ -1,0 +1,150 @@
+diff --git a/integrations/paseo-knowledge/server/service.ts b/integrations/paseo-knowledge/server/service.ts
+index e5cc074..1c2a9f2 100644
+--- a/integrations/paseo-knowledge/server/service.ts
++++ b/integrations/paseo-knowledge/server/service.ts
+@@ -229,8 +229,19 @@ export class KnowledgeTaskService {
+     if (task.status === "unknown") {
+       return { task: summarizeTask(task), error: task.error ?? userError("agent_create_unknown", "The previous start result is unknown; inspect or resolve it manually instead of retrying.", false) };
+     }
++    // Paseo 0.8's public SDK exposes only preapproved MCP tools in
++    // `toolPolicy`; it does not expose a provider-agnostic deny/no-tools
++    // capability for provider-native shell, file, or approval surfaces.
++    // Provider-specific modes are caller-selected and cannot prove isolation.
++    // Refuse before agents.create so untrusted indexed text never reaches a
++    // tool-capable task, rather than treating prompt instructions as a guard.
++    const isolationError = userError(
++      "tool_isolation_unavailable",
++      "Knowledge tasks cannot start: Paseo does not provide a provider-agnostic no-tools boundary for untrusted indexed vault text.",
++      false,
++    );
+     if (task.agentId && ["starting", "submitted", "running", "awaiting_approval", "completed", "failed", "timed_out"].includes(task.status)) {
+-      return { task: summarizeTask(task), error: null };
++      return { task: summarizeTask(task), error: isolationError };
+     }
+     if (task.workspaceId !== input.workspaceId || task.provider !== input.provider) {
+       const error = userError("task_identity_conflict", "Start must use the same workspace and explicit provider/model selected during preparation.", false);
+@@ -242,17 +253,6 @@ export class KnowledgeTaskService {
+       this.store.setStatus(task, "needs_prepare", error);
+       return { task: summarizeTask(task), error };
+     }
+-    // Paseo 0.8's public SDK exposes only preapproved MCP tools in
+-    // `toolPolicy`; it does not expose a provider-agnostic deny/no-tools
+-    // capability for provider-native shell, file, or approval surfaces.
+-    // Provider-specific modes are caller-selected and cannot prove isolation.
+-    // Refuse before agents.create so untrusted indexed text never reaches a
+-    // tool-capable task, rather than treating prompt instructions as a guard.
+-    const isolationError = userError(
+-      "tool_isolation_unavailable",
+-      "Knowledge tasks cannot start: Paseo does not provide a provider-agnostic no-tools boundary for untrusted indexed vault text.",
+-      false,
+-    );
+     this.store.setStatus(task, "failed", isolationError);
+     return { task: summarizeTask(task), error: isolationError };
+   }
+diff --git a/integrations/paseo-knowledge/server/task-store.ts b/integrations/paseo-knowledge/server/task-store.ts
+index 339a4e5..d6f62bf 100644
+--- a/integrations/paseo-knowledge/server/task-store.ts
++++ b/integrations/paseo-knowledge/server/task-store.ts
+@@ -51,6 +51,7 @@ const DURABLE_ERROR_CODES = new Set([
+   "personal_access_unavailable",
+   "task_not_found",
+   "task_identity_conflict",
++  "tool_isolation_unavailable",
+   "needs_prepare",
+   "agent_create_unknown",
+   "agent_send_unknown",
+diff --git a/integrations/paseo-knowledge/tests/paseo-knowledge.test.ts b/integrations/paseo-knowledge/tests/paseo-knowledge.test.ts
+index 350f9c6..05a65c3 100644
+--- a/integrations/paseo-knowledge/tests/paseo-knowledge.test.ts
++++ b/integrations/paseo-knowledge/tests/paseo-knowledge.test.ts
+@@ -318,6 +318,90 @@ describe("Paseo Knowledge P4 synthetic contracts", () => {
+     expect(fake.agent.send).not.toHaveBeenCalled();
+   });
+ 
++  it("preserves tool_isolation_unavailable error exactly across durable restart", async () => {
++    const directory = mkdtempSync(path.join(os.tmpdir(), "paseo-knowledge-isolation-state-"));
++    tempDirs.push(directory);
++    const taskStatePath = path.join(directory, "task-state.json");
++    const fake = makePaseo();
++    const firstService = new KnowledgeTaskService({ core: makeCore(), taskStatePath });
++
++    await firstService.prepare(prepareInput);
++    const startResult = await firstService.start(startInput, fake.paseo);
++    expect(startResult.error).toMatchObject({
++      code: "tool_isolation_unavailable",
++      retryable: false,
++    });
++    expect(startResult.task.status).toBe("failed");
++    firstService.dispose();
++
++    const secondService = new KnowledgeTaskService({ core: makeCore(), taskStatePath });
++    const reloaded = secondService.store.get(prepareInput.taskId);
++    expect(reloaded).not.toBeNull();
++    expect(reloaded?.status).toBe("failed");
++    expect(reloaded?.error).toEqual(startResult.error);
++    expect(reloaded?.error).toMatchObject({
++      code: "tool_isolation_unavailable",
++      retryable: false,
++    });
++    expect(reloaded?.error?.message).toMatch(/no-tools boundary/i);
++    secondService.dispose();
++  });
++
++  it("returns explicit isolation error and zero execution calls for already-bound historical tasks without corrupting status", async () => {
++    const boundStatuses = ["starting", "submitted", "running", "awaiting_approval", "completed", "failed", "timed_out"] as const;
++    for (const originalStatus of boundStatuses) {
++      const fake = makePaseo();
++      const service = new KnowledgeTaskService({ core: makeCore() });
++      await service.prepare(prepareInput);
++      seedRunningAgent(service, fake);
++      service.store.setStatus(service.store.get(prepareInput.taskId)!, originalStatus);
++
++      const result = await service.start(startInput, fake.paseo);
++
++      expect(result.error).toMatchObject({
++        code: "tool_isolation_unavailable",
++        retryable: false,
++      });
++      expect(result.error?.message).toMatch(/no-tools boundary/i);
++      expect(result.task.status).toBe(originalStatus);
++      expect(result.task.agentId).toBe(fake.agent.id);
++      expect(service.store.get(prepareInput.taskId)?.status).toBe(originalStatus);
++      expect(fake.create).not.toHaveBeenCalled();
++      expect(fake.agent.send).not.toHaveBeenCalled();
++      expect((fake.paseo as any).workspaces.ref).not.toHaveBeenCalled();
++      expect((fake.paseo as any).providers.listAvailable).not.toHaveBeenCalled();
++    }
++  });
++
++  it("preserves status, identity, and ambiguity error for already-bound tasks with unknown status without normalizing to isolation", async () => {
++    const fake = makePaseo();
++    const service = new KnowledgeTaskService({ core: makeCore() });
++    await service.prepare(prepareInput);
++    seedRunningAgent(service, fake);
++    const ambiguityError = {
++      code: "agent_create_unknown" as const,
++      message: "The previous start result is unknown; inspect or resolve it manually instead of retrying.",
++      retryable: false,
++    };
++    service.store.setStatus(service.store.get(prepareInput.taskId)!, "unknown", ambiguityError);
++
++    const result = await service.start(startInput, fake.paseo);
++
++    expect(result.error).toEqual(ambiguityError);
++    expect(result.error).toMatchObject({
++      code: "agent_create_unknown",
++      retryable: false,
++    });
++    expect(result.task.status).toBe("unknown");
++    expect(result.task.agentId).toBe(fake.agent.id);
++    expect(service.store.get(prepareInput.taskId)?.status).toBe("unknown");
++    expect(service.store.get(prepareInput.taskId)?.agentId).toBe(fake.agent.id);
++    expect(fake.create).not.toHaveBeenCalled();
++    expect(fake.agent.send).not.toHaveBeenCalled();
++    expect((fake.paseo as any).workspaces.ref).not.toHaveBeenCalled();
++    expect((fake.paseo as any).providers.listAvailable).not.toHaveBeenCalled();
++  });
++
+   it("maps provider availability, approval lifecycle, and timeline events without a write surface", async () => {
+     const fake = makePaseo();
+     const service = new KnowledgeTaskService({ core: makeCore() });
