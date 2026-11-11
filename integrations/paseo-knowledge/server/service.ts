@@ -229,19 +229,6 @@ export class KnowledgeTaskService {
     if (task.status === "unknown") {
       return { task: summarizeTask(task), error: task.error ?? userError("agent_create_unknown", "The previous start result is unknown; inspect or resolve it manually instead of retrying.", false) };
     }
-    if (task.agentId && ["starting", "submitted", "running", "awaiting_approval", "completed", "failed", "timed_out"].includes(task.status)) {
-      return { task: summarizeTask(task), error: null };
-    }
-    if (task.workspaceId !== input.workspaceId || task.provider !== input.provider) {
-      const error = userError("task_identity_conflict", "Start must use the same workspace and explicit provider/model selected during preparation.", false);
-      this.store.setStatus(task, "unknown", error);
-      return { task: summarizeTask(task), error };
-    }
-    if (!task.context || task.vaultScope !== "work") {
-      const error = userError("needs_prepare", "Prepare a work-vault context before starting; personal context needs a supervised core runner.", false);
-      this.store.setStatus(task, "needs_prepare", error);
-      return { task: summarizeTask(task), error };
-    }
     // Paseo 0.8's public SDK exposes only preapproved MCP tools in
     // `toolPolicy`; it does not expose a provider-agnostic deny/no-tools
     // capability for provider-native shell, file, or approval surfaces.
@@ -253,6 +240,19 @@ export class KnowledgeTaskService {
       "Knowledge tasks cannot start: Paseo does not provide a provider-agnostic no-tools boundary for untrusted indexed vault text.",
       false,
     );
+    if (task.agentId && ["starting", "submitted", "running", "awaiting_approval", "completed", "failed", "timed_out"].includes(task.status)) {
+      return { task: summarizeTask(task), error: isolationError };
+    }
+    if (task.workspaceId !== input.workspaceId || task.provider !== input.provider) {
+      const error = userError("task_identity_conflict", "Start must use the same workspace and explicit provider/model selected during preparation.", false);
+      this.store.setStatus(task, "unknown", error);
+      return { task: summarizeTask(task), error };
+    }
+    if (!task.context || task.vaultScope !== "work") {
+      const error = userError("needs_prepare", "Prepare a work-vault context before starting; personal context needs a supervised core runner.", false);
+      this.store.setStatus(task, "needs_prepare", error);
+      return { task: summarizeTask(task), error };
+    }
     this.store.setStatus(task, "failed", isolationError);
     return { task: summarizeTask(task), error: isolationError };
   }

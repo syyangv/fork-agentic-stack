@@ -51,6 +51,7 @@ const DURABLE_ERROR_CODES = new Set([
   "personal_access_unavailable",
   "task_not_found",
   "task_identity_conflict",
+  "tool_isolation_unavailable",
   "needs_prepare",
   "agent_create_unknown",
   "agent_send_unknown",

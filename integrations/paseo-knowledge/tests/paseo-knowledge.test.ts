@@ -318,6 +318,90 @@ describe("Paseo Knowledge P4 synthetic contracts", () => {
     expect(fake.agent.send).not.toHaveBeenCalled();
   });
 
+  it("preserves tool_isolation_unavailable error exactly across durable restart", async () => {
+    const directory = mkdtempSync(path.join(os.tmpdir(), "paseo-knowledge-isolation-state-"));
+    tempDirs.push(directory);
+    const taskStatePath = path.join(directory, "task-state.json");
+    const fake = makePaseo();
+    const firstService = new KnowledgeTaskService({ core: makeCore(), taskStatePath });
+
+    await firstService.prepare(prepareInput);
+    const startResult = await firstService.start(startInput, fake.paseo);
+    expect(startResult.error).toMatchObject({
+      code: "tool_isolation_unavailable",
+      retryable: false,
+    });
+    expect(startResult.task.status).toBe("failed");
+    firstService.dispose();
+
+    const secondService = new KnowledgeTaskService({ core: makeCore(), taskStatePath });
+    const reloaded = secondService.store.get(prepareInput.taskId);
+    expect(reloaded).not.toBeNull();
+    expect(reloaded?.status).toBe("failed");
+    expect(reloaded?.error).toEqual(startResult.error);
+    expect(reloaded?.error).toMatchObject({
+      code: "tool_isolation_unavailable",
+      retryable: false,
+    });
+    expect(reloaded?.error?.message).toMatch(/no-tools boundary/i);
+    secondService.dispose();
+  });
+
+  it("returns explicit isolation error and zero execution calls for already-bound historical tasks without corrupting status", async () => {
+    const boundStatuses = ["starting", "submitted", "running", "awaiting_approval", "completed", "failed", "timed_out"] as const;
+    for (const originalStatus of boundStatuses) {
+      const fake = makePaseo();
+      const service = new KnowledgeTaskService({ core: makeCore() });
+      await service.prepare(prepareInput);
+      seedRunningAgent(service, fake);
+      service.store.setStatus(service.store.get(prepareInput.taskId)!, originalStatus);
+
+      const result = await service.start(startInput, fake.paseo);
+
+      expect(result.error).toMatchObject({
+        code: "tool_isolation_unavailable",
+        retryable: false,
+      });
+      expect(result.error?.message).toMatch(/no-tools boundary/i);
+      expect(result.task.status).toBe(originalStatus);
+      expect(result.task.agentId).toBe(fake.agent.id);
+      expect(service.store.get(prepareInput.taskId)?.status).toBe(originalStatus);
+      expect(fake.create).not.toHaveBeenCalled();
+      expect(fake.agent.send).not.toHaveBeenCalled();
+      expect((fake.paseo as any).workspaces.ref).not.toHaveBeenCalled();
+      expect((fake.paseo as any).providers.listAvailable).not.toHaveBeenCalled();
+    }
+  });
+
+  it("preserves status, identity, and ambiguity error for already-bound tasks with unknown status without normalizing to isolation", async () => {
+    const fake = makePaseo();
+    const service = new KnowledgeTaskService({ core: makeCore() });
+    await service.prepare(prepareInput);
+    seedRunningAgent(service, fake);
+    const ambiguityError = {
+      code: "agent_create_unknown" as const,
+      message: "The previous start result is unknown; inspect or resolve it manually instead of retrying.",
+      retryable: false,
+    };
+    service.store.setStatus(service.store.get(prepareInput.taskId)!, "unknown", ambiguityError);
+
+    const result = await service.start(startInput, fake.paseo);
+
+    expect(result.error).toEqual(ambiguityError);
+    expect(result.error).toMatchObject({
+      code: "agent_create_unknown",
+      retryable: false,
+    });
+    expect(result.task.status).toBe("unknown");
+    expect(result.task.agentId).toBe(fake.agent.id);
+    expect(service.store.get(prepareInput.taskId)?.status).toBe("unknown");
+    expect(service.store.get(prepareInput.taskId)?.agentId).toBe(fake.agent.id);
+    expect(fake.create).not.toHaveBeenCalled();
+    expect(fake.agent.send).not.toHaveBeenCalled();
+    expect((fake.paseo as any).workspaces.ref).not.toHaveBeenCalled();
+    expect((fake.paseo as any).providers.listAvailable).not.toHaveBeenCalled();
+  });
+
   it("maps provider availability, approval lifecycle, and timeline events without a write surface", async () => {
     const fake = makePaseo();
     const service = new KnowledgeTaskService({ core: makeCore() });
