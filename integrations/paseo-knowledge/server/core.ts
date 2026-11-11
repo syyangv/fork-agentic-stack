@@ -104,7 +104,7 @@ export class KnowledgeCliRunner implements KnowledgeCore {
 
   public status(): Promise<Record<string, unknown>> {
     const args = ["status"];
-    this.addPathArgs(args);
+    this.addPathArgs(args, { personal: true });
     return this.invoke(args);
   }
 
@@ -179,10 +179,13 @@ export class KnowledgeCliRunner implements KnowledgeCore {
     });
   }
 
-  private addPathArgs(args: string[]): void {
+  private addPathArgs(args: string[], options: { personal?: boolean } = {}): void {
     const { workVaultPath, personalVaultPath, runtimeDir } = this.options;
     if (workVaultPath) args.push("--work-vault", workVaultPath);
-    if (personalVaultPath) args.push("--personal-vault", personalVaultPath);
+    // The checked-in CLI registers --personal-vault only on `status`. Passing it
+    // to search/build_context makes argparse reject the whole invocation, which
+    // surfaced as retrieval_failed whenever the personal vault was configured.
+    if (options.personal && personalVaultPath) args.push("--personal-vault", personalVaultPath);
     if (runtimeDir) args.push("--runtime-dir", runtimeDir);
   }
 

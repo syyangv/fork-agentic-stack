@@ -159,6 +159,53 @@ describe("Paseo Knowledge P4 synthetic contracts", () => {
     });
   });
 
+  it("passes --personal-vault only to status so search and build_context stay runnable", async () => {
+    const directory = mkdtempSync(path.join(os.tmpdir(), "paseo-knowledge-cli-personal-"));
+    tempDirs.push(directory);
+    const shim = path.join(directory, "core-shim.py");
+    writeFileSync(shim, "import json, sys\nprint(json.dumps({'argv': sys.argv[1:]}))\n", "utf8");
+    chmodSync(shim, 0o600);
+    const workVault = path.join(directory, "work-vault");
+    const personalVault = path.join(directory, "personal-vault");
+    const runtimeDir = path.join(directory, "runtime");
+    mkdirSync(workVault);
+    mkdirSync(personalVault);
+    const runner = new KnowledgeCliRunner({
+      pythonExecutable: "/Users/syang/miniconda3/bin/python3",
+      cliPath: shim,
+      workVaultPath: workVault,
+      personalVaultPath: personalVault,
+      runtimeDir,
+    });
+
+    const status = await runner.status() as { argv: string[] };
+    expect(status.argv).toContain("--personal-vault");
+
+    const search = await runner.search({
+      query: "synthetic",
+      vaultScope: "work",
+      limit: 5,
+      includeRelated: false,
+      personalGrantPaths: [],
+    }) as { argv: string[] };
+    expect(search.argv).not.toContain("--personal-vault");
+    expect(search.argv).toEqual(["search", "synthetic", "--limit", "5", "--work-vault", workVault, "--runtime-dir", runtimeDir]);
+
+    const context = await runner.buildContext({
+      taskId: "task_personal_flag",
+      query: "synthetic",
+      limit: 5,
+      maxSnippets: 2,
+      maxChars: 1_000,
+      excludeSourceIds: [],
+      includeRelated: false,
+      vaultScope: "work",
+      personalGrantPaths: [],
+    }) as { argv: string[] };
+    expect(context.argv).not.toContain("--personal-vault");
+    expect(context.argv).toContain("--work-vault");
+  });
+
   it("passes the completed result to propose_note over argv plus JSON stdin", async () => {
     const directory = mkdtempSync(path.join(os.tmpdir(), "paseo-knowledge-capture-cli-"));
     tempDirs.push(directory);
