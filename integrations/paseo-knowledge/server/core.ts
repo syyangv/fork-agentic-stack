@@ -36,8 +36,16 @@ export interface CoreCaptureRequest {
   personalContextUsed: boolean;
 }
 
+export interface CoreReadSourceRequest {
+  readonly taskId: string;
+  readonly source: SourceRef;
+  readonly maxChars: number;
+  readonly signal?: AbortSignal;
+}
+
 export interface KnowledgeCore {
   status(): Promise<Record<string, unknown>>;
+  readSource?(request: CoreReadSourceRequest): Promise<Record<string, unknown>>;
   search(request: CoreSearchRequest): Promise<Record<string, unknown>>;
   buildContext(request: CoreContextRequest): Promise<Record<string, unknown>>;
   proposeNote(request: CoreCaptureRequest): Promise<Record<string, unknown>>;
@@ -106,6 +114,17 @@ export class KnowledgeCliRunner implements KnowledgeCore {
     const args = ["status"];
     this.addPathArgs(args, { personal: true });
     return this.invoke(args);
+  }
+
+  public readSource(request: CoreReadSourceRequest): Promise<Record<string, unknown>> {
+    if (request.source.vault_id !== "work" || !Number.isSafeInteger(request.maxChars) || request.maxChars < 1 || request.maxChars > 12_000) {
+      throw new KnowledgeCoreInvocationError("Hosted provenance requires a bounded work source.");
+    }
+    const args = ["read_source", request.source.source_id, "--task-id", request.taskId,
+      "--line-start", String(request.source.line_start), "--line-end", String(request.source.line_end),
+      "--expected-hash", request.source.content_hash, "--max-chars", String(request.maxChars)];
+    this.addPathArgs(args);
+    return this.invoke(args, undefined, request.signal);
   }
 
   public search(request: CoreSearchRequest): Promise<Record<string, unknown>> {
@@ -189,23 +208,27 @@ export class KnowledgeCliRunner implements KnowledgeCore {
     if (runtimeDir) args.push("--runtime-dir", runtimeDir);
   }
 
-  private invoke(args: string[], stdinPayload?: Record<string, unknown>): Promise<Record<string, unknown>> {
+  private invoke(args: string[], stdinPayload?: Record<string, unknown>, signal?: AbortSignal): Promise<Record<string, unknown>> {
     const input = stdinPayload === undefined ? undefined : `${JSON.stringify(stdinPayload)}\n`;
     return new Promise((resolve, reject) => {
+      if (signal?.aborted) { reject(new KnowledgeCoreInvocationError("Knowledge core request was cancelled.")); return; }
       const child = spawn(this.options.pythonExecutable, [this.options.cliPath, ...args], {
         shell: false,
+        ...(signal ? { signal } : {}),
         stdio: ["pipe", "pipe", "pipe"],
       });
       let stdout = "";
       let stderr = "";
+      let processError: KnowledgeCoreInvocationError | null = null;
       child.stdout.setEncoding("utf8");
       child.stderr.setEncoding("utf8");
       child.stdout.on("data", (chunk: string) => { stdout += chunk; });
       child.stderr.on("data", (chunk: string) => { stderr += chunk; });
       child.once("error", () => {
-        reject(new KnowledgeCoreInvocationError("Knowledge core process could not be started."));
+        processError = new KnowledgeCoreInvocationError(signal?.aborted ? "Knowledge core request was cancelled." : "Knowledge core process could not be started.");
       });
       child.once("close", (exitCode) => {
+        if (processError) { reject(processError); return; }
         let parsed: unknown;
         try {
           parsed = JSON.parse(stdout);

@@ -29,6 +29,8 @@ import {
   type VaultScope,
 } from "../shared/contracts.js";
 
+import { HostedKnowledgePanel } from "./hosted-panel.js";
+
 type WorkspaceProps = PluginWorkspacePanelProps;
 type AgentProps = PluginAgentPanelProps;
 
@@ -109,6 +111,9 @@ function KnowledgeTaskPanel({
   const context = response?.kind === "prepare" ? response.value.context : null;
   const contextText = context && typeof context.context === "string" ? context.context : null;
 
+  const currentTask = response && response.kind !== "local-error" && "task" in response.value ? response.value.task : null;
+  const hostedRevision = JSON.stringify([provider, scope, query, project, busy, response?.kind, currentTask?.updatedAt, sourceManifest]);
+
   return (
     <ScrollView contentContainerStyle={styles.screen}>
       <Text style={styles.title}>Knowledge Task</Text>
@@ -157,6 +162,8 @@ function KnowledgeTaskPanel({
       {contextText ? <><Text style={styles.section}>Untrusted context preview</Text><Text style={styles.context}>{contextText}</Text></> : null}
       {searchResults.length > 0 ? <><Text style={styles.section}>Search results</Text>{searchResults.map((result, index) => <Text key={String(result.source_id ?? index)} style={styles.body}>{String(result.path ?? result.title ?? "Knowledge result")}</Text>)}</> : null}
       <ResponseView response={response} styles={styles} />
+      <HostedKnowledgePanel workspaceId={workspaceId} taskId={taskId} prompt={prompt} revision={hostedRevision}
+        allowPrepare={scope === "work" && !agentId} theme={theme} />
     </ScrollView>
   );
 }
