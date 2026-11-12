@@ -3,8 +3,8 @@ import type { AddressInfo } from "node:net";
 import { describe, expect, it } from "vitest";
 import {
   ProviderRunner,
-  loadOpenCodeGoKey,
-  parseOpenCodeGoKey,
+  loadOpenCodeCredential,
+  parseOpenCodeCredential,
   type ProviderRunnerConfig,
   type ProviderSource,
 } from "../server/provider-runner.js";
@@ -99,6 +99,7 @@ describe("hosted provider runner prototype", () => {
       expect(sent.body).not.toHaveProperty("tools");
       expect(sent.body).not.toHaveProperty("tool_choice");
       expect(sent.body?.model).toBe("deepseek-v4.1-flash");
+      expect(sent.body?.max_tokens).toBe(1_024);
       expect(JSON.stringify(sent.body?.messages)).toContain("UNTRUSTED SOURCE TEXT");
       expect(sent.headers.authorization).toBe("Bearer test-key");
       expect(sent.headers["user-agent"]).toBe("opencode/1.0.0");
@@ -221,29 +222,48 @@ describe("hosted provider runner prototype", () => {
   });
 });
 
-describe("OpenCode Go key loading", () => {
-  it("parses only the opencode-go API key from auth export", () => {
-    const raw = JSON.stringify([
-      { integrationID: "opencode", value: { type: "oauth", access: "secret-oauth" } },
-      { integrationID: "opencode-go", value: { type: "key", key: "go-key" } },
+describe("OpenCode credential loading", () => {
+  const now = 1_000_000_000_000;
+
+  it("prefers a valid OAuth token, then falls back to the Go API key", () => {
+    const oauthRaw = JSON.stringify([
+      { integrationID: "opencode-go", value: { type: "key", key: "expired-go-key" } },
+      { integrationID: "opencode", value: { type: "oauth", access: "access-token", expires: now + 3_600_000 } },
     ]);
-    expect(parseOpenCodeGoKey(raw)).toBe("go-key");
-    expect(parseOpenCodeGoKey("not json")).toBeNull();
-    expect(parseOpenCodeGoKey(JSON.stringify([{ integrationID: "opencode-go", value: { type: "oauth" } }]))).toBeNull();
+    expect(parseOpenCodeCredential(oauthRaw, now)).toEqual({
+      token: "access-token",
+      kind: "oauth",
+      expiresAt: now + 3_600_000,
+    });
+
+    const expiredOAuth = JSON.stringify([
+      { integrationID: "opencode-go", value: { type: "key", key: "go-key" } },
+      { integrationID: "opencode", value: { type: "oauth", access: "old-token", expires: now - 1 } },
+    ]);
+    expect(parseOpenCodeCredential(expiredOAuth, now)).toEqual({ token: "go-key", kind: "api_key" });
+
+    const onlyExpired = JSON.stringify([
+      { integrationID: "opencode", value: { type: "oauth", access: "old-token", expires: now - 1 } },
+    ]);
+    expect(parseOpenCodeCredential(onlyExpired, now)).toBeNull();
+    expect(parseOpenCodeCredential("not json", now)).toBeNull();
   });
 
   it("prefers OPENCODE_API_KEY and falls back to auth export", async () => {
-    await expect(loadOpenCodeGoKey({
+    await expect(loadOpenCodeCredential({
       env: { OPENCODE_API_KEY: "env-key" },
       exportAuth: async () => { throw new Error("must not be called"); },
-    })).resolves.toBe("env-key");
+    })).resolves.toEqual({ token: "env-key", kind: "api_key" });
 
-    await expect(loadOpenCodeGoKey({
+    await expect(loadOpenCodeCredential({
       env: {},
-      exportAuth: async () => JSON.stringify([{ integrationID: "opencode-go", value: { type: "key", key: "export-key" } }]),
-    })).resolves.toBe("export-key");
+      now,
+      exportAuth: async () => JSON.stringify([
+        { integrationID: "opencode", value: { type: "oauth", access: "export-token", expires: now + 3_600_000 } },
+      ]),
+    })).resolves.toEqual({ token: "export-token", kind: "oauth", expiresAt: now + 3_600_000 });
 
-    await expect(loadOpenCodeGoKey({
+    await expect(loadOpenCodeCredential({
       env: {},
       exportAuth: async () => { throw new Error("not logged in"); },
     })).resolves.toBeNull();

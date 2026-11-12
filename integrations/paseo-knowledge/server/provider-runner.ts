@@ -39,6 +39,7 @@ export interface ProviderRunnerConfig {
   readonly apiKey: string;
   readonly maxInputChars: number;
   readonly maxOutputChars: number;
+  readonly maxTokens?: number;
   readonly timeoutMs: number;
   readonly userAgent?: string;
 }
@@ -102,7 +103,7 @@ export class ProviderRunner {
         },
         { role: "user", content: `${sourceText}\n\nTASK:\n${request.prompt}` },
       ],
-      max_tokens: Math.min(this.config.maxOutputChars, 4_096),
+      max_tokens: Math.min(this.config.maxTokens ?? 1_024, 4_096),
       stream: false,
       temperature: 0.2,
     };
@@ -164,22 +165,47 @@ export class ProviderRunner {
   }
 }
 
-/** Parse `opencode auth export` output without exposing any other credential. */
-export function parseOpenCodeGoKey(raw: string): string | null {
+export interface OpenCodeCredential {
+  readonly token: string;
+  readonly kind: "api_key" | "oauth";
+  readonly expiresAt?: number;
+}
+
+interface AuthEntry {
+  readonly integrationID?: string;
+  readonly value?: { readonly type?: string; readonly key?: string; readonly access?: string; readonly expires?: number };
+}
+
+/**
+ * Prefer a valid OAuth access token, then the OpenCode Go API key. The stored
+ * Go key can be expired while the OAuth session is still valid; the server is
+ * the authority on expiry, so an expired OAuth token is skipped locally.
+ */
+export function parseOpenCodeCredential(raw: string, now = Date.now()): OpenCodeCredential | null {
   try {
-    const entries = JSON.parse(raw) as Array<{
-      integrationID?: string;
-      value?: { type?: string; key?: string };
-    }>;
+    const entries = JSON.parse(raw) as AuthEntry[];
     if (!Array.isArray(entries)) return null;
-    const entry = entries.find(
+
+    const oauth = entries.find(
+      (item) =>
+        item.integrationID === "opencode"
+        && item.value?.type === "oauth"
+        && typeof item.value.access === "string"
+        && item.value.access.length > 0,
+    );
+    if (oauth?.value?.access && typeof oauth.value.expires === "number" && oauth.value.expires > now + 60_000) {
+      return { token: oauth.value.access, kind: "oauth", expiresAt: oauth.value.expires };
+    }
+
+    const key = entries.find(
       (item) =>
         item.integrationID === "opencode-go"
         && item.value?.type === "key"
         && typeof item.value.key === "string"
         && item.value.key.length > 0,
     );
-    return entry?.value?.key ?? null;
+    if (key?.value?.key) return { token: key.value.key, kind: "api_key" };
+    return null;
   } catch {
     return null;
   }
@@ -199,15 +225,16 @@ function defaultExportAuth(): Promise<string> {
   });
 }
 
-export async function loadOpenCodeGoKey(options: {
+export async function loadOpenCodeCredential(options: {
   env?: NodeJS.ProcessEnv;
   exportAuth?: () => Promise<string>;
-} = {}): Promise<string | null> {
+  now?: number;
+} = {}): Promise<OpenCodeCredential | null> {
   const env = options.env ?? process.env;
   const direct = env.OPENCODE_API_KEY?.trim();
-  if (direct) return direct;
+  if (direct) return { token: direct, kind: "api_key" };
   try {
-    return parseOpenCodeGoKey(await (options.exportAuth ?? defaultExportAuth)());
+    return parseOpenCodeCredential(await (options.exportAuth ?? defaultExportAuth)(), options.now ?? Date.now());
   } catch {
     return null;
   }
