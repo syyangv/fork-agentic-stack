@@ -17,6 +17,7 @@ import { z } from "zod";
 
 export type ProviderFailureCode =
   | "not_configured"
+  | "source_invalidated"
   | "input_limit_exceeded"
   | "output_limit_exceeded"
   | "response_limit_exceeded"
@@ -32,7 +33,7 @@ export interface ProviderFailure {
 }
 
 export type ProviderRunResult =
-  | { readonly status: "completed"; readonly output: string }
+  | { readonly status: "completed"; readonly output: string; readonly completionId?: string; readonly model?: string }
   | { readonly status: "failed"; readonly error: ProviderFailure };
 
 export interface ProviderRunnerConfig {
@@ -66,6 +67,8 @@ const MAX_REQUEST_CHARS = 65_536;
 const MAX_TIMEOUT_MS = 120_000;
 const MAX_SOURCES = 64;
 const completionSchema = z.object({
+  id: z.string().regex(/^[A-Za-z0-9][A-Za-z0-9._:-]{0,199}$/).optional(),
+  model: z.string().min(1).max(200).optional(),
   choices: z.array(z.object({
     finish_reason: z.literal("stop").optional(),
     message: z.object({
@@ -115,7 +118,7 @@ async function readBoundedCompletion(response: Response) {
   }
   const parsed = completionSchema.safeParse(body);
   if (!parsed.success) throw new ProviderResponseError("invalid_output");
-  return parsed.data.choices[0]!.message.content;
+  return parsed.data;
 }
 
 function validConfiguration(config: ProviderRunnerConfig): boolean {
@@ -212,13 +215,17 @@ export class ProviderRunner {
         return failure("provider_error", `The provider returned HTTP ${response.status}.`, retryable);
       }
 
-      const output = await readBoundedCompletion(response);
+      const completion = await readBoundedCompletion(response);
+      const output = completion.choices[0]!.message.content;
       if (output.length > this.config.maxOutputChars) {
         return failure("output_limit_exceeded", "The provider output exceeds the configured limit.");
       }
       if (cancelled || request.signal?.aborted) return failure("cancelled", "The provider request was cancelled.");
       if (timedOut || performance.now() >= deadline) return failure("timeout", "The provider did not finish before its deadline.");
-      return { status: "completed", output };
+      return { status: "completed", output,
+        ...(completion.id ? { completionId: completion.id } : {}),
+        ...(completion.model ? { model: completion.model } : {}),
+      };
     } catch (error) {
       if (cancelled) return failure("cancelled", "The provider request was cancelled.");
       if (timedOut) return failure("timeout", "The provider did not finish before its deadline.");

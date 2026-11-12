@@ -11,11 +11,13 @@ import {
   StartKnowledgeTaskRpc,
   WaitKnowledgeTaskRpc,
 } from "./shared/contracts.js";
+import { registerHostedHandlers } from "./server/hosted-rpc.js";
 import { createProductionService } from "./server/service.js";
 
 /** Server entrypoint: RPC handlers and the supervised knowledge service only. */
 export default function contribute(server: PluginServerContext) {
   const service = createProductionService();
+  const cleanupHosted = registerHostedHandlers(server);
 
   server.handle(PluginStatusRpc, (input, context) => service.status(input, context.paseo));
   server.handle(SearchKnowledgeRpc, (input) => service.search(input));
@@ -28,5 +30,5 @@ export default function contribute(server: PluginServerContext) {
   server.handle(RevokePersonalSourceRpc, (input) => service.revokePersonal(input.taskId, input.path));
   server.handle(KnowledgeAttachmentSearchRpc, (input) => service.attachmentSearch(input.query));
 
-  return () => service.dispose();
+  return () => { cleanupHosted(); service.dispose(); };
 }
