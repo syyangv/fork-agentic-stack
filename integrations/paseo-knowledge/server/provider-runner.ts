@@ -3,8 +3,9 @@
  *
  * This module is NOT registered with the plugin and is not wired into
  * `knowledge.task.start`. It sends a bounded, tool-free chat completion to
- * OpenCode Go (Zen) and accepts text only. It has no vault filesystem access,
- * no shell, and no tools; the caller supplies the bounded context.
+ * OpenCode Go (Zen) and accepts text only. The provider receives no filesystem or shell tools.
+ * The runner executes in-process with ambient host permissions; it is not
+ * an OS filesystem/network sandbox. The caller supplies bounded context.
  *
  * The accepted trade-off is that bounded work-vault text leaves the Mac and is
  * processed by OpenCode and its upstream model provider. See
@@ -12,11 +13,13 @@
  */
 import { execFile } from "node:child_process";
 import { randomUUID } from "node:crypto";
+import { z } from "zod";
 
 export type ProviderFailureCode =
   | "not_configured"
   | "input_limit_exceeded"
   | "output_limit_exceeded"
+  | "response_limit_exceeded"
   | "invalid_output"
   | "provider_error"
   | "timeout"
@@ -57,13 +60,77 @@ export interface ProviderRunRequest {
   readonly sessionId?: string;
 }
 
-interface ChatCompletionResponse {
-  readonly choices?: ReadonlyArray<{
-    readonly message?: {
-      readonly content?: unknown;
-      readonly tool_calls?: unknown;
-    };
-  }>;
+const PROVIDER_ENDPOINT = "https://opencode.ai/zen/go/v1";
+const MAX_RESPONSE_BYTES = 65_536;
+const MAX_REQUEST_CHARS = 65_536;
+const MAX_TIMEOUT_MS = 120_000;
+const MAX_SOURCES = 64;
+const completionSchema = z.object({
+  choices: z.array(z.object({
+    finish_reason: z.literal("stop").optional(),
+    message: z.object({
+      role: z.literal("assistant").optional(),
+      content: z.string().refine((value) => value.trim().length > 0),
+      tool_calls: z.never().optional(),
+      function_call: z.never().optional(),
+      refusal: z.null().optional(),
+    }),
+  })).length(1),
+});
+
+class ProviderResponseError extends Error {
+  public constructor(public readonly code: "response_limit_exceeded" | "invalid_output") {
+    super("The provider returned an invalid or oversized response.");
+  }
+}
+
+async function readBoundedCompletion(response: Response) {
+  if (Number(response.headers.get("content-length")) > MAX_RESPONSE_BYTES) {
+    await response.body?.cancel();
+    throw new ProviderResponseError("response_limit_exceeded");
+  }
+  const reader = response.body?.getReader();
+  if (!reader) throw new ProviderResponseError("invalid_output");
+  const chunks: Uint8Array[] = [];
+  let size = 0;
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      size += value.byteLength;
+      if (size > MAX_RESPONSE_BYTES) {
+        await reader.cancel();
+        throw new ProviderResponseError("response_limit_exceeded");
+      }
+      chunks.push(value);
+    }
+  } finally {
+    reader.releaseLock();
+  }
+  let body: unknown;
+  try {
+    body = JSON.parse(Buffer.concat(chunks).toString("utf8"));
+  } catch {
+    throw new ProviderResponseError("invalid_output");
+  }
+  const parsed = completionSchema.safeParse(body);
+  if (!parsed.success) throw new ProviderResponseError("invalid_output");
+  return parsed.data.choices[0]!.message.content;
+}
+
+function validConfiguration(config: ProviderRunnerConfig): boolean {
+  try {
+    if (new URL(config.endpoint).href.replace(/\/+$/, "") !== PROVIDER_ENDPOINT) return false;
+  } catch {
+    return false;
+  }
+  return config.apiKey.trim().length > 0 && config.model.trim().length > 0
+    && [config.maxInputChars, config.maxOutputChars, config.timeoutMs, config.maxTokens ?? 1_024]
+      .every((value) => Number.isSafeInteger(value) && value > 0)
+    && config.maxInputChars <= MAX_REQUEST_CHARS
+    && config.maxOutputChars <= MAX_RESPONSE_BYTES
+    && config.timeoutMs <= MAX_TIMEOUT_MS
+    && (config.maxTokens ?? 1_024) <= 4_096;
 }
 
 const failure = (code: ProviderFailureCode, message: string, retryable = false): ProviderRunResult => ({
@@ -74,23 +141,22 @@ const failure = (code: ProviderFailureCode, message: string, retryable = false):
 export class ProviderRunner {
   private readonly config: ProviderRunnerConfig;
 
-  public constructor(config: ProviderRunnerConfig) {
-    this.config = config;
+  public constructor(config: ProviderRunnerConfig, private readonly transport: typeof fetch = fetch) {
+    this.config = { ...config };
   }
 
   public async run(request: ProviderRunRequest): Promise<ProviderRunResult> {
-    if (!this.config.apiKey) {
-      return failure("not_configured", "The provider API key is not configured.");
+    if (!validConfiguration(this.config)) {
+      return failure("not_configured", "Configure the approved provider endpoint, credentials, model, and bounded resource limits.");
     }
     if (request.signal?.aborted) {
       return failure("cancelled", "The provider request was cancelled.");
     }
 
-    const inputChars = request.sources.reduce((total, source) => total + source.text.length, 0) + request.prompt.length;
-    if (inputChars > this.config.maxInputChars) {
+    const sourceChars = request.sources.reduce((total, source) => total + source.path.length + source.text.length, request.prompt.length);
+    if (request.sources.length > MAX_SOURCES || sourceChars > this.config.maxInputChars) {
       return failure("input_limit_exceeded", "The bounded request exceeds the configured input limit.");
     }
-
     const sourceText = request.sources
       .map((source) => `[SOURCE ${source.path}]\n${source.text}`)
       .join("\n\n");
@@ -108,6 +174,10 @@ export class ProviderRunner {
       temperature: 0.2,
     };
 
+    const serialized = JSON.stringify(payload);
+    if (serialized.length > this.config.maxInputChars || Buffer.byteLength(serialized, "utf8") > MAX_REQUEST_CHARS) {
+      return failure("input_limit_exceeded", "The bounded request exceeds the configured input limit.");
+    }
     const controller = new AbortController();
     let cancelled = false;
     let timedOut = false;
@@ -116,13 +186,14 @@ export class ProviderRunner {
       controller.abort();
     };
     request.signal?.addEventListener("abort", onAbort, { once: true });
+    const deadline = performance.now() + this.config.timeoutMs;
     const timer = setTimeout(() => {
       timedOut = true;
       controller.abort();
     }, this.config.timeoutMs);
 
     try {
-      const response = await fetch(`${this.config.endpoint.replace(/\/+$/, "")}/chat/completions`, {
+      const response = await this.transport(`${this.config.endpoint.replace(/\/+$/, "")}/chat/completions`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -130,33 +201,28 @@ export class ProviderRunner {
           "User-Agent": this.config.userAgent ?? "opencode/1.0.0",
           "x-opencode-session": request.sessionId ?? `knowledge-${randomUUID()}`,
         },
-        body: JSON.stringify(payload),
+        body: serialized,
+        redirect: "manual",
         signal: controller.signal,
       });
 
       if (!response.ok) {
         const retryable = response.status === 429 || response.status >= 500;
+        await response.body?.cancel();
         return failure("provider_error", `The provider returned HTTP ${response.status}.`, retryable);
       }
 
-      const body = await response.json() as ChatCompletionResponse;
-      const message = body.choices?.[0]?.message;
-      if (!message) {
-        return failure("invalid_output", "The provider response has no message.");
-      }
-      if (message.tool_calls !== undefined) {
-        return failure("invalid_output", "The provider returned a tool call; the runner accepts text only.");
-      }
-      if (typeof message.content !== "string") {
-        return failure("invalid_output", "The provider returned a non-text message.");
-      }
-      if (message.content.length > this.config.maxOutputChars) {
+      const output = await readBoundedCompletion(response);
+      if (output.length > this.config.maxOutputChars) {
         return failure("output_limit_exceeded", "The provider output exceeds the configured limit.");
       }
-      return { status: "completed", output: message.content };
-    } catch {
+      if (cancelled || request.signal?.aborted) return failure("cancelled", "The provider request was cancelled.");
+      if (timedOut || performance.now() >= deadline) return failure("timeout", "The provider did not finish before its deadline.");
+      return { status: "completed", output };
+    } catch (error) {
       if (cancelled) return failure("cancelled", "The provider request was cancelled.");
       if (timedOut) return failure("timeout", "The provider did not finish before its deadline.");
+      if (error instanceof ProviderResponseError) return failure(error.code, error.message);
       return failure("provider_error", "The provider request failed.", true);
     } finally {
       clearTimeout(timer);
