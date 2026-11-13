@@ -1,0 +1,12 @@
+
+> test
+> vitest run --config vitest.config.mjs --configLoader runner tests/hosted-collection-admission.test.ts
+
+
+ RUN  v4.1.12 /private/tmp/kv-dependency-clean-geum3vyy/integrations/paseo-knowledge
+
+
+ Test Files  1 passed (1)
+      Tests  4 passed (4)
+   Start at  13:10:45
+   Duration  300ms (transform 60ms, setup 0ms, import 124ms, tests 11ms, environment 0ms)

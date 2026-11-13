@@ -4,13 +4,14 @@ import { digest, type HostedTaskBinding } from "./hosted-task-policy.js";
 import type { CoreReadSourceRequest } from "./core.js";
 import type { TaskStore } from "./task-store.js";
 
+const MAX_HOSTED_PREPARATION_SOURCES = 8;
 const refSchema = SourceRefSchema.extend({ heading: z.string().max(512).nullable().optional(), path: z.string().min(1).max(1_024) }).transform((ref) => ({ ...ref, heading: ref.heading ?? null, content_hash: ref.content_hash.toLowerCase() }));
 const bundleSchema = z.object({
   task_id: z.string(), status: z.literal("ok"), personal_context_used: z.literal(false),
   source_content_untrusted: z.literal(true), truncated: z.literal(false),
-  source_manifest: z.array(refSchema).min(1).max(8),
+  source_manifest: z.array(refSchema).min(1).max(MAX_HOSTED_PREPARATION_SOURCES),
   snippets: z.array(z.object({ source_ref: refSchema, content: z.string().max(12_000).optional(),
-    snippet: z.string().max(12_000).optional(), source_content_untrusted: z.literal(true), truncated: z.literal(false).optional() })).min(1).max(8),
+    snippet: z.string().max(12_000).optional(), source_content_untrusted: z.literal(true), truncated: z.literal(false).optional() })).min(1).max(MAX_HOSTED_PREPARATION_SOURCES),
 });
 export class HostedPreparationError extends Error {
   public constructor(public readonly code: "needs_prepare" | "task_identity_conflict" | "personal_access_unavailable" | "source_invalidated") {
@@ -38,6 +39,12 @@ export class StoredHostedPreparationSource {
     if (!task || !task.context || task.status !== "prepared") throw new HostedPreparationError("needs_prepare");
     if (task.workspaceId !== workspaceId || !task.provider || task.agentId) throw new HostedPreparationError("task_identity_conflict");
     if (task.vaultScope !== "work" || task.personalContextUsed) throw new HostedPreparationError("personal_access_unavailable");
+    // Check both counts before any schema can traverse either collection.
+    const { source_manifest: manifestInput, snippets: snippetsInput } = task.context;
+    if (!Array.isArray(manifestInput) || manifestInput.length < 1 || manifestInput.length > MAX_HOSTED_PREPARATION_SOURCES
+      || !Array.isArray(snippetsInput) || snippetsInput.length < 1 || snippetsInput.length > MAX_HOSTED_PREPARATION_SOURCES) {
+      throw new HostedPreparationError("needs_prepare");
+    }
     const parsed = bundleSchema.safeParse(task.context);
     if (!parsed.success || parsed.data.task_id !== taskId) throw new HostedPreparationError("needs_prepare");
     const bundle = parsed.data;

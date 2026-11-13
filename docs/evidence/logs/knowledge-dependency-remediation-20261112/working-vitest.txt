@@ -1,0 +1,12 @@
+
+> test
+> vitest run --config vitest.config.mjs --configLoader runner
+
+
+ RUN  v4.1.12 /Users/syang/.agentic-stack-kv-rpc/integrations/paseo-knowledge
+
+
+ Test Files  17 passed (17)
+      Tests  206 passed (206)
+   Start at  13:08:32
+   Duration  2.46s (transform 912ms, setup 0ms, import 2.34s, tests 6.56s, environment 1ms)

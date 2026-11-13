@@ -1,0 +1,68 @@
+
+> test
+> vitest run --config vitest.config.mjs --configLoader runner tests/hosted-collection-admission.test.ts
+
+
+ RUN  v4.1.12 /private/tmp/kv-dependency-clean-geum3vyy/integrations/paseo-knowledge
+
+ ❯ tests/hosted-collection-admission.test.ts (4 tests | 3 failed) 14ms
+     × rejects oversized sources before invoking any input schema parser 5ms
+     × rejects oversized exclusions before invoking any input schema parser 1ms
+     × rejects oversized stored manifests or snippets without invoking the bundle parser 3ms
+
+ Test Files  1 failed (1)
+      Tests  3 failed | 1 passed (4)
+   Start at  13:10:44
+   Duration  354ms (transform 66ms, setup 0ms, import 153ms, tests 14ms, environment 0ms)
+
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 3 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/hosted-collection-admission.test.ts > collection admission independent of Zod's own patched behavior > rejects oversized sources before invoking any input schema parser
+Error: Schema parser must not run before collection admission
+ ❯ _.schema.safeParse tests/hosted-collection-admission.test.ts:16:33
+     14|       schema.safeParse = (...input: Parameters<typeof safeParse>) => {
+     15|         parser.attempts++;
+     16|         if (parser.block) throw new Error("Schema parser must not run …
+       |                                 ^
+     17|         return safeParse(...input);
+     18|       };
+ ❯ Module.prepareHostedInput server/hosted-task-policy.ts:61:30
+ ❯ tests/hosted-collection-admission.test.ts:36:12
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/3]⎯
+
+ FAIL  tests/hosted-collection-admission.test.ts > collection admission independent of Zod's own patched behavior > rejects oversized exclusions before invoking any input schema parser
+Error: Schema parser must not run before collection admission
+ ❯ _.schema.safeParse tests/hosted-collection-admission.test.ts:16:33
+     14|       schema.safeParse = (...input: Parameters<typeof safeParse>) => {
+     15|         parser.attempts++;
+     16|         if (parser.block) throw new Error("Schema parser must not run …
+       |                                 ^
+     17|         return safeParse(...input);
+     18|       };
+ ❯ Module.prepareHostedInput server/hosted-task-policy.ts:61:30
+ ❯ tests/hosted-collection-admission.test.ts:41:12
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/3]⎯
+
+ FAIL  tests/hosted-collection-admission.test.ts > collection admission independent of Zod's own patched behavior > rejects oversized stored manifests or snippets without invoking the bundle parser
+AssertionError: expected error to be instance of HostedPreparationError
+
+- Expected:
+[Function HostedPreparationError]
+
++ Received:
+Error {
+  "message": "Schema parser must not run before collection admission",
+}
+
+ ❯ tests/hosted-collection-admission.test.ts:60:58
+     58|     for (const field of ["source_manifest", "snippets"]) {
+     59|       task.context = { ...baseline, [field]: Array.from({ length: 9 },…
+     60|       expect(() => source.snapshot("task", "workspace")).toThrow(Hoste…
+       |                                                          ^
+     61|     }
+     62|     expect(parser.attempts).toBe(0);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/3]⎯

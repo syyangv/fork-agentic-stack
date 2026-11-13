@@ -1,0 +1,124 @@
+{
+  "name": "paseo-knowledge",
+  "dependencies": {
+    "@getpaseo/client": {
+      "version": "0.8.0",
+      "resolved": "https://registry.npmjs.org/@getpaseo/client/-/client-0.8.0.tgz",
+      "overridden": false,
+      "dependencies": {
+        "zod": {
+          "version": "4.6.6"
+        }
+      }
+    },
+    "@getpaseo/plugin": {
+      "version": "0.8.0",
+      "resolved": "https://registry.npmjs.org/@getpaseo/plugin/-/plugin-0.8.0.tgz",
+      "overridden": false,
+      "dependencies": {
+        "@agentclientprotocol/sdk": {
+          "version": "1.4.0",
+          "resolved": "https://registry.npmjs.org/@agentclientprotocol/sdk/-/sdk-1.4.0.tgz",
+          "overridden": false,
+          "dependencies": {
+            "zod": {
+              "version": "4.6.6"
+            }
+          }
+        },
+        "zod": {
+          "version": "4.6.6"
+        }
+      }
+    },
+    "@getpaseo/protocol": {
+      "version": "0.8.0",
+      "resolved": "https://registry.npmjs.org/@getpaseo/protocol/-/protocol-0.8.0.tgz",
+      "overridden": false,
+      "dependencies": {
+        "zod": {
+          "version": "4.6.6"
+        }
+      }
+    },
+    "react-native": {
+      "version": "0.81.5",
+      "resolved": "https://registry.npmjs.org/react-native/-/react-native-0.81.5.tgz",
+      "overridden": false,
+      "dependencies": {
+        "glob": {
+          "version": "7.2.3",
+          "resolved": "https://registry.npmjs.org/glob/-/glob-7.2.3.tgz",
+          "overridden": false,
+          "dependencies": {
+            "minimatch": {
+              "version": "3.1.5",
+              "resolved": "https://registry.npmjs.org/minimatch/-/minimatch-3.1.5.tgz",
+              "overridden": false,
+              "dependencies": {
+                "brace-expansion": {
+                  "version": "1.1.22",
+                  "resolved": "https://registry.npmjs.org/brace-expansion/-/brace-expansion-1.1.22.tgz",
+                  "overridden": false
+                }
+              }
+            }
+          }
+        },
+        "react-devtools-core": {
+          "version": "6.1.5",
+          "resolved": "https://registry.npmjs.org/react-devtools-core/-/react-devtools-core-6.1.5.tgz",
+          "overridden": false,
+          "dependencies": {
+            "shell-quote": {
+              "version": "1.12.0",
+              "resolved": "https://registry.npmjs.org/shell-quote/-/shell-quote-1.12.0.tgz",
+              "overridden": false
+            }
+          }
+        }
+      }
+    },
+    "vitest": {
+      "version": "4.1.12",
+      "resolved": "https://registry.npmjs.org/vitest/-/vitest-4.1.12.tgz",
+      "overridden": false,
+      "dependencies": {
+        "@vitest/mocker": {
+          "version": "4.1.12",
+          "resolved": "https://registry.npmjs.org/@vitest/mocker/-/mocker-4.1.12.tgz",
+          "overridden": false,
+          "dependencies": {
+            "vite": {
+              "version": "8.3.8"
+            }
+          }
+        },
+        "vite": {
+          "version": "8.3.8",
+          "resolved": "https://registry.npmjs.org/vite/-/vite-8.3.8.tgz",
+          "overridden": false,
+          "dependencies": {
+            "postcss": {
+              "version": "8.5.32",
+              "resolved": "https://registry.npmjs.org/postcss/-/postcss-8.5.32.tgz",
+              "overridden": false,
+              "dependencies": {
+                "source-map-js": {
+                  "version": "1.2.2",
+                  "resolved": "https://registry.npmjs.org/source-map-js/-/source-map-js-1.2.2.tgz",
+                  "overridden": false
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "zod": {
+      "version": "4.6.6",
+      "resolved": "https://registry.npmjs.org/zod/-/zod-4.6.6.tgz",
+      "overridden": false
+    }
+  }
+}

@@ -1,0 +1,12 @@
+
+> test
+> vitest run --config vitest.config.mjs --configLoader runner
+
+
+ RUN  v4.1.12 /private/tmp/kv-dependency-clean-geum3vyy/integrations/paseo-knowledge
+
+
+ Test Files  17 passed (17)
+      Tests  206 passed (206)
+   Start at  13:08:37
+   Duration  2.63s (transform 1.16s, setup 0ms, import 2.89s, tests 5.52s, environment 2ms)
