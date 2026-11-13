@@ -3,7 +3,7 @@ import type { AddressInfo } from "node:net";
 import { describe, expect, it, vi } from "vitest";
 import { ProviderRunner, type ProviderRunResult } from "../server/provider-runner.js";
 import { HostedTaskCoordinator, type HostedDraftCompletion } from "../server/hosted-task.js";
-import { digest, HostedPreparationRegistry, type HostedDisclosurePolicy, type HostedTaskInput } from "../server/hosted-task-policy.js";
+import { digest, prepareHostedInput, HostedPreparationRegistry, type HostedDisclosurePolicy, type HostedTaskInput } from "../server/hosted-task-policy.js";
 import type { HostedExecutionLedger, HostedLedgerOutcome, HostedReservation } from "../server/hosted-execution-ledger.js";
 
 const now = 10_000;
@@ -315,5 +315,41 @@ describe("offline hosted Knowledge Task integration", () => {
     } finally {
       await new Promise<void>((done) => server.close(() => done()));
     }
+  });
+});
+
+describe("hosted collection pre-validation", () => {
+  it("rejects limit+1 collections before traversing either collection", () => {
+    for (const field of ["sources", "excludedSourceIds"] as const) {
+      const touched = vi.fn(() => { throw new Error("Collection element traversed"); });
+      const oversized = new Array(65);
+      Object.defineProperty(oversized, 0, { get: touched });
+      // Even a valid-sized sibling must remain unparsed on count rejection.
+      const sibling = new Array(1);
+      Object.defineProperty(sibling, 0, { get: touched });
+      const base = input();
+      const candidate = field === "sources" ? { ...base, binding: { ...base.binding, sources: oversized }, excludedSourceIds: sibling }
+        : { ...base, binding: { ...base.binding, sources: sibling }, excludedSourceIds: oversized };
+      expect(prepareHostedInput(policy, candidate, now)).toEqual({ error: "needs_prepare" });
+      expect(touched).not.toHaveBeenCalled();
+    }
+  });
+  it("rejects malformed collection envelopes safely", () => {
+    const base = input();
+    const malformed: unknown[] = [null, undefined, 1, "input", {}, { binding: null }];
+    for (const value of [null, {}, "sources", { length: 64 }]) {
+      malformed.push({ ...base, binding: { ...base.binding, sources: value } }, { ...base, excludedSourceIds: value });
+    }
+    for (const candidate of malformed) {
+      expect(prepareHostedInput(policy, candidate as HostedTaskInput, now)).toEqual({ error: "needs_prepare" });
+    }
+  });
+  it("preserves exact-boundary collections and optional exclusions", () => {
+    const base = input();
+    const sources = Array.from({ length: 64 }, (_, index) => ({ ...base.binding.sources[0]!, sourceId: `source_${index}` }));
+    const candidate = { ...base, binding: { ...base.binding, sources }, excludedSourceIds: Array.from({ length: 64 }, (_, index) => `excluded_${index}`) };
+    const checked = prepareHostedInput({ ...policy, maxInputChars: 65_536 }, candidate, now);
+    expect(checked).toEqual({ input: candidate });
+    expect(prepareHostedInput(policy, base, now)).toEqual({ input: { ...base, excludedSourceIds: [] } });
   });
 });

@@ -1,0 +1,320 @@
+[
+  {
+    "path": "node_modules/@emnapi/core",
+    "from": null,
+    "to": "2.0.0-beta.2",
+    "optional": true
+  },
+  {
+    "path": "node_modules/@emnapi/runtime",
+    "from": null,
+    "to": "2.0.0-beta.2",
+    "optional": true
+  },
+  {
+    "path": "node_modules/@emnapi/wasi-threads",
+    "from": null,
+    "to": "2.2.0",
+    "optional": true
+  },
+  {
+    "path": "node_modules/@napi-rs/wasm-runtime",
+    "from": null,
+    "to": "1.2.6",
+    "optional": true
+  },
+  {
+    "path": "node_modules/@oxc-project/types",
+    "from": "0.149.0",
+    "to": "0.156.0",
+    "optional": false
+  },
+  {
+    "path": "node_modules/@rolldown/binding-android-arm-eabi",
+    "from": null,
+    "to": "1.2.19",
+    "optional": true
+  },
+  {
+    "path": "node_modules/@rolldown/binding-android-arm64",
+    "from": null,
+    "to": "1.2.19",
+    "optional": true
+  },
+  {
+    "path": "node_modules/@rolldown/binding-darwin-arm64",
+    "from": "1.2.8",
+    "to": "1.2.19",
+    "optional": true
+  },
+  {
+    "path": "node_modules/@rolldown/binding-darwin-x64",
+    "from": "1.2.8",
+    "to": "1.2.19",
+    "optional": true
+  },
+  {
+    "path": "node_modules/@rolldown/binding-freebsd-x64",
+    "from": null,
+    "to": "1.2.19",
+    "optional": true
+  },
+  {
+    "path": "node_modules/@rolldown/binding-linux-arm-gnueabihf",
+    "from": null,
+    "to": "1.2.19",
+    "optional": true
+  },
+  {
+    "path": "node_modules/@rolldown/binding-linux-arm64-gnu",
+    "from": null,
+    "to": "1.2.19",
+    "optional": true
+  },
+  {
+    "path": "node_modules/@rolldown/binding-linux-arm64-musl",
+    "from": null,
+    "to": "1.2.19",
+    "optional": true
+  },
+  {
+    "path": "node_modules/@rolldown/binding-linux-ppc64-gnu",
+    "from": null,
+    "to": "1.2.19",
+    "optional": true
+  },
+  {
+    "path": "node_modules/@rolldown/binding-linux-s390x-gnu",
+    "from": null,
+    "to": "1.2.19",
+    "optional": true
+  },
+  {
+    "path": "node_modules/@rolldown/binding-linux-x64-gnu",
+    "from": null,
+    "to": "1.2.19",
+    "optional": true
+  },
+  {
+    "path": "node_modules/@rolldown/binding-linux-x64-musl",
+    "from": null,
+    "to": "1.2.19",
+    "optional": true
+  },
+  {
+    "path": "node_modules/@rolldown/binding-openharmony-arm64",
+    "from": null,
+    "to": "1.2.19",
+    "optional": true
+  },
+  {
+    "path": "node_modules/@rolldown/binding-wasm32-wasi",
+    "from": null,
+    "to": "1.2.19",
+    "optional": true
+  },
+  {
+    "path": "node_modules/@rolldown/binding-win32-arm64-msvc",
+    "from": null,
+    "to": "1.2.19",
+    "optional": true
+  },
+  {
+    "path": "node_modules/@rolldown/binding-win32-x64-msvc",
+    "from": null,
+    "to": "1.2.19",
+    "optional": true
+  },
+  {
+    "path": "node_modules/@rolldown/pluginutils",
+    "from": "1.0.1",
+    "to": "1.1.0",
+    "optional": false
+  },
+  {
+    "path": "node_modules/@tybys/wasm-util",
+    "from": null,
+    "to": "0.10.4",
+    "optional": true
+  },
+  {
+    "path": "node_modules/@types/estree",
+    "from": "1.0.9",
+    "to": "1.0.10",
+    "optional": false
+  },
+  {
+    "path": "node_modules/@vitest/expect",
+    "from": "4.1.11",
+    "to": "4.1.12",
+    "optional": false
+  },
+  {
+    "path": "node_modules/@vitest/mocker",
+    "from": "4.1.11",
+    "to": "4.1.12",
+    "optional": false
+  },
+  {
+    "path": "node_modules/@vitest/pretty-format",
+    "from": "4.1.11",
+    "to": "4.1.12",
+    "optional": false
+  },
+  {
+    "path": "node_modules/@vitest/runner",
+    "from": "4.1.11",
+    "to": "4.1.12",
+    "optional": false
+  },
+  {
+    "path": "node_modules/@vitest/snapshot",
+    "from": "4.1.11",
+    "to": "4.1.12",
+    "optional": false
+  },
+  {
+    "path": "node_modules/@vitest/spy",
+    "from": "4.1.11",
+    "to": "4.1.12",
+    "optional": false
+  },
+  {
+    "path": "node_modules/@vitest/utils",
+    "from": "4.1.11",
+    "to": "4.1.12",
+    "optional": false
+  },
+  {
+    "path": "node_modules/brace-expansion",
+    "from": "1.1.18",
+    "to": "1.1.22",
+    "optional": false
+  },
+  {
+    "path": "node_modules/chai",
+    "from": "6.2.2",
+    "to": "6.3.0",
+    "optional": false
+  },
+  {
+    "path": "node_modules/lightningcss-android-arm64",
+    "from": null,
+    "to": "1.33.0",
+    "optional": true
+  },
+  {
+    "path": "node_modules/lightningcss-darwin-arm64",
+    "from": null,
+    "to": "1.33.0",
+    "optional": true
+  },
+  {
+    "path": "node_modules/lightningcss-freebsd-x64",
+    "from": null,
+    "to": "1.33.0",
+    "optional": true
+  },
+  {
+    "path": "node_modules/lightningcss-linux-arm-gnueabihf",
+    "from": null,
+    "to": "1.33.0",
+    "optional": true
+  },
+  {
+    "path": "node_modules/lightningcss-linux-arm64-gnu",
+    "from": null,
+    "to": "1.33.0",
+    "optional": true
+  },
+  {
+    "path": "node_modules/lightningcss-linux-arm64-musl",
+    "from": null,
+    "to": "1.33.0",
+    "optional": true
+  },
+  {
+    "path": "node_modules/lightningcss-linux-x64-gnu",
+    "from": null,
+    "to": "1.33.0",
+    "optional": true
+  },
+  {
+    "path": "node_modules/lightningcss-linux-x64-musl",
+    "from": null,
+    "to": "1.33.0",
+    "optional": true
+  },
+  {
+    "path": "node_modules/lightningcss-win32-arm64-msvc",
+    "from": null,
+    "to": "1.33.0",
+    "optional": true
+  },
+  {
+    "path": "node_modules/lightningcss-win32-x64-msvc",
+    "from": null,
+    "to": "1.33.0",
+    "optional": true
+  },
+  {
+    "path": "node_modules/nanoid",
+    "from": "3.3.19",
+    "to": "3.3.20",
+    "optional": false
+  },
+  {
+    "path": "node_modules/postcss",
+    "from": "8.5.28",
+    "to": "8.5.32",
+    "optional": false
+  },
+  {
+    "path": "node_modules/rolldown",
+    "from": "1.2.8",
+    "to": "1.2.19",
+    "optional": false
+  },
+  {
+    "path": "node_modules/shell-quote",
+    "from": "1.10.0",
+    "to": "1.12.0",
+    "optional": false
+  },
+  {
+    "path": "node_modules/source-map-js",
+    "from": "1.2.1",
+    "to": "1.2.2",
+    "optional": false
+  },
+  {
+    "path": "node_modules/tinyrainbow",
+    "from": "3.1.1",
+    "to": "3.2.0",
+    "optional": false
+  },
+  {
+    "path": "node_modules/tslib",
+    "from": null,
+    "to": "2.9.1",
+    "optional": true
+  },
+  {
+    "path": "node_modules/vite",
+    "from": "8.3.0",
+    "to": "8.3.8",
+    "optional": false
+  },
+  {
+    "path": "node_modules/vitest",
+    "from": "4.1.11",
+    "to": "4.1.12",
+    "optional": false
+  },
+  {
+    "path": "node_modules/zod",
+    "from": "4.6.5",
+    "to": "4.6.6",
+    "optional": false
+  }
+]

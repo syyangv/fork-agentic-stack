@@ -94,3 +94,49 @@ describe("server-owned hosted provenance preparation", () => {
     } finally { f.service.dispose(); }
   });
 });
+
+describe("stored hosted collection pre-validation", () => {
+  it("rejects limit+1 collections before traversing either collection", async () => {
+    for (const field of ["source_manifest", "snippets"] as const) {
+      const f = await fixture();
+      try {
+        const touched = vi.fn(() => { throw new Error("Collection element traversed"); });
+        const oversized = new Array(9);
+        const sibling = new Array(1);
+        Object.defineProperty(oversized, 0, { get: touched });
+        Object.defineProperty(sibling, 0, { get: touched });
+        f.service.store.get("task_1")!.context = { ...bundle(),
+          [field]: oversized, [field === "source_manifest" ? "snippets" : "source_manifest"]: sibling };
+        expect(() => f.source.snapshot("task_1", "workspace_1")).toThrow(expect.objectContaining({ code: "needs_prepare" }));
+        expect(touched).not.toHaveBeenCalled();
+        expect(f.read).not.toHaveBeenCalled();
+      } finally { f.service.dispose(); }
+    }
+  });
+  it("rejects empty or malformed stored collections", async () => {
+    const f = await fixture();
+    try {
+      for (const field of ["source_manifest", "snippets"] as const) {
+        for (const value of [undefined, null, [], {}, "sources", { length: 8 }]) {
+          f.service.store.get("task_1")!.context = { ...bundle(), [field]: value };
+          expect(() => f.source.snapshot("task_1", "workspace_1")).toThrow(expect.objectContaining({ code: "needs_prepare" }));
+        }
+      }
+    } finally { f.service.dispose(); }
+  });
+  it("preserves exact-boundary stored collections", async () => {
+    const f = await fixture();
+    try {
+      const refs = Array.from({ length: 8 }, (_, index) => ({ ...ref, source_id: `core_source_${index}` }));
+      const task = f.service.store.get("task_1")!;
+      task.sourceManifest = refs;
+      task.context = { ...bundle(), source_manifest: refs,
+        snippets: refs.map((source_ref) => ({ ...bundle().snippets[0]!, source_ref })) };
+      const snapshot = f.source.snapshot("task_1", "workspace_1");
+      expect(snapshot.refs).toEqual(refs);
+      expect(snapshot.binding.sources).toHaveLength(8);
+      expect(snapshot.binding.sources.map((source) => source.text)).toEqual(Array(8).fill(excerpt));
+      expect(f.read).not.toHaveBeenCalled();
+    } finally { f.service.dispose(); }
+  });
+});

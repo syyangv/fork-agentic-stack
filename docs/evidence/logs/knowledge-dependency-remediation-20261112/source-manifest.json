@@ -1,0 +1,14 @@
+{
+  "base": "d9529f0d3bf0fa7f4259193a6fef20d61fd19f7c",
+  "files": {
+    "integrations/paseo-knowledge/package.json": "41e8fb9bcba8be0401804cbc44eea761d4f51d96491b990b23b991cb28773058",
+    "integrations/paseo-knowledge/package-lock.json": "ff17e1d3a8dd63c851fbe03a9f50baf070b914878795c5a336820fa3237367de",
+    "integrations/paseo-knowledge/server/hosted-task-policy.ts": "742867a10cf5b6ff848b95a8d734cb0d368e848fb362efc2a385a31d1cebdd11",
+    "integrations/paseo-knowledge/server/hosted-preparation.ts": "247498d10159dffb2ef6e54e524bc13124f7528916a00958e2ee755fe2c5a8f0",
+    "integrations/paseo-knowledge/tests/hosted-task.test.ts": "1b98062d8ff2cc263029f8fab8ff6e7e8f2dd0ab8fd43ad38b755d340374a0f8",
+    "integrations/paseo-knowledge/tests/hosted-preparation.test.ts": "18562ec269afcb6f93521a70485e0d9756fd8d07b9797544370c1de7abfe89ff",
+    "integrations/paseo-knowledge/tests/hosted-collection-admission.test.ts": "bd83e86224d36f4f1f9dbde14c07a7df895d085f09e3a14c93b5c1d25a8ea3f1"
+  },
+  "lockBeforeSha256": "7dabf2307947b2f575931e1d4a3cc53a79ae50cd6b334fb0025290f9d16acff1",
+  "lockAfterSha256": "ff17e1d3a8dd63c851fbe03a9f50baf070b914878795c5a336820fa3237367de"
+}
