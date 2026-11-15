@@ -2,10 +2,10 @@ import type { PluginServerContext } from "@getpaseo/plugin/server";
 import { HostedAvailabilityRpc, HostedPreviewRpc, HostedExecuteRpc, HostedCancelRpc,
   HostedDraftListRpc, HostedDraftReadRpc, HostedDraftRejectRpc } from "../shared/hosted-contracts.js";
 import type { HostedKnowledgeApplication } from "./hosted-application.js";
-const unavailable = { code: "hosted_disabled", retryable: false as const };
 
-/** No application is provided by the production entrypoint: hosted execution stays disabled. */
-export function registerHostedHandlers(server: PluginServerContext, application?: HostedKnowledgeApplication): () => void {
+/** Production passes an application only after a private operator policy opt-in. */
+export function registerHostedHandlers(server: PluginServerContext, application?: HostedKnowledgeApplication, disabledReason = "hosted_disabled"): () => void {
+  const unavailable = {code: disabledReason, retryable: false as const};
   server.handle(HostedAvailabilityRpc, (input, context) => application?.availability(input.workspaceId, context.paseo) ?? { available: false, error: unavailable });
   server.handle(HostedPreviewRpc, (input, context) => application?.preview(input, context.paseo) ?? { preview: null, error: unavailable });
   server.handle(HostedExecuteRpc, (input, context) => application?.execute(input, context.paseo) ?? { result: null, error: unavailable });

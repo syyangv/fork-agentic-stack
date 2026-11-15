@@ -11,13 +11,15 @@ import {
   StartKnowledgeTaskRpc,
   WaitKnowledgeTaskRpc,
 } from "./shared/contracts.js";
+import { createProductionHostedRuntime } from "./server/hosted-production.js";
 import { registerHostedHandlers } from "./server/hosted-rpc.js";
 import { createProductionService } from "./server/service.js";
 
 /** Server entrypoint: RPC handlers and the supervised knowledge service only. */
 export default function contribute(server: PluginServerContext) {
   const service = createProductionService();
-  const cleanupHosted = registerHostedHandlers(server);
+  const hosted = createProductionHostedRuntime({store: service.store});
+  const cleanupHosted = registerHostedHandlers(server, hosted.application, hosted.disabledReason);
 
   server.handle(PluginStatusRpc, (input, context) => service.status(input, context.paseo));
   server.handle(SearchKnowledgeRpc, (input) => service.search(input));

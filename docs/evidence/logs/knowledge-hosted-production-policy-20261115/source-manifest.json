@@ -1,0 +1,17 @@
+{
+  "base": "f0796faf3de55d97eb601732a43dee0e6899e5d7",
+  "files": {
+    "integrations/paseo-knowledge/index.server.ts": "65e3fd39f690b069536766239df63a4095043eb380b9f2c1b9080ddbd6f92475",
+    "integrations/paseo-knowledge/server/hosted-production.ts": "3129b49d811fba7b35c44e0b70da40e6069f2691e0e8fa9541efa557dead595d",
+    "integrations/paseo-knowledge/server/hosted-runtime-config.ts": "ba5b7b80b0e13b071830ee16bf1ddd8ba148000b1f8ae3392be75abda7d63b32",
+    "integrations/paseo-knowledge/server/hosted-request-budget.ts": "be5b8c1867357b0535296768310d5e80067901e6c5889c5c364d7be51d9de466",
+    "integrations/paseo-knowledge/server/hosted-rpc.ts": "8610bec9211b07d89035c8fffb30b9b62a6445c3079a49029b74786dd614f02d",
+    "integrations/paseo-knowledge/server/provider-runner.ts": "3a61ea8cb67936901231381f8a4960e12b26bb2dfb41d7419036f9291ba9ae59",
+    "integrations/paseo-knowledge/tests/hosted-production.test.ts": "01fc71a685cd023bafbba8a84dec779e549863d4f161b93dc152f7ed8c5c70b3",
+    "integrations/paseo-knowledge/tests/hosted-runtime-config.test.ts": "001f6fbf523e7c6b8ec0da8c0ceee484754785606d664bc58b9b4e526e07472e",
+    "integrations/paseo-knowledge/tests/hosted-request-budget.test.ts": "de5f85fec14c1c0858a352167eba209b19f614d0dd94beaa5970fbcc22cb9e4a",
+    "integrations/paseo-knowledge/hosted-policy.example.json": "b10c97990324a0c5ee0f33968d9fd0f70eef91331aa69e5564e3617dd3395c75",
+    "integrations/paseo-knowledge/HOSTED-OPERATOR-POLICY.md": "f70ba10df13efb8ed9d944cc91e30e3b06070b18ceca6cdc6282b1574b742c60",
+    "integrations/paseo-knowledge/tests/hosted-application.test.ts": "8ee517e3284450ddf048ec95c56530454016ab6c7de85be2f955e7a186cba0f7"
+  }
+}

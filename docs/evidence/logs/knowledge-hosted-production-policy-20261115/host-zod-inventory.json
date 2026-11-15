@@ -1,0 +1,9 @@
+{
+  "bundledZodCopies": [
+    {
+      "path": "node_modules/zod/package.json",
+      "version": "4.4.3"
+    }
+  ],
+  "scope": "static signed-app metadata only; not a full host audit or exploitability test"
+}
