@@ -17,6 +17,8 @@ import { z } from "zod";
 
 export type ProviderFailureCode =
   | "not_configured"
+  | "policy_unavailable"
+  | "budget_exceeded"
   | "source_invalidated"
   | "input_limit_exceeded"
   | "output_limit_exceeded"

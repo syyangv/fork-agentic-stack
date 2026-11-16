@@ -138,6 +138,8 @@ describe("hosted application daemon-session bridge", () => {
     } finally { f.application.dispose(); f.service.dispose(); }
   });
   it("bounds concurrent preview verification and retains admission until abort-ignoring readers settle", async () => {
+    vi.useFakeTimers();
+    try {
     const f = await fixture({ timeoutMs: 20 });
     const complete: Array<(value: Awaited<ReturnType<typeof f.readSource>>) => void> = [];
     let started!: () => void; const bothStarted = new Promise<void>((resolve) => { started = resolve; });
@@ -150,14 +152,16 @@ describe("hosted application daemon-session bridge", () => {
       await bothStarted;
       expect((await f.application.preview({ taskId: "task_3", workspaceId: "workspace_1", prompt: "third" }, f.access)).error?.code).toBe("busy");
       expect(f.readSource).toHaveBeenCalledTimes(2);
+      await vi.advanceTimersByTimeAsync(20);
       await Promise.all([first, second]);
       expect((await f.preview()).error?.code).toBe("busy");
       expect(f.createProvider).not.toHaveBeenCalled();
     } finally {
       f.application.dispose();
       for (const done of complete) done({ success: true, source_ref: ref, content: "APPROVED SOURCE", truncated: false, source_content_untrusted: true });
-      await new Promise((resolve) => setImmediate(resolve)); f.service.dispose();
+      await vi.advanceTimersByTimeAsync(0); f.service.dispose();
     }
+    } finally { vi.useRealTimers(); }
   });
   it("disposal prevents late preview restoration and further application work", async () => {
     const f = await fixture();

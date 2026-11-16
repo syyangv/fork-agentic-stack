@@ -1,0 +1,38 @@
+{
+  "version": 1,
+  "enabled": false,
+  "mode": "synthetic-only",
+  "credentialSource": "opencode-session",
+  "credentialReuseApproved": false,
+  "disclosureAccepted": "work-context-to-opencode-and-upstream",
+  "approvedAt": "1970-01-01T00:00:00.000Z",
+  "expiresAt": "1970-01-01T00:00:00.000Z",
+  "maxRequestsPerUtcDay": 1,
+  "allowedWorkspaceIds": [
+    "REPLACE_WORKSPACE_ID"
+  ],
+  "allowedSources": [
+    {
+      "path": "10-Projects/REPLACE-SYNTHETIC-FIXTURE.md",
+      "contentHash": "0000000000000000000000000000000000000000000000000000000000000000"
+    }
+  ],
+  "policy": {
+    "policyId": "synthetic-acceptance",
+    "version": "1",
+    "endpoint": "https://opencode.ai/zen/go/v1",
+    "model": "deepseek-v4.1-flash",
+    "vaultScope": "work",
+    "tools": "none",
+    "network": "opencode-provider-api",
+    "disclosure": "work-context-to-opencode-and-upstream",
+    "maxInputChars": 20000,
+    "maxOutputChars": 12000,
+    "maxTokens": 4096,
+    "timeoutMs": 20000,
+    "freshnessMs": 300000
+  },
+  "allowedPromptHashes": [
+    "0000000000000000000000000000000000000000000000000000000000000000"
+  ]
+}
