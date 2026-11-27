@@ -1,6 +1,7 @@
 import importlib.util
 import json
 import re
+from datetime import datetime, timezone
 from pathlib import Path
 
 import pytest
@@ -70,3 +71,18 @@ def test_markdown_fallback_counts_seed_lessons(dashboard):
     assert stats["accepted"] == []
     assert stats["from_md_fallback"] is True
     assert "1 seed lessons in LESSONS.md" in dashboard.render(plain=True, width=80)
+
+
+def test_failing_skills_excludes_harness_captures(dashboard):
+    failure = {"result": "failure", "timestamp": datetime.now(timezone.utc).isoformat()}
+    harness_names = ("claude-code", "codex", "gemini", "copilot-cli", "pi")
+    skill_failure = {**failure, "skill": "real-skill"}
+    rows = [
+        *({**failure, "skill": name} for name in harness_names),
+        {**skill_failure, "harness": "codex"},
+        skill_failure,
+        skill_failure,
+    ]
+    Path(dashboard.EPISODIC).write_text("\n".join(map(json.dumps, rows)) + "\n", encoding="utf-8")
+
+    assert dashboard.failing_skills(threshold=1) == [("real-skill", 2)]

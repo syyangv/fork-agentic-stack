@@ -31,6 +31,11 @@ DREAM_STATE = os.path.join(BASE, "memory/dream-state.json")
 MANIFEST = os.path.join(BASE, "skills/_manifest.jsonl")
 INFRASTRUCTURE_MANIFEST = os.path.join(BASE, "infrastructure.json")
 
+# Harness identifiers that pre-`harness`-field episodes wrote into `skill`.
+# Used by failing_skills() to exclude raw tool captures from skill-failure
+# counting, matching the newer entries that carry an explicit `harness` field.
+_HARNESS_SKILL_NAMES = {"claude-code", "codex", "gemini", "copilot-cli", "pi"}
+
 
 # ── ANSI color primitives ──────────────────────────────────────────────────
 
@@ -272,6 +277,11 @@ def failing_skills(threshold=3, window_days=14):
     by_skill = {}
     for e in _load_episodic():
         if e.get("result") != "failure":
+            continue
+        # Raw tool captures are harness observations, not skill executions.
+        # New entries carry a `harness` field; historical entries (written
+        # before the field existed) stored the harness name in `skill`.
+        if e.get("harness") or e.get("skill") in _HARNESS_SKILL_NAMES:
             continue
         try:
             parsed = datetime.datetime.fromisoformat(e.get("timestamp", ""))
