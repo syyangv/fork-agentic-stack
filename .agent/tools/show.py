@@ -8,7 +8,7 @@ that understands ANSI.
 
 Panels:
   - MEMORY      episodes, size, recent failures, last dream cycle
-  - LESSONS     accepted + provisional, with claims
+  - LESSONS     current counts by status, with accepted claims
   - CANDIDATES  staged / graduated / rejected lifecycle
   - SKILLS      loaded + any flagged for rewrite
   - ACTIVITY    episodic entries per day, sparkline
@@ -18,6 +18,9 @@ Use --json for programmatic consumption, --plain to disable ANSI.
 import argparse, datetime, json, os, shutil, sys
 
 BASE = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+sys.path.insert(0, os.path.join(BASE, "memory"))
+
+from orchestration.governance_recall import load_structured_state  # noqa: E402
 
 EPISODIC = os.path.join(BASE, "memory/episodic/AGENT_LEARNINGS.jsonl")
 CANDIDATES = os.path.join(BASE, "memory/candidates")
@@ -213,21 +216,16 @@ def candidate_stats():
 
 def lesson_stats():
     out = {"count": 0, "provisional": 0, "accepted": [],
-           "from_md_fallback": False}
+           "from_md_fallback": False, "retracted": 0, "legacy": 0}
     if os.path.exists(LESSONS_JSONL):
-        for line in open(LESSONS_JSONL):
-            line = line.strip()
-            if not line:
-                continue
-            try:
-                l = json.loads(line)
-            except json.JSONDecodeError:
-                continue
-            out["count"] += 1
-            if l.get("status") == "provisional":
-                out["provisional"] += 1
-            elif l.get("status") == "accepted":
-                out["accepted"].append(l)
+        lessons = load_structured_state(LESSONS_JSONL)
+        out["count"] = len(lessons)
+        for lesson in lessons:
+            status = lesson.get("status")
+            if status == "accepted":
+                out["accepted"].append(lesson)
+            elif status in ("provisional", "retracted", "legacy"):
+                out[status] += 1
     elif os.path.exists(LESSONS_MD):
         out["from_md_fallback"] = True
         for line in open(LESSONS_MD):
@@ -414,10 +412,12 @@ def render(width=None, json_out=False, plain=False):
     le = data["lessons"]
     source = "lessons.jsonl" if not le["from_md_fallback"] else "LESSONS.md"
     le_lines = [""]
-    ai, ac = _health_icon(len(le["accepted"]) if le["accepted"] else le["count"],
-                          zero_is_good=False, low_is_good=False)
+    accepted_count = le["count"] if le["from_md_fallback"] else len(le["accepted"])
+    ai, ac = _health_icon(accepted_count, zero_is_good=False, low_is_good=False)
+    if not le["from_md_fallback"]:
+        le_lines.append(_metric_row("total", le["count"], width))
     le_lines.append(_metric_row(
-        "accepted", len(le["accepted"]) if le["accepted"] else le["count"],
+        "accepted", accepted_count,
         width, icon=ai, icon_color=ac,
         suffix=f"(source: {source})"))
     pi = "○" if le["provisional"] == 0 else "◐"
@@ -425,6 +425,9 @@ def render(width=None, json_out=False, plain=False):
     le_lines.append(_metric_row("provisional", le["provisional"], width,
                                 icon=pi, icon_color=pc,
                                 value_color=C.BOLD if le["provisional"] > 0 else C.DIM))
+    if not le["from_md_fallback"]:
+        for status in ("retracted", "legacy"):
+            le_lines.append(_metric_row(status, le[status], width))
 
     shown = 0
     if le["accepted"]:
