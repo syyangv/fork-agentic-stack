@@ -4,6 +4,10 @@ This guide explains how local agentic-stack memory, external Brain, and
 Headroom fit together. They solve different problems and are not
 interchangeable stores.
 
+> For the user-facing four-store map and flowchart, see the vault guide
+> `~/obsidian/syang/个人整理/流程说明/AI 助手记忆系统.md`. This document does
+> not cover Claude Code auto-memory or the Agent Knowledge Vault.
+
 ## The Three Planes
 
 ```text
